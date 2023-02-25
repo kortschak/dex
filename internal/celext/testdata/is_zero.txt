@@ -1,0 +1,14 @@
+cel src.cel
+! stderr .
+cmp stdout want.txt
+
+-- src.cel --
+[
+	timestamp("0001-01-01T00:00:00Z").is_zero(),
+	timestamp("0001-01-01T00:00:01Z").is_zero(),
+]
+-- want.txt --
+[
+	true,
+	false
+]

@@ -1,0 +1,12 @@
+cel src.cel
+cmp stdout want.txt
+stderr '"level":"DEBUG","msg":"cel debug log","tag":"ok","value":1'
+
+-- src.cel --
+{
+	"non_error": debug("ok", 1),
+}
+-- want.txt --
+{
+	"non_error": 1
+}

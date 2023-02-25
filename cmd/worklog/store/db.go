@@ -1,0 +1,614 @@
+// Copyright ©2023 Dan Kortschak. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package store provides the worklog data storage layer.
+package store
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
+
+	worklog "github.com/kortschak/dex/cmd/worklog/api"
+)
+
+// DB is a persistent store.
+type DB struct {
+	name  string
+	host  string
+	mu    sync.Mutex
+	store *sql.DB
+
+	allow map[string]map[string]bool
+}
+
+// Open opens an existing DB. See https://pkg.go.dev/modernc.org/sqlite#Driver.Open
+// for name handling details. Open attempts to get the CNAME for the host, which
+// may wait indefinitely, so a timeout context can be provided to fall back to
+// the kernel-provided hostname.
+func Open(ctx context.Context, name, host string) (*DB, error) {
+	db, err := sql.Open("sqlite", name)
+	if err != nil {
+		return nil, err
+	}
+	_, err = db.Exec(Schema)
+	if err != nil {
+		return nil, err
+	}
+	if host == "" {
+		host, err = hostname(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &DB{name: name, host: host, store: db, allow: allow}, nil
+}
+
+// hostname returns the FQDN of the local host, falling back to the hostname
+// reported by the kernel if CNAME lookup fails.
+func hostname(ctx context.Context) (string, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	cname, err := net.DefaultResolver.LookupCNAME(ctx, host)
+	if err != nil {
+		return host, nil
+	}
+	return strings.TrimSuffix(cname, "."), nil
+}
+
+// Name returns the name of the database as provided to Open.
+func (db *DB) Name() string {
+	if db == nil {
+		return ""
+	}
+	return db.name
+}
+
+func (db *DB) exec(query string, args ...any) (sql.Result, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.store.Exec(query, args...)
+}
+
+func (db *DB) execContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.store.ExecContext(ctx, query, args...)
+}
+
+func (db *DB) query(query string, args ...any) (*sql.Rows, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.store.Query(query, args...)
+}
+
+func (db *DB) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.store.QueryContext(ctx, query, args...)
+}
+
+// Close closes the database.
+func (db *DB) Close() error {
+	return db.store.Close()
+}
+
+// Schema is the DB schema.
+const Schema = `
+create table if not exists buckets (
+	rowid    INTEGER PRIMARY KEY AUTOINCREMENT,
+	id       TEXT UNIQUE NOT NULL,
+	name     TEXT,
+	type     TEXT NOT NULL,
+	client   TEXT NOT NULL,
+	hostname TEXT NOT NULL,
+	created  TEXT NOT NULL, -- unix micro
+	datastr  TEXT NOT NULL  -- JSON text
+);
+create table if not exists events (
+	id        INTEGER PRIMARY KEY AUTOINCREMENT,
+	bucketrow INTEGER NOT NULL,
+	starttime INTEGER NOT NULL, -- unix micro
+	endtime   INTEGER NOT NULL, -- unix micro
+	datastr   TEXT NOT NULL,    -- JSON text
+	FOREIGN KEY (bucketrow) REFERENCES buckets(rowid)
+);
+create index if not exists event_index_id ON events(id);
+create index if not exists event_index_starttime ON events(bucketrow, starttime);
+create index if not exists event_index_endtime ON events(bucketrow, endtime);
+pragma journal_mode=WAL;
+`
+
+// allow is the set of names allowed in dynamic queries.
+var allow = map[string]map[string]bool{
+	"buckets": {
+		"rowid":    true,
+		"id":       true,
+		"name":     true,
+		"type":     true,
+		"client":   true,
+		"hostname": true,
+		"created":  true,
+		"datastr":  true,
+	},
+	"events": {
+		"id":        true,
+		"bucketrow": true,
+		"starttime": true,
+		"endtime":   true,
+		"datastr":   true,
+	},
+}
+
+// BucketID returns the internal bucket ID for the provided bucket uid.
+func (db *DB) BucketID(uid string) string {
+	return fmt.Sprintf("%s_%s", uid, db.host)
+}
+
+const CreateBucket = `insert into buckets(id, name, type, client, hostname, created, datastr) values (?, ?, ?, ?, ?, ?, ?)`
+
+// CreateBucket creates a new entry in the bucket table. If the entry already
+// exists it will return an sqlite.Error with the code sqlite3.SQLITE_CONSTRAINT_UNIQUE.
+// The SQL command run is [CreateBucket].
+func (db *DB) CreateBucket(uid, name, typ, client string, created time.Time, data map[string]any) (*worklog.BucketMetadata, error) {
+	bid := db.BucketID(uid)
+	return db.createBucket(bid, name, typ, client, db.host, created, data)
+}
+
+func (db *DB) createBucket(bid, name, typ, client, host string, created time.Time, data map[string]any) (*worklog.BucketMetadata, error) {
+	var (
+		msg = []byte{} // datastr has a NOT NULL constraint.
+		err error
+	)
+	if data != nil {
+		msg, err = json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = db.exec(CreateBucket, bid, name, typ, client, host, created.Format(time.RFC3339Nano), msg)
+	var sqlErr *sqlite.Error
+	if errors.As(err, &sqlErr) && sqlErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+		return nil, err
+	}
+	m, err := db.BucketMetadata(bid)
+	if err != nil {
+		return nil, err
+	}
+	if sqlErr != nil {
+		return m, sqlErr
+	}
+	return m, nil
+}
+
+const BucketMetadata = `select id, name, type, client, hostname, created, datastr from buckets where id = ?`
+
+// BucketMetadata returns the metadata for the bucket with the provided internal
+// bucket ID.
+// The SQL command run is [BucketMetadata].
+func (db *DB) BucketMetadata(bid string) (*worklog.BucketMetadata, error) {
+	rows, err := db.query(BucketMetadata, bid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, io.EOF
+	}
+	var (
+		m       worklog.BucketMetadata
+		created string
+		msg     []byte
+	)
+	err = rows.Scan(&m.ID, &m.Name, &m.Type, &m.Client, &m.Hostname, &created, &msg)
+	if err != nil {
+		return nil, err
+	}
+	m.Created, err = time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return &m, err
+	}
+	if len(msg) != 0 {
+		err = json.Unmarshal(msg, &m.Data)
+		if err != nil {
+			return &m, err
+		}
+	}
+	if rows.Next() {
+		return &m, errors.New("unexpected item")
+	}
+	return &m, nil
+}
+
+const InsertEvent = `insert into events(bucketrow, starttime, endtime, datastr) values ((select rowid from buckets where id = ?), ?, ?, ?)`
+
+// InsertEvent inserts a new event into the events table.
+// The SQL command run is [InsertEvent].
+func (db *DB) InsertEvent(e *worklog.Event) (sql.Result, error) {
+	bid := fmt.Sprintf("%s_%s", e.Bucket, db.host)
+	return db.insertEvent(bid, e)
+}
+
+func (db *DB) insertEvent(bid string, e *worklog.Event) (sql.Result, error) {
+	msg, err := json.Marshal(e.Data)
+	if err != nil {
+		return nil, err
+	}
+	return db.exec(InsertEvent, bid, e.Start.Format(time.RFC3339Nano), e.End.Format(time.RFC3339Nano), msg)
+}
+
+const UpdateEvent = `update events set starttime = ?, endtime = ?, datastr = ? where id = ? and bucketrow = (
+	select rowid from buckets where id = ?
+)`
+
+// UpdateEvent updates the event in the store corresponding to the provided
+// event.
+// The SQL command run is [UpdateEvent].
+func (db *DB) UpdateEvent(e *worklog.Event) (sql.Result, error) {
+	msg, err := json.Marshal(e.Data)
+	if err != nil {
+		return nil, err
+	}
+	bid := fmt.Sprintf("%s_%s", e.Bucket, db.host)
+	return db.exec(UpdateEvent, e.Start.Format(time.RFC3339Nano), e.End.Format(time.RFC3339Nano), msg, e.ID, bid)
+}
+
+const LastEvent = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?1
+) and endtime = (
+	select max(endtime) from events where bucketrow = (
+		select rowid from buckets where id = ?1
+	) limit 1
+) limit 1`
+
+// LastEvent returns the last event in the named bucket.
+// The SQL command run is [LastEvent].
+func (db *DB) LastEvent(uid string) (*worklog.Event, error) {
+	bid := db.BucketID(uid)
+	rows, err := db.query(LastEvent, bid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, io.EOF
+	}
+	var (
+		e worklog.Event
+
+		start, end string
+		msg        []byte
+	)
+	err = rows.Scan(&e.ID, &start, &end, &msg)
+	if err != nil {
+		return nil, err
+	}
+	e.Start, err = time.Parse(time.RFC3339Nano, start)
+	if err != nil {
+		return &e, err
+	}
+	e.End, err = time.Parse(time.RFC3339Nano, end)
+	if err != nil {
+		return &e, err
+	}
+	if len(msg) != 0 {
+		err = json.Unmarshal(msg, &e.Data)
+		if err != nil {
+			return &e, err
+		}
+	}
+	if rows.Next() {
+		return &e, errors.New("unexpected item")
+	}
+	return &e, nil
+}
+
+// Dump dumps the complete database into a slice of [worklog.BucketMetadata].
+func (db *DB) Dump() ([]worklog.BucketMetadata, error) {
+	m, err := db.Buckets()
+	if err != nil {
+		return nil, err
+	}
+	for i, b := range m {
+		bucket, ok := strings.CutSuffix(b.ID, "_"+b.Hostname)
+		if !ok {
+			return m, fmt.Errorf("invalid bucket ID at %d: %s", i, b.ID)
+		}
+		e, err := db.Events(b.ID)
+		if err != nil {
+			return m, err
+		}
+		for j := range e {
+			e[j].Bucket = bucket
+		}
+		m[i].Events = e
+	}
+	return m, nil
+}
+
+// DumpRange dumps the database spanning the specified time range into a slice
+// of [worklog.BucketMetadata].
+func (db *DB) DumpRange(start, end time.Time) ([]worklog.BucketMetadata, error) {
+	m, err := db.Buckets()
+	if err != nil {
+		return nil, err
+	}
+	for i, b := range m {
+		bucket, ok := strings.CutSuffix(b.ID, "_"+b.Hostname)
+		if !ok {
+			return m, fmt.Errorf("invalid bucket ID at %d: %s", i, b.ID)
+		}
+		e, err := db.dumpEventsRange(b.ID, start, end, -1)
+		if err != nil {
+			return m, err
+		}
+		for j := range e {
+			e[j].Bucket = bucket
+		}
+		m[i].Events = e
+	}
+	return m, nil
+}
+
+const (
+	dumpEventsRange = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and endtime >= ? and starttime <= ? limit ?`
+
+	dumpEventsRangeUntil = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and starttime <= ? limit ?`
+
+	dumpEventsRangeFrom = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and endtime >= ? limit ?`
+
+	dumpEventsLimit = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) limit ?`
+)
+
+func (db *DB) dumpEventsRange(bid string, start, end time.Time, limit int) ([]worklog.Event, error) {
+	var e []worklog.Event
+	err := db.eventsRangeFunc(bid, start, end, limit, func(m worklog.Event) error {
+		e = append(e, m)
+		return nil
+	}, false)
+	return e, err
+}
+
+// Load loads a complete database from a slice of [worklog.BucketMetadata].
+// Event IDs will be regenerated by the backing database and so will not
+// match the input data.
+func (db *DB) Load(buckets []worklog.BucketMetadata) error {
+	for _, m := range buckets {
+		_, err := db.createBucket(m.ID, m.Name, m.Type, m.Client, m.Hostname, m.Created, m.Data)
+		if err != nil {
+			return err
+		}
+		for i, e := range m.Events {
+			bid := fmt.Sprintf("%s_%s", e.Bucket, m.Hostname)
+			_, err := db.insertEvent(bid, &m.Events[i])
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+const Buckets = `select id, name, type, client, hostname, created, datastr from buckets`
+
+// Buckets returns the full set of bucket metadata.
+// The SQL command run is [Buckets].
+func (db *DB) Buckets() ([]worklog.BucketMetadata, error) {
+	rows, err := db.query(Buckets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var b []worklog.BucketMetadata
+	for rows.Next() {
+		var (
+			m       worklog.BucketMetadata
+			msg     []byte
+			created string
+		)
+		err = rows.Scan(&m.ID, &m.Name, &m.Type, &m.Client, &m.Hostname, &created, &msg)
+		if err != nil {
+			return nil, err
+		}
+		m.Created, err = time.Parse(time.RFC3339Nano, created)
+		if err != nil {
+			return b, err
+		}
+		if len(msg) != 0 {
+			err = json.Unmarshal(msg, &m.Data)
+			if err != nil {
+				return b, err
+			}
+		}
+		b = append(b, m)
+	}
+	return b, nil
+}
+
+const Event = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and id = ? limit 1`
+
+const Events = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+)`
+
+// Buckets returns the full set of events in the bucket with the provided
+// internal bucket ID.
+// The SQL command run is [Events].
+func (db *DB) Events(bid string) ([]worklog.Event, error) {
+	rows, err := db.query(Events, bid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var e []worklog.Event
+	for rows.Next() {
+		var (
+			m worklog.Event
+
+			start, end string
+			msg        []byte
+		)
+		err = rows.Scan(&m.ID, &start, &end, &msg)
+		if err != nil {
+			return nil, err
+		}
+		m.Start, err = time.Parse(time.RFC3339Nano, start)
+		if err != nil {
+			return e, err
+		}
+		m.End, err = time.Parse(time.RFC3339Nano, end)
+		if err != nil {
+			return e, err
+		}
+		if len(msg) != 0 {
+			err = json.Unmarshal(msg, &m.Data)
+			if err != nil {
+				return e, err
+			}
+		}
+		e = append(e, m)
+	}
+	return e, nil
+}
+
+const (
+	EventsRange = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and endtime >= ? and starttime <= ? order by endtime desc limit ?`
+
+	EventsRangeUntil = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and starttime <= ? order by endtime desc limit ?`
+
+	EventsRangeFrom = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and endtime >= ? order by endtime desc limit ?`
+
+	EventsLimit = `select id, starttime, endtime, datastr from events where bucketrow = (
+	select rowid from buckets where id = ?
+) order by endtime desc limit ?`
+)
+
+// EventsRange returns the events in the bucket with the provided bucket ID
+// within the specified time range, sorted descending by end time.
+// The SQL command run is [EventsRange], [EventsRangeUntil], [EventsRangeFrom]
+// or [EventsLimit] depending on whether start and end are zero.
+func (db *DB) EventsRange(bid string, start, end time.Time, limit int) ([]worklog.Event, error) {
+	var e []worklog.Event
+	err := db.EventsRangeFunc(bid, start, end, limit, func(m worklog.Event) error {
+		e = append(e, m)
+		return nil
+	})
+	return e, err
+}
+
+// EventsRange calls fn on all the events in the bucket with the provided
+// bucket ID within the specified time range, sorted descending by end time.
+// The SQL command run is [EventsRange], [EventsRangeUntil], [EventsRangeFrom]
+// or [EventsLimit] depending on whether start and end are zero.
+func (db *DB) EventsRangeFunc(bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error {
+	return db.eventsRangeFunc(bid, start, end, limit, fn, true)
+}
+
+func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn func(worklog.Event) error, order bool) error {
+	var (
+		query string
+		rows  *sql.Rows
+		err   error
+	)
+	switch {
+	case !start.IsZero() && !end.IsZero():
+		query = EventsRange
+		if !order {
+			query = dumpEventsRange
+		}
+		rows, err = db.query(query, bid, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), limit)
+	case !start.IsZero():
+		query = EventsRangeFrom
+		if !order {
+			query = dumpEventsRangeFrom
+		}
+		rows, err = db.query(query, bid, start.Format(time.RFC3339Nano), limit)
+	case !end.IsZero():
+		query = EventsRangeUntil
+		if !order {
+			query = dumpEventsRangeUntil
+		}
+		rows, err = db.query(query, bid, end.Format(time.RFC3339Nano), limit)
+	default:
+		query = EventsLimit
+		if !order {
+			query = dumpEventsLimit
+		}
+		rows, err = db.query(query, bid, limit)
+	}
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			m worklog.Event
+
+			start, end string
+			msg        []byte
+		)
+		err = rows.Scan(&m.ID, &start, &end, &msg)
+		if err != nil {
+			return err
+		}
+		m.Start, err = time.Parse(time.RFC3339Nano, start)
+		if err != nil {
+			return err
+		}
+		m.End, err = time.Parse(time.RFC3339Nano, end)
+		if err != nil {
+			return err
+		}
+		if len(msg) != 0 {
+			err = json.Unmarshal(msg, &m.Data)
+			if err != nil {
+				return err
+			}
+		}
+		err = fn(m)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const DeleteEvent = `delete from events where bucketrow = (
+	select rowid from buckets where id = ?
+) and id = ?`
+
+const DeleteBucketEvents = `delete from events where bucketrow in (
+	select rowid from buckets where id = ?
+)`
+
+const DeleteBucket = `delete from buckets where id = ?`

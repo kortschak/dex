@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>worklog</title>
+		<script src="js/echarts-5.4.2.min.js"></script>
+		<script src="js/jquery-3.7.0.min.js"></script>
+	</head>
+	<body>
+		<div style="display: table;">
+				<div style="display: table-row">
+					<div id="day" style="width: 1000px;height:400px; display: table-cell;"></div>
+					<div style="display: table-cell;width: 50px;height:400px;"></div>
+					<div id="dayGauge" style="display: table-cell;width: 400px;height:400px;"></div>
+				</div>
+		</div>
+		<div style="display: table;">
+				<div style="display: table-row">
+					<div style="width: 1000px;height:600px; display: table-cell;">
+						<div id="activity" style="align: center;width: 1000px;height:200px;"></div>
+						<div id="flow" style="align: center;width: 1000px;height:400px;"></div>
+					</div>
+					<div id="transition" style="display: table-cell;width: 450px;height:600px;"></div>
+				</div>
+		</div>
+		<div style="display: table;">
+				<div style="display: table-row">
+					<div id="week" style="width: 1000px;height:400px; display: table-cell;"></div>
+					<div style="display: table-cell;width: 50px;height:400px;"></div>
+					<div id="weekGauge" style="display: table-cell;width: 400px;height:400px;"></div>
+				</div>
+		</div>
+		</div>
+		<div id="year" style="align: center;width: 1450px;height:250px;"></div>
+		<script type="text/javascript">
+
+const second = 1000;
+const minute = 60*second
+const hour = 60*minute
+
+var reloadEvery = minute;
+
+var urlParams = new URL(window.location.href).searchParams;
+var requestedDate = urlParams.get('date');
+
+$.get(urlFor(requestedDate), function(data) {
+	render(data);
+});
+setInterval(function () {
+	$.get(urlFor(requestedDate), function(data) {
+		render(data);
+	});
+}, reloadEvery);
+
+var data = {};
+
+function urlFor(date) {
+	if (date == formatDate(new Date())) {
+		date = '';
+	}
+	if (date != urlParams.get('date')) {
+		if (date == '') {
+			urlParams.delete('date')
+		} else {
+			urlParams.set('date', date)
+		}
+	}
+	if (urlParams.size == 0) {
+		return 'data/';
+	}
+	return 'data/?'+urlParams.toString();
+}
+
+function formatDate(d) {
+	return [d.getFullYear(), ('0' + (d.getMonth() + 1)).slice(-2), ('0' + d.getDate()).slice(-2)].join('-');
+}
+
+function formatTime(date){
+	function pad(n){ return n<10 ? '0'+n : n }
+	var y = date.getUTCFullYear();
+	var mo = pad(date.getMonth()+1);
+	var d = pad(date.getDate());
+	var h = pad(date.getHours());
+	var m = pad(date.getMinutes());
+	var s = pad(date.getSeconds());
+	var tzOff = date.getTimezoneOffset();
+	if (tzOff == 0) {
+		return `${y}-${mo}-${d}T${h}:${m}:${s}Z`;
+	}
+	var tzS = tzOff > 0 ? '-' : '+';
+	var tzH = pad(Math.trunc(Math.abs(tzOff)/60));
+	var tzM = pad(Math.abs(tzOff)%60);
+	return `${y}-${mo}-${d}T${h}:${m}:${s}${tzS}${tzH}:${tzM}`;
+}
+
+function formatDuration(hours) {
+	function frac(n) {
+		return n-Math.trunc(n);
+	}
+	var h = Math.trunc(hours);
+	var m = (60*frac(hours));
+	var s = (60*frac(m));
+	m = Math.trunc(m);
+	s = Math.trunc(s);
+	if (h != 0) {
+		return h + 'h' + (Math.trunc(m) != 0 ? Math.trunc(m) + 'm' : '');
+	}
+	if (m != 0 && s != 0) {
+		return Math.trunc(m) + 'm' + Math.trunc(s) + 's';
+	}
+	if (m != 0) {
+		return Math.trunc(m) + 'm';
+	}
+	if (s != 0) {
+		return Math.trunc(s) + 's';
+	}
+	return '-';
+}
+
+const hours = ['12a', '1a', '2a', '3a', '4a', '5a', '6a', '7a', '8a', '9a', '10a', '11a', '12p', '1p', '2p', '3p', '4p', '5p', '6p', '7p', '8p', '9p', '10p', '11p'];
+const days = ['Saturday', 'Friday', 'Thursday', 'Wednesday', 'Tuesday', 'Monday', 'Sunday'];
+
+var day = echarts.init(document.getElementById('day'), '');
+day.setOption({
+	title: {
+		top: 30,
+		left: 'center',
+	},
+	tooltip: {
+		position: 'top',
+		valueFormatter: function(d) {
+			return formatDuration(d/60);
+		}
+	},
+	xAxis: {
+		type: 'category',
+		data: hours
+	},
+	yAxis: {
+		type: 'value',
+		max: 60
+	},
+	series: [
+		{
+			type: 'bar'
+		}
+	]
+});
+
+var activity = echarts.init(document.getElementById('activity'));
+activity.setOption({
+	tooltip: {
+		confine: true,
+		showDelay: 50,
+		formatter: function(params) {
+			var d = formatDuration(params.value[3]/(3600*second));
+			var bucket = params.value[4];
+			var id = params.value[5];
+			return params.marker + params.name + '  <b>' + d + '</b><br>' + formatTime(params.value[1]) + '—' + formatTime(params.value[2]) + ` (${bucket}:${id})`;
+		}
+	},
+	dataZoom: [
+		{
+			type: 'slider',
+			filterMode: 'weakFilter',
+			showDataShadow: false,
+			top: 0,
+			labelFormatter: ''
+		},
+		{
+			type: 'inside',
+			filterMode: 'weakFilter'
+		}
+	],
+	grid: {
+		height: 75
+	},
+	xAxis: {
+		splitLine: {
+			show: false
+		},
+		axisLabel: {
+			show: false
+		}
+	},
+	yAxis: {
+		data: []
+	},
+	series: [
+		{
+			type: 'custom',
+			renderItem: function (params, api) {
+				var categoryIndex = api.value(0);
+				var start = api.coord([api.value(1), categoryIndex]);
+				var end = api.coord([api.value(2), categoryIndex]);
+				var height = api.size([0, 1])[1] * 0.6;
+				var rectShape = echarts.graphic.clipRectByRect(
+					{
+						x: start[0],
+						y: start[1] - height / 2,
+						width: end[0] - start[0],
+						height: height
+					},
+					{
+						x: params.coordSys.x,
+						y: params.coordSys.y,
+						width: params.coordSys.width,
+						height: params.coordSys.height
+					}
+				);
+				return (
+					rectShape && {
+						type: 'rect',
+						transition: ['shape'],
+						shape: rectShape,
+						style: api.style()
+					}
+				);
+			},
+			itemStyle: {
+				opacity: 0.8
+			},
+			encode: {
+				x: [1, 2],
+				y: 0
+			},
+			data: null
+		}
+	]
+});
+
+var flow = echarts.init(document.getElementById('flow'));
+flow.setOption({
+	tooltip: {
+		trigger: 'axis',
+		valueFormatter: formatDuration,
+		axisPointer: {
+			type: 'line',
+			lineStyle: {
+				color: 'rgba(0,0,0,0.2)',
+				width: 1,
+				type: 'solid'
+			}
+		}
+	},
+	legend: {
+		data: null
+	},
+	singleAxis: {
+		top: 50,
+		bottom: 50,
+		left: 100,
+		right: 100,
+		axisTick: {},
+		axisLabel: {
+			show: false
+		},
+		type: 'time',
+		axisPointer: {
+			animation: true,
+			label: {
+				show: true
+			}
+		},
+		splitLine: {
+			show: true,
+			lineStyle: {
+				type: 'dashed',
+				opacity: 0.2
+			}
+		}
+	},
+	series: [
+		{
+			type: 'themeRiver',
+			emphasis: {
+				itemStyle: {
+					shadowBlur: 20,
+					shadowColor: 'rgba(0, 0, 0, 0.8)'
+				}
+			},
+			data: null
+		}
+	]
+});
+
+var transition = echarts.init(document.getElementById('transition'), null, {width: 450, height: 550});
+transition.setOption({
+	tooltip: {},
+	legend: [],
+	series: [
+		{
+			type: 'graph',
+			layout: 'force',
+			data: null,
+			links: null,
+			categories: null,
+			roam: true,
+			draggable: true,
+			force: {
+				gravity: 1,
+				friction: 0.1,
+				repulsion: [1000, 10000],
+				edgeLength: 10
+			},
+			label: {
+				show: true,
+				position: 'right',
+				formatter: '{b}'
+			},
+			labelLayout: {
+				hideOverlap: true
+			},
+			scaleLimit: {
+				min: 0.4,
+				max: 2
+			},
+			lineStyle: {
+				color: 'source',
+				curveness: 0.3
+			}
+		}
+	]
+});
+
+var week = echarts.init(document.getElementById('week'));
+week.setOption({
+	title: {
+		top: 30,
+		left: 'center',
+		text: 'Weekly'
+	},
+	tooltip: {
+		position: 'top',
+		formatter: function(param) {
+			var d = formatDuration(param.value[2]/60);
+			return param.marker + "<b>" + d + '</b>';
+		}    
+	},
+	grid: {
+		height: '50%',
+		top: '25%'
+	},
+	xAxis: {
+		type: 'category',
+		data: hours,
+		splitArea: {
+			show: true
+		}
+	},
+	yAxis: {
+		type: 'category',
+		data: days,
+		splitArea: {
+			show: true
+		}
+	},
+	visualMap: {
+		min: 0,
+		max: 60,
+		calculable: true,
+		orient: 'vertical',
+		left: 'right',
+		top: '30%'
+	},
+	series: [
+		{
+			name: 'Work',
+			type: 'heatmap',
+			data: null,
+			label: {
+				show: false
+			},
+			emphasis: {
+				itemStyle: {
+					shadowBlur: 10,
+					shadowColor: 'rgba(0, 0, 0, 0.5)'
+				}
+			}
+		}
+	]
+});
+
+var year = echarts.init(document.getElementById('year'));
+year.setOption({
+	title: {
+		top: 30,
+		left: 'center',
+		text: 'Yearly'
+	},
+	tooltip: {
+		triggerOn: 'mousemove',
+		formatter: function(param) {
+			return param.marker + param.value[0] + '  <b>' + formatDuration(param.value[1]) + '</b>';
+		}    
+	},
+	visualMap: {
+		min: 0,
+		max: 24,
+		splitNumber: 6,
+		type: 'piecewise',
+		orient: 'horizontal',
+		left: 'center',
+		top: 65
+	},
+	calendar: {
+		top: 120,
+		left: 30,
+		right: 30,
+		cellSize: ['auto', 13],
+		range: new Date().getFullYear(),
+		itemStyle: {
+			borderWidth: 0.5
+		},
+		yearLabel: { show: true }
+	},
+	series: {
+		type: 'heatmap',
+		coordinateSystem: 'calendar',
+		data: null
+	}
+});
+year.on('click', function(params) {
+	requestedDate = params.value[0];
+	$.get(urlFor(requestedDate), function(data) {
+		render(data);
+	});
+});
+
+var dayGauge = gauge('dayGauge', 8);
+var weekGauge = gauge('weekGauge', 40);
+
+function gauge(id, hours) {
+	const animationDuration = second;
+	const animationDurationUpdate = second;
+	const animationEasingUpdate = 'quarticInOut';
+
+	var gauge = echarts.init(document.getElementById(id));
+	gauge.setOption({
+		animationEasing: animationEasingUpdate,
+		animationDuration: animationDuration,
+		animationDurationUpdate: animationDurationUpdate,
+		animationEasingUpdate: animationEasingUpdate,
+		dataset: {
+			source: [[1, 0]]
+		},
+		tooltip: {
+			show: false
+		},
+		angleAxis: {
+			type: 'value',
+			startAngle: 0,
+			show: false,
+			min: 0,
+			max: hours
+		},
+		radiusAxis: {
+			type: 'value',
+			show: false
+		},
+		polar: {},
+		series: [
+			{
+				type: 'custom',
+				coordinateSystem: 'polar',
+				renderItem: renderItem
+			}
+		]
+	});
+	return gauge;
+}
+
+var _outerRadius = 200;
+var _innerRadius = 170;
+var _insidePanelRadius = 140;
+function renderItem(params, api) {
+	const panelImage = 'img/gauge_panel.png';
+
+	var valOnRadian = api.value(1);
+	var coords = api.coord([api.value(0), valOnRadian]);
+	var polarEndRadian = coords[3];
+	var imageStyle = {
+		image: panelImage,
+		x: params.coordSys.cx - _outerRadius,
+		y: params.coordSys.cy - _outerRadius,
+		width: _outerRadius * 2,
+		height: _outerRadius * 2
+	};
+	return {
+		type: 'group',
+		children: [
+			{
+				type: 'image',
+				style: imageStyle,
+				clipPath: {
+					type: 'sector',
+					shape: {
+						cx: params.coordSys.cx,
+						cy: params.coordSys.cy,
+						r: _outerRadius,
+						r0: _innerRadius,
+						startAngle: 0,
+						endAngle: -polarEndRadian,
+						transition: 'endAngle',
+						enterFrom: { endAngle: 0 }
+					}
+				}
+			},
+			{
+				type: 'image',
+				style: imageStyle,
+				clipPath: {
+					type: 'polygon',
+					shape: {
+						points: makePointerPoints(params, polarEndRadian)
+					},
+					extra: {
+						polarEndRadian: polarEndRadian,
+						transition: 'polarEndRadian',
+						enterFrom: { polarEndRadian: 0 }
+					},
+					during: function(apiDuring) {
+						apiDuring.setShape(
+							'points',
+							makePointerPoints(params, apiDuring.getExtra('polarEndRadian'))
+						);
+					}
+				}
+			},
+			{
+				type: 'circle',
+				shape: {
+					cx: params.coordSys.cx,
+					cy: params.coordSys.cy,
+					r: _insidePanelRadius
+				},
+				style: {
+					fill: '#fff',
+					shadowBlur: 25,
+					shadowOffsetX: 0,
+					shadowOffsetY: 0,
+					shadowColor: 'rgba(76,107,167,0.4)'
+				}
+			},
+			{
+				type: 'text',
+				extra: {
+					valOnRadian: valOnRadian,
+					transition: 'valOnRadian',
+					enterFrom: { valOnRadian: 0 }
+				},
+				style: {
+					text: formatDuration(valOnRadian),
+					fontSize: 50,
+					fontWeight: 700,
+					x: params.coordSys.cx,
+					y: params.coordSys.cy,
+					fill: 'rgb(0,50,190)',
+					align: 'center',
+					verticalAlign: 'middle',
+					enterFrom: { opacity: 0 }
+				},
+			}
+		]
+	};
+}
+function makePointerPoints(offset, polarEndRadian) {
+	const pointerInnerRadius = 40;
+	return [
+		convertToPolarPoint(offset, _outerRadius, polarEndRadian),
+		convertToPolarPoint(offset, _outerRadius, polarEndRadian + Math.PI * 0.03 ),
+		convertToPolarPoint(offset, pointerInnerRadius, polarEndRadian)
+	];
+}
+function convertToPolarPoint(offset, radius, radian) {
+	return [Math.cos(radian) * radius + offset.coordSys.cx, -Math.sin(radian) * radius + offset.coordSys.cy];
+}
+
+function render(data) {
+	day.setOption({
+		title: {
+			text: dayTitle(requestedDate)
+		},
+		series: [
+			{
+				data: dayData(data),
+			}
+		]
+	});
+
+	var categories = activityCategories(data);
+	activity.setOption({
+		xAxis: {
+			min: dataDate(data),
+			max: dataDate(data)+24*hour,
+		},
+		yAxis: {
+			data: categories.list
+		},
+		series: [
+			{
+				data: activityData(data, categories.table)
+			}
+		]
+	});
+
+	flow.setOption({
+		singleAxis: {
+			min: dataDate(data),
+			max: dataDate(data)+24*hour,
+		},
+		legend: {
+			data: flowLegend(data)
+		},
+		series: [
+			{
+				data: flowData(data)
+			}
+		]
+	});
+
+	var transitions = transitionData(data);
+	var categories = transitions.categories;
+	transition.setOption({
+		tooltip: {
+			formatter: function(p) {
+				if (p.dataType == 'edge') {
+					return categories[p.data.source].name + '→' + categories[p.data.target].name + '  <b>' + p.data.value + '</b>';
+				}
+				return p.marker + p.name + '  <b>' + formatDuration(p.value) + '</b>';
+			}
+		},
+		legend: [
+			{
+				data: categories.map(function (a) {
+					return a.name;
+				})
+			}
+		],
+		series: [
+			{
+				data: transitions.nodes,
+				links: transitions.links,
+				categories: categories
+			}
+		]
+	});
+
+	week.setOption({
+		series: [
+			{
+				data: weekMinutesPerHour(data)
+			}
+		]
+	});
+
+	dayGauge.setOption({
+		dataset: {
+			source: [[1, data?.day?.total_hours || 0]]
+		}
+	});
+
+	weekGauge.setOption({
+		dataset: {
+			source: [[1, data?.week?.total_hours || 0]]
+		}
+	});
+
+	year.setOption({
+		calendar: {
+			range: yearFrom(data),
+		},
+		series: {
+			data: yearData(data)
+		}
+	});
+}
+
+function dataDate(data) {
+	if (!data.date) {
+		return new Date().setHours(0, 0, 0, 0);
+	}
+	return new Date(data.date).setHours(0, 0, 0, 0);
+}
+
+function dayTitle(date) {
+	if (date == null || date == '' || date == formatDate(new Date())) {
+		return 'Today';
+	}
+	return date;
+}
+
+function dayData(data) {
+	var hours = [];
+	for (let i = 0; i < 24; i++) {
+		var h = ("0"+i).slice(-2);
+		hours.push(data.day?.minutes[`${h}:00:00`] || 0);
+	}
+	return hours;
+}
+
+function activityCategories(data) {
+	var table = new Map();
+	var categories = [];
+	if (!data?.day?.events) {
+		return {table:table, list:categories};
+	}
+	// Reverse the order of the keys since they are
+	// sorted ascending by Go, but eCharts starts
+	// categories from the bottom of the axis.
+	var idx = Object.keys(data.day.events).length-1;
+	for (let [key, value] of Object.entries(data.day.events)) {
+		if (table.has[key]) {
+			continue;
+		}
+		table[key] = idx;
+		categories.unshift(key);
+		idx--;
+	}
+	return {table:table, list:categories};
+}
+
+function activityData(data, categories) {
+	var activityData = [];
+	if (!data?.day?.events) {
+		return activityData
+	}
+	for (let [key, value] of Object.entries(data.day.events)) {
+		if (key == '') {
+			continue;
+		}
+		value.forEach(e => {
+			var start = new Date(e.start);
+			var end = new Date(e.end);
+
+			var name = "";
+			if (key == "window") {
+				name = e.data?.app+" | "+e.data?.title;
+			} else if (key == "afk") {
+				if (e.data?.afk != undefined && !e.data.afk) {
+					name = "not-afk"
+				} else {
+					return;
+				}
+			} else if (e.data?.activity) {
+				name = e.data?.activity
+			}
+			activityData.push({
+				name: name,
+				value: [categories[key], start, end, end-start, e.bucket, e.id],
+				itemStyle: {
+					normal: {
+						color: stringToColour(name)
+					}
+				}
+			});
+		});
+	}    
+	return activityData;
+}
+
+function stringToColour(str) {
+	var hash = 0;
+	for (var i = 0; i < str.length; i++) {
+		hash = str.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	var colour = '#';
+	for (var i = 0; i < 3; i++) {
+		var value = (hash >> (i * 8)) & 0xff;
+		colour += ('00' + value.toString(16)).substr(-2);
+	}
+	return colour;
+}
+
+function flowLegend(data) {
+	var table = new Map();
+	var legend = [];
+	if (!data?.day?.flow) {
+		return legend;
+	}
+	for (let [key, value] of Object.entries(data.day.flow)) {
+		if (table.has[key]) {
+			continue;
+		}
+		table[key] = true;
+		legend.push(key);
+	}
+	return legend;
+}
+
+function flowData(data) {
+	var flow = [];
+	if (!data?.day?.flow) {
+		return flow;
+	}
+	function formatTime(date){
+		function pad(n){ return n<10 ? '0'+n : n }
+		var y = date.getUTCFullYear();
+		var mo = pad(date.getMonth()+1);
+		var d = pad(date.getDate());
+		var h = pad(date.getHours());
+		var m = pad(date.getMinutes());
+		var s = pad(date.getSeconds());
+		return `${y}-${mo}-${d} ${h}:${m}:${s}`;
+	}
+	for (let [app, value] of Object.entries(data.day.flow)) {
+		for (let [time, hours] of Object.entries(value)) {
+			// Offset so the point is in the middle of the hour.
+			var t = new Date(time);
+			t.setTime(t.getTime()+30*minute);
+			flow.push([formatTime(t), hours, app]);
+		}
+	}
+	return flow;
+}
+
+function transitionData(data) {
+	var transitions = data.day?.transitions;
+	if (!transitions) {
+		return transitions;
+	}
+	var nodes = transitions.nodes;
+	var links = transitions.links;
+	var categories = transitions.categories;
+	return {nodes: nodes, links: links, categories: categories};
+}
+
+function weekMinutesPerHour(data) {
+	var hours = [];
+	if (!data.week?.hours) {
+		return hours;
+	}
+	for (let [key, value] of Object.entries(data.week.hours)) {
+		var date = new Date(key);
+		var dow = date.getDay();
+		var hod = date.getHours()
+		hours.push([hod, 6-dow, value*60]);
+	}
+	return hours;
+}
+
+function yearFrom(data) {
+	if (!data.year?.hours) {
+		return new Date().getFullYear();
+	}
+	for (let [key, value] of Object.entries(data.year.hours)) {
+		return key.slice(0, key.indexOf('-'))
+	}
+}
+
+function yearData(data) {
+	var yearHours = [];
+	if (!data.year?.hours) {
+		return yearHours;
+	}
+	for (let [key, value] of Object.entries(data.year.hours)) {
+		yearHours.push([key, value]);
+	}
+	return yearHours;
+}
+
+		</script>
+	</body>
+</html>

@@ -1,0 +1,7 @@
+! cel src.cel
+stderr '"level":"ERROR","msg":"cel debug log error","tag":"bad","error":"division by zero"'
+
+-- src.cel --
+{
+	"error": debug("bad", 1/0),
+}
