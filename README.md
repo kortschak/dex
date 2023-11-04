@@ -4,7 +4,7 @@
 
 ## Architecture
 
-`dex` is built on a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) message passing system with a message passing kernel managing a set of modules that can communicate with it and each other through it via the API described in the [rpc package](./rpc/rpc.go). Modules may provide services that perform actions in response to Stream Deck button presses or change button images in response to external state.
+`dex` is built on a [JSON-RPC 2.0](https://www.jsonrpc.org/specification) message passing system with a message passing kernel managing a set of modules that can communicate with it and each other through it via the API described in the [rpc package](https://pkg.go.dev/github.com/kortschak/dex/rpc). Modules may provide services that perform actions in response to Stream Deck button presses or change button images in response to external state.
 
 In addition to handling message passing, the kernel also provides a set of low level operations such as retaining persistent state in a key store and interacting with the Stream Deck device.
 
@@ -18,7 +18,7 @@ In addition to these required flags, if the `log` `module.*.log_mode` configurat
 
 ## Configuration
 
-The complete specification of the required by the system is defined in the [configuration schema](./config/config.go) using the [CUE language](https://cuelang.org/) and in the [Go types](./config/config.go) used to hold the configuration values.
+The complete specification of the required by the system is defined in the [configuration schema](https://pkg.go.dev/github.com/kortschak/dex/config#pkg-constants) using the [CUE language](https://cuelang.org/) and in the [Go types](https://pkg.go.dev/github.com/kortschak/dex/config#System) used to hold the configuration values.
 
 Configurations are represented on disk as TOML files and may be split across multiple files.
 
@@ -44,21 +44,21 @@ Core methods provided by the kernel:
 - `notify` — JSON-RPC2.0 **notify** with a body corresponding to `rcp.Message[rpc.Forward[any]]` forwarding the `rpc.Forward.Method` notification to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
 - `unregister` — `rpc.Message[rpc.None]` to unregister the sending module and its services from the kernel's registry.
 - `heartbeat` — `rpc.Message[rpc.Deadline]` record a heartbeat from the sending module with a deadline for the next expected heartbeat.
-- `state` — `rpc.Message[rpc.None]` returns or logs the current [`rpc.SysState`](./rpc/rpc.go).
+- `state` — `rpc.Message[rpc.None]` returns or logs the current [`rpc.SysState`](https://pkg.go.dev/github.com/kortschak/dex/rpc#SysState).
 
 Extended methods provide by the kernel:
 
-- [`system`](./internal/sys/funcs.go) — `rpc.Message[rpc.None]` returns or logs the current [`config.System`](./config/config.go).
-- [`draw`](./internal/device/funcs.go) — `rpc.Message[device.DrawMessage]` draw an image to a device 
+- [`system`](https://pkg.go.dev/github.com/kortschak/dex/internal/sys#Funcs) — `rpc.Message[rpc.None]` returns or logs the current [`config.System`](https://pkg.go.dev/github.com/kortschak/dex/config#System).
+- [`draw`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.DrawMessage]` draw an image to a device 
 button.
-- [`brightness`](./internal/device/funcs.go) — `rpc.Message[device.BrightnessMessage]` set a device's brightness.
-- [`sleep`](./internal/device/funcs.go) — `rpc.Message[device.SleepMessage]` change a device's sleep state.
-- [`get`](./internal/state/funcs.go) — `rpc.Message[state.GetMessage]` get a value from the state store.
-- [`set`](./internal/state/funcs.go) — `rpc.Message[state.SetMessage]` set a value in the state store.
-- [`put`](./internal/state/funcs.go) — `rpc.Message[state.PutMessage]` replace a value in the state store.
-- [`delete`](./internal/state/funcs.go) — `rpc.Message[state.DeleteMessage]` delete a value from the state store.
-- [`drop`](./internal/state/funcs.go) — `rpc.Message[rpc.None]` delete all state data associated with a service (identity in the `rpc.Message`).
-- [`drop_module`](./internal/state/funcs.go) — `rpc.Message[rpc.None]` delete all state data associated with a module (identity in the `rpc.Message`).
+- [`brightness`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.BrightnessMessage]` set a device's brightness.
+- [`sleep`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.SleepMessage]` change a device's sleep state.
+- [`get`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.GetMessage]` get a value from the state store.
+- [`set`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.SetMessage]` set a value in the state store.
+- [`put`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.PutMessage]` replace a value in the state store.
+- [`delete`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.DeleteMessage]` delete a value from the state store.
+- [`drop`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[rpc.None]` delete all state data associated with a service (identity in the `rpc.Message`).
+- [`drop_module`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[rpc.None]` delete all state data associated with a module (identity in the `rpc.Message`).
 
 ## Provided modules
 
@@ -132,7 +132,7 @@ log_level = "error"
 log_add_source = true
 ```
 
-Modules have an additional setting, [`log_mode`](./config/config.go), that specifies how module logging is handled by the system; options are "log", "passthrough" and "none". The default behaviour is "passthrough". Modules must support the boolean `-log_stdout` flag to use the "log" option. When a module is passed a true `-log_stdout` it must log to stdout, but can emit arbitrary text to stderr.
+Modules have an additional setting, [`log_mode`](https://pkg.go.dev/github.com/kortschak/dex/config#Module), that specifies how module logging is handled by the system; options are "log", "passthrough" and "none". The default behaviour is "passthrough". Modules must support the boolean `-log_stdout` flag to use the "log" option. When a module is passed a true `-log_stdout` it must log to stdout, but can emit arbitrary text to stderr.
 
 - log:
     stdout → stderr

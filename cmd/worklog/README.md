@@ -157,7 +157,7 @@ In addition to the dashboard endpoint provided by the `worklog` server, there ar
 
 - `GET` `/data/`: accepts `date` and `tz` query parameters.
 - `GET` `/dump/`: accepts `start` and `end` query parameters.
-- `GET`/`POST` `/query`: takes a JSON-encoded (content-type:application/json) [query](./store/dynamic_query.go) or a CEL program (content-type:application/cel) that may use a built-in `query(<from table>, <JSON-encoded query without "from">)` function.
+- `GET`/`POST` `/query`: takes a JSON-encoded (content-type:application/json) [query](https://pkg.go.dev/github.com/kortschak/dex/cmd/worklog/store#Query) or a CEL program (content-type:application/cel) that may use a built-in `query(<from table>, <JSON-encoded query without "from">)` function.
 
 A potentially useful configuration for debugging rules is
 ```

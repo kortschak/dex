@@ -60,7 +60,7 @@ type DeleteMessage struct {
 //   - "drop": [DB.Drop]
 //   - "drop_module": [DB.DropModule]
 //
-// "drop" and "drop_module" expect [rpc.None] the call message body.
+// "drop" and "drop_module" expect [rpc.None] as the call message body.
 func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 	store := manager.Store()
 	storeUID := rpc.UID{Module: "kernel", Service: "store"}
