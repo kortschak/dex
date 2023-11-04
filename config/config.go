@@ -31,6 +31,9 @@ type Kernel struct {
 	// Device is the set of physical devices the kernel is handling.
 	// If Device is [{0, ""}], it is handling the first available device.
 	Device []Device `json:"device,omitempty" toml:"device"`
+	// Missing is the list of devices that are not required and are
+	// not present.
+	Missing []string `json:"missing,omitempty"`
 	// Network is the network the kernel is communicating on.
 	Network   string      `json:"network,omitempty" toml:"network"`
 	LogLevel  *slog.Level `json:"log_level,omitempty" toml:"log_level"`
@@ -51,6 +54,9 @@ type Device struct {
 	// Default is the default page name for the device.
 	// If Default is nil, the device default name is used.
 	Default *string `json:"default,omitempty" toml:"default"`
+	// Required indicates the configuration may not
+	// continue if the device is not available.
+	Required bool `json:"required,omitempty" toml:"required"`
 }
 
 // Module is a module configuration.
@@ -166,9 +172,10 @@ _#kernel: {
 }
 
 _#device: {
-	pid:      *0 | uint16
-	serial:   *"" | string
-	default?: string
+	pid:       *0 | uint16
+	serial:    *"" | string
+	default?:  string
+	required?: bool
 }
 
 _#module: {

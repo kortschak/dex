@@ -54,6 +54,10 @@ type Manager[K Kernel, D Device[B], B Button] struct {
 	// of the device the service is registered
 	// to use.
 	serviceSerial map[rpc.UID]string
+	// missing is the set of devices that were
+	// not available at start up but were not
+	// required.
+	missing map[string]bool
 
 	// newDevice is the dex device constructor.
 	newDevice NewDevice[K, D, B]
@@ -282,7 +286,7 @@ func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) er
 			// Stop sending events to service and remove
 			// it from its device's handler list,
 			m.log.LogAttrs(ctx, slog.LevelDebug, "unset send to service", slog.Any("uid", svc))
-			if c.Serial != nil {
+			if c.Serial != nil && !m.missing[*c.Serial] {
 				err = m.devices[*c.Serial].SendTo(rpc.UID{Module: uid, Service: c.Name}, nil)
 				if err != nil {
 					m.log.LogAttrs(ctx, slog.LevelWarn, "failed unset send to service", slog.Any("uid", svc), slog.Any("error", err))
@@ -326,6 +330,7 @@ func (m *Manager[K, D, B]) boot(ctx context.Context, cfg *config.System) error {
 
 	m.devices = make(map[string]D)
 	m.serviceSerial = make(map[rpc.UID]string)
+	m.missing = make(map[string]bool)
 	m.log.LogAttrs(ctx, slog.LevelDebug, "set devices", slog.Any("devices", cfg.Kernel.Device))
 	err = m.setDevices(ctx, cfg.Kernel.Device)
 	if err != nil {
@@ -361,6 +366,10 @@ func (m *Manager[K, D, B]) setDevices(ctx context.Context, devices []config.Devi
 		}
 		d, err := m.newDevice(ctx, dev.PID, *dev.Serial, m.kernel, m.parentLog)
 		if err != nil {
+			if !dev.Required {
+				m.missing[*dev.Serial] = true
+				continue
+			}
 			// Clean up opened devices.
 			for _, d := range m.devices {
 				err = d.Close()
@@ -415,6 +424,9 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 		uid := ""
 		svc := rpc.UID{Module: uid, Service: cfg.Name}
 		if cfg.Serial != nil {
+			if m.missing[*cfg.Serial] {
+				continue
+			}
 			m.log.LogAttrs(ctx, slog.LevelDebug, "add service to devices handler list", slog.Any("uid", svc), slog.String("serial", *cfg.Serial))
 			m.serviceSerial[svc] = *cfg.Serial
 		}
@@ -522,6 +534,9 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 					if err != nil {
 						m.log.LogAttrs(ctx, slog.LevelWarn, "failed configure service", slog.Any("uid", svc), slog.Any("error", err))
 					}
+				}
+				if cfg.Serial != nil && m.missing[*cfg.Serial] {
+					continue
 				}
 				if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreConfig) {
 					// Register requested button events.
@@ -689,6 +704,10 @@ func (m *Manager[K, D, B]) DeviceFor(svc rpc.UID) (D, error) {
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no serial", slog.Any("uid", svc))
 		return device, fmt.Errorf("no serial for %s", svc)
 	}
+	if m.missing[serial] {
+		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no device", slog.Any("uid", svc), slog.Any("serial", serial))
+		return device, fmt.Errorf("no device for %s serial %s", svc, serial)
+	}
 	device, ok = m.devices[serial]
 	if !ok {
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no device", slog.Any("uid", svc), slog.String("serial", serial))
@@ -741,6 +760,7 @@ func (m *Manager[K, D, B]) Close() error {
 	var none K
 	m.kernel = none
 	m.devices = nil
+	m.missing = nil
 	return err
 }
 
@@ -750,7 +770,8 @@ func (m *Manager[K, D, B]) close() error {
 	if !m.running {
 		return nil
 	}
-	for _, d := range m.devices {
+	for serial, d := range m.devices {
+		delete(m.missing, serial)
 		d.Close()
 	}
 	err := m.kernel.Close()

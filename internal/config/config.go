@@ -44,9 +44,10 @@ _#kernel: {
 }
 
 _#device: {
-	pid:      *0 | uint16
-	serial:   *"" | string
-	default?: string
+	pid:       *0 | uint16
+	serial:    *"" | string
+	default?:  string
+	required?: bool
 }
 
 _#module: {

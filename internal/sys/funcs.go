@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sort"
 
 	"github.com/kortschak/jsonrpc2"
 
@@ -28,8 +29,15 @@ func Funcs[K Kernel, D Device[B], B Button](manager *Manager[K, D, B], log *slog
 				log.LogAttrs(ctx, slog.LevelError, "system", slog.Any("error", err))
 				return nil, err
 			}
+			current := *manager.current
+			kernel := *current.Kernel
+			for m := range manager.missing {
+				kernel.Missing = append(kernel.Missing, m)
+			}
+			sort.Strings(kernel.Missing)
+			current.Kernel = &kernel
 			if id.IsValid() {
-				return rpc.NewMessage[any](kernelUID, manager.current), nil
+				return rpc.NewMessage[any](kernelUID, current), nil
 			}
 			log.LogAttrs(ctx, slog.LevelInfo, "system config request", slog.Any("config", manager.current))
 			return nil, nil
