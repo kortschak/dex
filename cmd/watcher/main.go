@@ -324,7 +324,9 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 }
 
 func compile(src string, log *slog.Logger) (cel.Program, error) {
-	opts := append([]cel.EnvOption{
+	env, err := cel.NewEnv(
+		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+		celext.Lib(log),
 		cel.Declarations(
 			decls.NewVar("time", decls.Timestamp),
 			decls.NewVar("window_id", decls.Int),
@@ -335,8 +337,7 @@ func compile(src string, log *slog.Logger) (cel.Program, error) {
 			decls.NewVar("locked", decls.Bool),
 			decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
 		),
-	}, celext.Lib(log))
-	env, err := cel.NewEnv(opts...)
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create env: %v", err)
 	}

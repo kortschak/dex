@@ -175,3 +175,7 @@ src = """
 """
 ```
 This will log all raw events sent from `watcher` so they can be correlated with digest rules and their resulting events. This will obviously store a lot of events in the database, and so is not recommended for long term operation.
+
+## CEL optional types
+
+The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion).

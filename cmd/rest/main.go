@@ -356,7 +356,12 @@ func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, cu
 }
 
 func compile(src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, error) {
-	env, err := cel.NewEnv(celext.Lib(log), cel.Lib(jsonLib{}), decls)
+	env, err := cel.NewEnv(
+		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+		celext.Lib(log),
+		cel.Lib(jsonLib{}),
+		decls,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create env: %v", err)
 	}

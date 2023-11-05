@@ -34,6 +34,10 @@ The response program may return the following CEL types:
 - duration (will be formatted as nanoseconds)
 - JSON object or array
 
+## CEL optional types
+
+The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion).
+
 ## CEL extensions
 
 The CEL environment provide extensions from the [celext package](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#Lib) and a JSON decoder to convert `bytes` JSON messages to objects, `<bytes>.decode_json() -> <dyn>`/`decode_json(<bytes>) -> <dyn>`.

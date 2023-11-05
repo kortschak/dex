@@ -254,11 +254,12 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			}
 			if m.Body.Options.Web.Rules != nil {
 				opts := []cel.EnvOption{
+					cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+					celext.Lib(d.log),
 					cel.Declarations(
 						decls.NewVar("bucket", decls.String),
 						decls.NewVar("data", decls.NewMapType(decls.String, decls.Dyn)),
 					),
-					celext.Lib(d.log),
 				}
 				rules := make(map[string]map[string]ruleDetail)
 				for srcBucket, ruleSet := range m.Body.Options.Web.Rules {
@@ -322,6 +323,8 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 
 			if m.Body.Options.Rules != nil {
 				opts := []cel.EnvOption{
+					cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+					celext.Lib(d.log),
 					cel.Declarations(
 						decls.NewVar("bucket", decls.String),
 						decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
@@ -330,7 +333,6 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 						decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
 						decls.NewVar("last_event", decls.NewMapType(decls.String, decls.Dyn)),
 					),
-					celext.Lib(d.log),
 				}
 				rules := make(map[string]ruleDetail)
 				for bucket, rule := range m.Body.Options.Rules {
@@ -784,6 +786,7 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			json.NewEncoder(w).Encode(resp)
 		case "application/cel":
 			prg, err := compile(body.String(), []cel.EnvOption{
+				cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 				celext.Lib(d.log),
 				cel.Lib(dbLib{db: db, log: d.log}),
 			})
