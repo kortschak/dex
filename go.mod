@@ -9,7 +9,7 @@ require (
 	github.com/bbrks/wrap/v2 v2.5.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gofrs/flock v0.8.1
-	github.com/google/cel-go v0.15.3
+	github.com/google/cel-go v0.17.7
 	github.com/google/go-cmp v0.5.9
 	github.com/kortschak/ardilla v0.0.0-20230412201247-08786440875c
 	github.com/kortschak/goroutine v1.0.1
