@@ -154,10 +154,12 @@ type Device[B Button] interface {
 
 	CurrentName() string
 	Page(name string) (p Page[B], ok bool)
+	PageNames() []string
 
 	Bounds() (image.Rectangle, error)
 	RawImage(img image.Image) (*ardilla.RawImage, error)
 
+	SetDisplayTo(ctx context.Context, name string) error
 	SetBrightness(percent int) error
 	Wake(ctx context.Context)
 	Sleep() error
@@ -567,9 +569,11 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 		}
 	}
 	for serial, p := range pages {
-		err := m.devices[serial].SetPages(ctx, defaultFor[serial], unique(p))
+		p = unique(p)
+		m.log.LogAttrs(ctx, slog.LevelDebug, "set pages", slog.Any("serial", serial), slog.Any("pages", p))
+		err := m.devices[serial].SetPages(ctx, defaultFor[serial], p)
 		if err != nil {
-			m.log.LogAttrs(ctx, slog.LevelWarn, "failed set pages", slog.Any("serial", serial), slog.Any("pages", pages), slog.Any("error", err))
+			m.log.LogAttrs(ctx, slog.LevelWarn, "failed set pages", slog.Any("serial", serial), slog.Any("pages", p), slog.Any("error", err))
 		}
 	}
 }

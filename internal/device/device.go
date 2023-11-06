@@ -13,6 +13,7 @@ import (
 	"image/color"
 	"io"
 	"log/slog"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -244,6 +245,7 @@ func (c *Controller) PageNames() []string {
 	for n := range c.pages {
 		names = append(names, n)
 	}
+	sort.Strings(names)
 	return names
 }
 

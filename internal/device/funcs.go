@@ -26,6 +26,19 @@ type DrawMessage struct {
 	Image string `json:"image"`
 }
 
+// PageMessage is is the RPC message for changing page.
+type PageMessage struct {
+	Page string `json:"page"`
+}
+
+// PageNamesMessage is is the RPC message for listing pages.
+type PageNamesMessage struct {
+	// The service owning the device to request
+	// the page list from. If nil, query the
+	// calling manager's service.
+	Service *rpc.UID `json:"service"`
+}
+
 // BrightnessMessage is is the RPC message for getting or setting the brightness
 // of a device.
 type BrightnessMessage struct {
@@ -49,6 +62,8 @@ type SleepMessage struct {
 // The RPC methods in the table are:
 //
 //   - "draw": see [sys.Page.Button]/[DecodeImage]/[sys.Button.Draw] and [DrawMessage]
+//   - "page": see [Controller.SetDisplayTo] and [PageMessage]
+//   - "page_names": see [Controller.PageNames] and [PageNamesMessage], returns []string
 //   - "brightness": see [sys.Device.SetBrightness] and [BrightnessMessage]
 //   - "sleep": see [sys.Device.Wake]/[sys.Device.Sleep]/[sys.Device.Clear] and [SleepMessage]
 func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
@@ -90,6 +105,47 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				resp = rpc.NewMessage[any](kernelUID, "ok")
 			}
 			return resp, nil
+		},
+
+		"page": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+			var m rpc.Message[PageMessage]
+			err := rpc.UnmarshalMessage(msg, &m)
+			if err != nil {
+				return nil, err
+			}
+
+			dev, err := manager.DeviceFor(m.UID)
+			if err != nil {
+				return nil, err
+			}
+			err = dev.SetDisplayTo(ctx, m.Body.Page)
+			var resp *rpc.Message[any]
+			if err == nil && id.IsValid() {
+				resp = rpc.NewMessage[any](kernelUID, "ok")
+			}
+			return resp, err
+		},
+
+		"page_names": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+			var m rpc.Message[PageNamesMessage]
+			err := rpc.UnmarshalMessage(msg, &m)
+			if err != nil {
+				return nil, err
+			}
+
+			uid := m.UID
+			if m.Body.Service != nil {
+				uid = *m.Body.Service
+			}
+			dev, err := manager.DeviceFor(uid)
+			if err != nil {
+				return nil, err
+			}
+			if id.IsValid() {
+				return rpc.NewMessage[any](kernelUID, dev.PageNames()), nil
+			}
+			log.LogAttrs(ctx, slog.LevelInfo, "page list request", slog.Any("service", uid), slog.Any("pages", dev.PageNames()))
+			return nil, nil
 		},
 
 		"brightness": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {

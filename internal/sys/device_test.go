@@ -64,6 +64,16 @@ func (d *testDevice) Page(name string) (p Page[*testButton], ok bool) {
 	return &testPage{name: name, recorder: d.recorder}, true
 }
 
+func (d *testDevice) SetDisplayTo(ctx context.Context, name string) error {
+	d.addAction("set display to", name)
+	return nil
+}
+
+func (d *testDevice) PageNames() []string {
+	d.addAction("page_names")
+	return nil
+}
+
 func (d *testDevice) Bounds() (image.Rectangle, error) {
 	d.addAction("bounds")
 	return image.Rectangle{}, nil

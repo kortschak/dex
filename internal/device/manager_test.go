@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"testing"
 	"time"
 
@@ -654,6 +655,15 @@ func (d *testDevice) Page(name string) (p Page, ok bool) {
 		}
 	}
 	return p, ok
+}
+
+func (d *testDevice) PageNames() []string {
+	names := make([]string, 0, len(d.pages))
+	for p := range d.pages {
+		names = append(names, p)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (d *testDevice) NewPage(name string) error {

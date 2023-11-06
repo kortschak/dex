@@ -51,6 +51,8 @@ Extended methods provide by the kernel:
 - [`system`](https://pkg.go.dev/github.com/kortschak/dex/internal/sys#Funcs) — `rpc.Message[rpc.None]` returns or logs the current [`config.System`](https://pkg.go.dev/github.com/kortschak/dex/config#System).
 - [`draw`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.DrawMessage]` draw an image to a device 
 button.
+- [`page`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[PageMessage]` change the displayed page.
+- [`page_names`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[PageNamesMessage]` returns a list of the device's page names for a service.
 - [`brightness`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.BrightnessMessage]` set a device's brightness.
 - [`sleep`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.SleepMessage]` change a device's sleep state.
 - [`get`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.GetMessage]` get a value from the state store.
@@ -89,8 +91,8 @@ Pressing the button at row 0/column 1 will log the kernel state at INFO level.
 [service.kernel_state]
 serial = ""
 listen = [
-    {"row" = 0, "col" = 1, "image" = "data:text/plain,state"},
-    {"row" = 0, "col" = 1, "change" = "press", "do" = "state"}
+    {row = 0, col = 1, image = "data:text/plain,state"},
+    {row = 0, col = 1, change = "press", do = "state"}
 ]
 ```
 
@@ -101,8 +103,49 @@ Pressing the button at row 0/column 2 will log the system configuration at INFO 
 [service.kernel_system]
 serial = ""
 listen = [
-    {"row" = 0, "col" = 2, "image" = "data:text/plain,system"},
-    {"row" = 0, "col" = 2, "change" = "press", "do" = "system"}
+    {row = 0, col = 2, image = "data:text/plain,system"},
+    {row = 0, col = 2, change = "press", do = "system"}
+]
+```
+
+## Pages
+
+`dex` has a notion of pages. A page is a set of buttons and actions that are presented as a unit. The current page can be changed using the `page` RPC call.
+
+For example, the state logging actions above could be put into a "debug" page which is togglable with the button at row 1/column 0.
+
+```
+[service.kernel_debug]
+serial = ""
+listen = [
+    {row = 1, col = 0, image = "data:text/plain,debug"},
+    {row = 1, col = 0, change = "press", do = "page", args = {page = "debug"}},
+    {page = "debug", row = 1, col = 0, image = "data:text/plain,home"},
+    {page = "debug", row = 1, col = 0, change = "press", do = "page", args = {page = "default"}}
+]
+
+[service.kernel_state]
+serial = ""
+listen = [
+    {page = "debug", row = 0, col = 1, image = "data:text/plain,state"},
+    {page = "debug", row = 0, col = 1, change = "press", do = "state"}
+]
+
+[service.kernel_system]
+serial = ""
+listen = [
+    {page = "debug", row = 0, col = 2, image = "data:text/plain,system"},
+    {page = "debug", row = 0, col = 2, change = "press", do = "system"}
+]
+```
+
+The set of available pages can be obtained using the `pages` RPC call. The following button action in the "debug" page logs the list of pages at INFO level.
+```
+[service.kernel_page_names]
+serial = ""
+listen = [
+    {page = "debug", row = 0, col = 3, image = "data:text/plain,pages"},
+    {page = "debug", row = 0, col = 3, change = "press", do = "page_names"}
 ]
 ```
 

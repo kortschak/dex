@@ -100,9 +100,20 @@ func (m *Manager) CurrentName() string {
 	return m.controller.CurrentName()
 }
 
+// SetDisplayTo sets the current display the named page. SetDisplayTo returns
+// an error if the page does not exist.
+func (m *Manager) SetDisplayTo(ctx context.Context, name string) error {
+	return m.controller.SetDisplayTo(ctx, name)
+}
+
 // Page returns the named page.
 func (m *Manager) Page(name string) (p sys.Page[*Button], ok bool) {
 	return m.controller.Page(name)
+}
+
+// PageNames returns a list of the device's page names.
+func (m *Manager) PageNames() []string {
+	return m.controller.PageNames()
 }
 
 // Bounds returns the image bounds for buttons on the managed device. If the
@@ -186,6 +197,7 @@ type device interface {
 	SetDefaultName(name string) error
 
 	Page(name string) (p Page, ok bool)
+	PageNames() []string
 	NewPage(name string) error
 	Delete(ctx context.Context, name string) error
 	Rename(old, new string) error
