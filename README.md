@@ -139,7 +139,7 @@ listen = [
 ]
 ```
 
-The set of available pages can be obtained using the `pages` RPC call. The following button action in the "debug" page logs the list of pages at INFO level.
+The set of available pages can be obtained using the `page_names` RPC call. The following button action in the "debug" page logs the list of pages at INFO level.
 ```
 [service.kernel_page_names]
 serial = ""
