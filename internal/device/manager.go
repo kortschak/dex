@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
+	"maps"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -211,6 +213,20 @@ func (p *pageManager) sendTo(dev device, service rpc.UID, actions []config.Butto
 	if p.reqs == nil {
 		p.reqs = make(map[string][]sendToRequest)
 	}
+	if len(actions) == 0 {
+		// Mark for deletion from all pages it is found in.
+		for name, page := range p.state {
+			for _, module := range page {
+				if _, ok := module[service]; !ok {
+					continue
+				}
+				p.reqs[name] = append(p.reqs[name], sendToRequest{
+					Service: service,
+				})
+			}
+		}
+		return nil
+	}
 	deflt := dev.DefaultName()
 	for _, a := range actions {
 		if a.Page == "" {
@@ -258,9 +274,7 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 	if deflt == nil {
 		deflt = &defaultName
 	}
-	rows, cols := dev.Layout()
-	want := getState(p.reqs, pages, *deflt, rows, cols)
-
+	want := getState(p.state, p.reqs, pages, *deflt)
 	p.notify = make(map[svcConn]Notification) // Retain temporarily for testing.
 	for name := range p.state {
 		if len(want[name]) != 0 {
@@ -286,6 +300,7 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 			}
 		}
 		for conn := range notify {
+			p.notify[conn] = Notification{Service: conn.uid, Buttons: nil}
 			err := conn.Notify(ctx, "state", rpc.NewMessage(kernelUID, Notification{Service: conn.uid}))
 			if err != nil {
 				p.log.LogAttrs(ctx, slog.LevelError, "failed to notify drop state", slog.Any("uid", conn.uid), slog.Any("error", err))
@@ -477,32 +492,114 @@ type Notification struct {
 }
 
 // getState returns a device state goal based on a set of requests, the list of
-// pages and the default page name, and the layout of a device page.
-func getState(reqs map[string][]sendToRequest, pages []string, deflt string, rows, cols int) map[string]map[pos]map[rpc.UID][]config.Button {
-	state := make(map[string]map[pos]map[rpc.UID][]config.Button)
-	for _, name := range pages {
-		if name == "" {
-			name = deflt
+// pages, and the default page name.
+func getState(state map[string]map[pos]map[rpc.UID][]config.Button, reqs map[string][]sendToRequest, pages []string, deflt string) map[string]map[pos]map[rpc.UID][]config.Button {
+	if reqs == nil {
+		return state
+	}
+
+	validPage := make(map[string]bool, len(pages))
+	for _, p := range pages {
+		if p == "" {
+			p = deflt
 		}
-		actions := make(map[pos]map[rpc.UID][]config.Button, rows*cols)
-		for _, req := range reqs[name] {
-			for _, a := range req.Actions {
+		validPage[p] = true
+	}
+
+	want := cloneState(state)
+	for name, req := range reqs {
+		for _, r := range req {
+			for _, module := range want[name] {
+				if len(r.Actions) == 0 || !validPage[name] {
+					delete(module, r.Service)
+					continue
+				}
+			}
+			for _, a := range r.Actions {
+				actions, ok := want[a.Page]
+				if !ok {
+					actions = make(map[pos]map[rpc.UID][]config.Button)
+					want[a.Page] = actions
+				}
 				svc, ok := actions[pos{a.Row, a.Col}]
 				if !ok {
 					svc = make(map[rpc.UID][]config.Button)
 					actions[pos{a.Row, a.Col}] = svc
 				}
-				svc[req.Service] = append(svc[req.Service], a)
+				svc[r.Service] = append(svc[r.Service], a)
 			}
 		}
-		for _, button := range actions {
-			for _, svc := range button {
-				sort.Sort(lexicalButtons(svc))
+	}
+	for name, page := range want {
+		if !validPage[name] {
+			delete(want, name)
+			continue
+		}
+		for pos, module := range page {
+			if len(module) == 0 {
+				delete(page, pos)
+				continue
+			}
+			for svc, actions := range module {
+				module[svc] = unique(actions)
 			}
 		}
-		state[name] = actions
+		if len(page) == 0 {
+			delete(want, name)
+		}
+	}
+	return want
+}
+
+// cloneState returns a deep copy of orig.
+func cloneState(orig map[string]map[pos]map[rpc.UID][]config.Button) map[string]map[pos]map[rpc.UID][]config.Button {
+	if orig == nil {
+		return make(map[string]map[pos]map[rpc.UID][]config.Button)
+	}
+	state := maps.Clone(orig)
+	for name, page := range state {
+		page := maps.Clone(page)
+		for pos, module := range page {
+			module := maps.Clone(module)
+			for svc, actions := range module {
+				// Fields in elements of actions must not be mutated
+				// in the resulting clone as they may be shared.
+				module[svc] = slices.Clone(actions)
+			}
+			page[pos] = module
+		}
+		state[name] = page
 	}
 	return state
+}
+
+// unique returns paths lexically sorted in ascending order and with repeated
+// and nil elements omitted.
+func unique(actions []config.Button) []config.Button {
+	if len(actions) < 2 {
+		return actions
+	}
+	sort.Sort(lexicalButtons(actions))
+	var zero config.Button
+	curr := 0
+	for i, a := range actions {
+		if reflect.DeepEqual(a, actions[curr]) {
+			continue
+		}
+		curr++
+		if curr < i {
+			actions[curr], actions[i] = actions[i], zero
+		}
+	}
+	// Remove any zero actions.
+	var s int
+	for i, a := range actions {
+		if a != zero {
+			s = i
+			break
+		}
+	}
+	return actions[s : curr+1]
 }
 
 // lexicalButtons sorts a slice of config.Button lexically.

@@ -574,6 +574,92 @@ var pageTransactionTests = []struct {
 			},
 		},
 	},
+	{
+		name: "delete",
+		device: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default":  true,
+				"foo-page": true,
+			},
+		},
+		manager: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 1, col: 1}: {
+						{Module: "bar", Service: "bar-1"}: {
+							{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("go-foo")},
+						},
+					},
+				},
+				"foo-page": {
+					{row: 1, col: 1}: {
+						{Module: "foo", Service: "foo-1"}: {
+							{Row: 1, Col: 1, Page: "foo-page", Change: ptr("press"), Do: ptr("go-default")},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"default": {
+					{
+						Service: rpc.UID{Module: "bar", Service: "bar-1"},
+						Actions: []config.Button{
+							{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("go-foo")},
+						},
+					},
+				},
+				"foo-page": {
+					{
+						Service: rpc.UID{Module: "foo", Service: "foo-1"},
+						Actions: []config.Button{
+							{Row: 1, Col: 1, Page: "foo-page", Change: ptr("press"), Do: ptr("go-default")},
+						},
+					},
+				},
+			},
+		},
+		reqs: []sendToRequest{
+			{
+				Service: rpc.UID{Module: "foo", Service: "foo-1"},
+				Actions: nil,
+			},
+		},
+		pages: setPages{deflt: nil, pages: []string{"", "foo-page"}},
+		want: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 1, col: 1}: {
+						{Module: "bar", Service: "bar-1"}: {
+							{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("go-foo")},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"foo-page": {
+					{
+						Service: rpc.UID{Module: "foo", Service: "foo-1"},
+						Actions: nil,
+					},
+				},
+			},
+			notify: map[svcConn]Notification{
+				{uid: rpc.UID{Module: "foo", Service: "foo-1"}, Connection: testConn("foo-conn")}: {
+					Service: rpc.UID{Module: "foo", Service: "foo-1"},
+					Buttons: nil,
+				},
+			},
+		},
+		wantDevice: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+	},
 }
 
 type setPages struct {
