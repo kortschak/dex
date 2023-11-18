@@ -49,6 +49,7 @@ rules.paging = """
 		"service": {"service":"kernel_pager"}
 	},
 })
+"""
 ```
 
 This depends on a kernel service to assign a device. This can be set up in the kernel configuration by adding the following lines.
