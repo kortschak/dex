@@ -29,6 +29,10 @@ type DrawMessage struct {
 // PageMessage is is the RPC message for changing page.
 type PageMessage struct {
 	Page string `json:"page"`
+	// The service owning the device to request
+	// the page change on. If nil, query the
+	// calling manager's service.
+	Service *rpc.UID `json:"service"`
 }
 
 // PageNamesMessage is is the RPC message for listing pages.
@@ -114,7 +118,11 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 
-			dev, err := manager.DeviceFor(m.UID)
+			uid := m.UID
+			if m.Body.Service != nil {
+				uid = *m.Body.Service
+			}
+			dev, err := manager.DeviceFor(uid)
 			if err != nil {
 				return nil, err
 			}

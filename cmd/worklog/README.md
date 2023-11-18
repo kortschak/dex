@@ -25,6 +25,7 @@ rules.activity = """
 			"last_input": last_input,
 			"locked":     locked,
 		},
+		"period": period,
 	},
 }
 """

@@ -277,7 +277,7 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 						break
 					}
 					for name, prg := range rules {
-						notes, err := eval(prg, t, details, last)
+						notes, err := eval(prg, t, details, last, p)
 						if err != nil {
 							d.log.LogAttrs(ctx, slog.LevelError, "polling evaluation", slog.Any("name", name), slog.Any("error", err))
 							continue
@@ -286,7 +286,6 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 							if note.Method == "" {
 								continue
 							}
-							note.Params["period"] = &rpc.Duration{Duration: p}
 							d.log.LogAttrs(ctx, slog.LevelDebug, "note details", slog.String("rule", name), slog.Any("number", i), slog.Any("note", note))
 							if note.UID.IsZero() {
 								err = d.conn.Notify(ctx, note.Method,
@@ -329,6 +328,7 @@ func compile(src string, log *slog.Logger) (cel.Program, error) {
 		celext.Lib(log),
 		cel.Declarations(
 			decls.NewVar("time", decls.Timestamp),
+			decls.NewVar("period", decls.Duration),
 			decls.NewVar("window_id", decls.Int),
 			decls.NewVar("name", decls.String),
 			decls.NewVar("class", decls.String),
@@ -354,9 +354,10 @@ func compile(src string, log *slog.Logger) (cel.Program, error) {
 	return prg, nil
 }
 
-func eval(prg cel.Program, ts time.Time, curr, last watcher.Details) ([]watcher.Notification, error) {
+func eval(prg cel.Program, ts time.Time, curr, last watcher.Details, period time.Duration) ([]watcher.Notification, error) {
 	out, _, err := prg.Eval(map[string]any{
-		"time": ts,
+		"time":   ts,
+		"period": period,
 
 		"window_id":  curr.WindowID,
 		"name":       curr.Name,
