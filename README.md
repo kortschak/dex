@@ -36,32 +36,32 @@ Each module and service it provides MUST use configurations consistent with the 
 
 ## Kernel RPC methods
 
-All RPC methods expect call and notify parameters to be a JSON object that can be deserialised into an `rpc.Message` envelope which contains the time of the call, the module/service UID of the caller, and the call parameters in the `rpc.Message.Body` field.
+All RPC methods expect call and notify parameters to be a JSON object that can be deserialised into an [`rpc.Message`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Message) envelope which contains the time of the call, the module/service UID of the caller, and the call parameters in the `rpc.Message.Body` field.
 
 Core methods provided by the kernel:
 
-- `call` — JSON-RPC2.0 **call** with a body corresponding to `rcp.Message[rpc.Forward[any]]` forwarding the `rpc.Forward.Method` call to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
-- `notify` — JSON-RPC2.0 **notify** with a body corresponding to `rcp.Message[rpc.Forward[any]]` forwarding the `rpc.Forward.Method` notification to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
-- `unregister` — `rpc.Message[rpc.None]` to unregister the sending module and its services from the kernel's registry.
-- `heartbeat` — `rpc.Message[rpc.Deadline]` record a heartbeat from the sending module with a deadline for the next expected heartbeat.
-- `state` — `rpc.Message[rpc.None]` returns or logs the current [`rpc.SysState`](https://pkg.go.dev/github.com/kortschak/dex/rpc#SysState).
+- `call` — JSON-RPC2.0 **call** with a body corresponding to [`rcp.Message[rpc.Forward[any]]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Forward) forwarding the `rpc.Forward.Method` call to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
+- `notify` — JSON-RPC2.0 **notify** with a body corresponding to [`rcp.Message[rpc.Forward[any]]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Forward) forwarding the `rpc.Forward.Method` notification to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
+- `unregister` — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) to unregister the sending module and its services from the kernel's registry.
+- `heartbeat` — [`rpc.Message[rpc.Deadline]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Deadline) record a heartbeat from the sending module with a deadline for the next expected heartbeat.
+- `state` — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) returns or logs the current [`rpc.SysState`](https://pkg.go.dev/github.com/kortschak/dex/rpc#SysState).
 
 Extended methods provide by the kernel:
 
-- [`system`](https://pkg.go.dev/github.com/kortschak/dex/internal/sys#Funcs) — `rpc.Message[rpc.None]` returns or logs the current [`config.System`](https://pkg.go.dev/github.com/kortschak/dex/config#System).
-- [`draw`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.DrawMessage]` draw an image to a device 
+- [`system`](https://pkg.go.dev/github.com/kortschak/dex/internal/sys#Funcs) — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) returns or logs the current [`config.System`](https://pkg.go.dev/github.com/kortschak/dex/config#System).
+- [`draw`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — [`rpc.Message[device.DrawMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#DrawMessage) draw an image to a device 
 button.
-- [`page`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.PageMessage]` change the displayed page.
-- [`page_names`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.PageStateMessage]` returns or logs the list of the device's page names for a service.
-- [`page_details`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.PageStateMessage]` returns of logs the device's page state for a service.
-- [`brightness`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.BrightnessMessage]` set a device's brightness.
-- [`sleep`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.SleepMessage]` change a device's sleep state.
-- [`get`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.GetMessage]` get a value from the state store.
-- [`set`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.SetMessage]` set a value in the state store.
-- [`put`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.PutMessage]` replace a value in the state store.
-- [`delete`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.DeleteMessage]` delete a value from the state store.
-- [`drop`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[rpc.None]` delete all state data associated with a service (identity in the `rpc.Message`).
-- [`drop_module`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[rpc.None]` delete all state data associated with a module (identity in the `rpc.Message`).
+- [`page`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — [`rpc.Message[device.PageMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#PageMessage) change the displayed page.
+- [`page_names`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — [`rpc.Message[device.PageStateMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#PageStateMessage) returns or logs the list of the device's page names for a service.
+- [`page_details`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — [`rpc.Message[device.PageStateMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#PageStateMessage) returns of logs the device's page state for a service.
+- [`brightness`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — [`rpc.Message[device.BrightnessMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#BrightnessMessage) set a device's brightness.
+- [`sleep`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — [`rpc.Message[device.SleepMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#SleepMessage) change a device's sleep state.
+- [`get`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[state.GetMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#GetMessage) get a value from the state store.
+- [`set`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[state.SetMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#SetMessage) set a value in the state store.
+- [`put`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[state.PutMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#PutMessage) replace a value in the state store.
+- [`delete`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[state.DeleteMessage]`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#DeleteMessage) delete a value from the state store.
+- [`drop`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) delete all state data associated with a service (identity in the `rpc.Message`).
+- [`drop_module`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) delete all state data associated with a module (identity in the `rpc.Message`).
 
 ## Provided modules
 
