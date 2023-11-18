@@ -138,22 +138,22 @@ listen = [
     {page = "debug", row = 0, col = 2, image = "data:text/plain,system"},
     {page = "debug", row = 0, col = 2, change = "press", do = "system"}
 ]
-
-[service.kernel_page_details]
-serial = ""
-listen = [
-    {page = "debug", row = 0, col = 3, image = "data:text/plain,page details"},
-    {page = "debug", row = 0, col = 3, change = "press", do = "page_details"}
-]
 ```
 
-The set of available pages can be obtained using the `page_names` RPC call. The following button action in the "debug" page logs the list of pages at INFO level.
+The set of available pages can be obtained using the `page_names` RPC call. The following button action in the "debug" page logs the list of pages at INFO level. A complete description of the page layout and actions can be obtained using the `page_details` method.
 ```
 [service.kernel_page_names]
 serial = ""
 listen = [
     {page = "debug", row = 0, col = 3, image = "data:text/plain,pages"},
     {page = "debug", row = 0, col = 3, change = "press", do = "page_names"}
+]
+
+[service.kernel_page_details]
+serial = ""
+listen = [
+    {page = "debug", row = 0, col = 4, image = "data:text/plain,page details"},
+    {page = "debug", row = 0, col = 4, change = "press", do = "page_details"}
 ]
 ```
 
