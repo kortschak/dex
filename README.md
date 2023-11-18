@@ -51,8 +51,9 @@ Extended methods provide by the kernel:
 - [`system`](https://pkg.go.dev/github.com/kortschak/dex/internal/sys#Funcs) — `rpc.Message[rpc.None]` returns or logs the current [`config.System`](https://pkg.go.dev/github.com/kortschak/dex/config#System).
 - [`draw`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.DrawMessage]` draw an image to a device 
 button.
-- [`page`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[PageMessage]` change the displayed page.
-- [`page_names`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[PageNamesMessage]` returns a list of the device's page names for a service.
+- [`page`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.PageMessage]` change the displayed page.
+- [`page_names`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.PageStateMessage]` returns or logs the list of the device's page names for a service.
+- [`page_details`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.PageStateMessage]` returns of logs the device's page state for a service.
 - [`brightness`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.BrightnessMessage]` set a device's brightness.
 - [`sleep`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Funcs) — `rpc.Message[device.SleepMessage]` change a device's sleep state.
 - [`get`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — `rpc.Message[state.GetMessage]` get a value from the state store.
@@ -136,6 +137,13 @@ serial = ""
 listen = [
     {page = "debug", row = 0, col = 2, image = "data:text/plain,system"},
     {page = "debug", row = 0, col = 2, change = "press", do = "system"}
+]
+
+[service.kernel_page_details]
+serial = ""
+listen = [
+    {page = "debug", row = 0, col = 3, image = "data:text/plain,page details"},
+    {page = "debug", row = 0, col = 3, change = "press", do = "page_details"}
 ]
 ```
 

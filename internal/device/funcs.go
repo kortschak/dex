@@ -35,8 +35,8 @@ type PageMessage struct {
 	Service *rpc.UID `json:"service"`
 }
 
-// PageNamesMessage is is the RPC message for listing pages.
-type PageNamesMessage struct {
+// PageStateMessage is is the RPC message for listing pages.
+type PageStateMessage struct {
 	// The service owning the device to request
 	// the page list from. If nil, query the
 	// calling manager's service.
@@ -67,7 +67,8 @@ type SleepMessage struct {
 //
 //   - "draw": see [sys.Page.Button]/[DecodeImage]/[sys.Button.Draw] and [DrawMessage]
 //   - "page": see [Controller.SetDisplayTo] and [PageMessage]
-//   - "page_names": see [Controller.PageNames] and [PageNamesMessage], returns []string
+//   - "page_names": see [Controller.PageNames] and [PageStateMessage], returns []string
+//   - "page_details": see [Controller.PageNames] and [PageStateMessage], returns map[string][]config.Button
 //   - "brightness": see [sys.Device.SetBrightness] and [BrightnessMessage]
 //   - "sleep": see [sys.Device.Wake]/[sys.Device.Sleep]/[sys.Device.Clear] and [SleepMessage]
 func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
@@ -135,7 +136,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 		},
 
 		"page_names": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
-			var m rpc.Message[PageNamesMessage]
+			var m rpc.Message[PageStateMessage]
 			err := rpc.UnmarshalMessage(msg, &m)
 			if err != nil {
 				return nil, err
@@ -153,6 +154,28 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return rpc.NewMessage[any](kernelUID, dev.PageNames()), nil
 			}
 			log.LogAttrs(ctx, slog.LevelInfo, "page list request", slog.Any("service", uid), slog.Any("pages", dev.PageNames()))
+			return nil, nil
+		},
+
+		"page_details": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+			var m rpc.Message[PageStateMessage]
+			err := rpc.UnmarshalMessage(msg, &m)
+			if err != nil {
+				return nil, err
+			}
+
+			uid := m.UID
+			if m.Body.Service != nil {
+				uid = *m.Body.Service
+			}
+			dev, err := manager.DeviceFor(uid)
+			if err != nil {
+				return nil, err
+			}
+			if id.IsValid() {
+				return rpc.NewMessage[any](kernelUID, dev.PageDetails()), nil
+			}
+			log.LogAttrs(ctx, slog.LevelInfo, "page details request", slog.Any("service", uid), slog.Any("pages", dev.PageDetails()))
 			return nil, nil
 		},
 

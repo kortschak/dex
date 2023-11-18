@@ -118,6 +118,22 @@ func (m *Manager) PageNames() []string {
 	return m.controller.PageNames()
 }
 
+// PageDetails returns the device's page details.
+func (m *Manager) PageDetails() map[string][]config.Button {
+	pages := make(map[string][]config.Button, len(m.pages.state))
+	for name, page := range m.pages.state {
+		for _, module := range page {
+			for _, actions := range module {
+				pages[name] = append(pages[name], actions...)
+			}
+		}
+	}
+	for name, buttons := range pages {
+		pages[name] = unique(buttons)
+	}
+	return pages
+}
+
 // Bounds returns the image bounds for buttons on the managed device. If the
 // device is not visual an error is returned.
 func (m *Manager) Bounds() (image.Rectangle, error) {

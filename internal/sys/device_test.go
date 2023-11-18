@@ -74,6 +74,11 @@ func (d *testDevice) PageNames() []string {
 	return nil
 }
 
+func (d *testDevice) PageDetails() map[string][]config.Button {
+	d.addAction("page_details")
+	return nil
+}
+
 func (d *testDevice) Bounds() (image.Rectangle, error) {
 	d.addAction("bounds")
 	return image.Rectangle{}, nil

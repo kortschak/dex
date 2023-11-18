@@ -155,6 +155,7 @@ type Device[B Button] interface {
 	CurrentName() string
 	Page(name string) (p Page[B], ok bool)
 	PageNames() []string
+	PageDetails() map[string][]config.Button
 
 	Bounds() (image.Rectangle, error)
 	RawImage(img image.Image) (*ardilla.RawImage, error)
