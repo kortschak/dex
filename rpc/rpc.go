@@ -37,7 +37,7 @@ type Message[T any] struct {
 	Body T         `json:"body,omitempty"`
 }
 
-// UID is a components UID.
+// UID is a component's UID.
 type UID struct {
 	Module  string `json:"module,omitempty"`
 	Service string `json:"service,omitempty"`
