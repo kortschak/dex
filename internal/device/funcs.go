@@ -83,6 +83,9 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 
 			dev, err := manager.DeviceFor(m.UID)
 			if err != nil {
+				if err == sys.ErrAllowedMissingDevice {
+					err = nil
+				}
 				return nil, err
 			}
 			p, ok := dev.Page(m.Body.Page)
@@ -125,6 +128,9 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			dev, err := manager.DeviceFor(uid)
 			if err != nil {
+				if err == sys.ErrAllowedMissingDevice {
+					err = nil
+				}
 				return nil, err
 			}
 			err = dev.SetDisplayTo(ctx, m.Body.Page)
@@ -148,6 +154,9 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			dev, err := manager.DeviceFor(uid)
 			if err != nil {
+				if err == sys.ErrAllowedMissingDevice {
+					err = nil
+				}
 				return nil, err
 			}
 			if id.IsValid() {
@@ -170,6 +179,9 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			dev, err := manager.DeviceFor(uid)
 			if err != nil {
+				if err == sys.ErrAllowedMissingDevice {
+					err = nil
+				}
 				return nil, err
 			}
 			if id.IsValid() {
@@ -194,6 +206,9 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 
 			dev, err := manager.DeviceFor(m.UID)
 			if err != nil {
+				if err == sys.ErrAllowedMissingDevice {
+					err = nil
+				}
 				return nil, err
 			}
 			devUID := rpc.UID{Module: "kernel", Service: dev.Serial()}
@@ -248,6 +263,9 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 
 			dev, err := manager.DeviceFor(m.UID)
 			if err != nil {
+				if err == sys.ErrAllowedMissingDevice {
+					err = nil
+				}
 				return nil, err
 			}
 			switch m.Body.State {

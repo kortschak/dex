@@ -31,7 +31,7 @@ func Funcs[K Kernel, D Device[B], B Button](manager *Manager[K, D, B], log *slog
 			}
 			current := *manager.current
 			kernel := *current.Kernel
-			for m := range manager.missing {
+			for m := range manager.missingSerial {
 				kernel.Missing = append(kernel.Missing, m)
 			}
 			sort.Strings(kernel.Missing)

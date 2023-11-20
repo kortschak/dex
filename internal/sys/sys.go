@@ -54,10 +54,13 @@ type Manager[K Kernel, D Device[B], B Button] struct {
 	// of the device the service is registered
 	// to use.
 	serviceSerial map[rpc.UID]string
-	// missing is the set of devices that were
-	// not available at start up but were not
-	// required.
-	missing map[string]bool
+	// missingSerial is the set of devices that
+	// were not available at start up but were
+	// not required.
+	missingSerial map[string]bool
+	// missingService is the set of services that
+	// depend on missing devices.
+	missingService map[rpc.UID]bool
 
 	// newDevice is the dex device constructor.
 	newDevice NewDevice[K, D, B]
@@ -289,7 +292,7 @@ func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) er
 			// Stop sending events to service and remove
 			// it from its device's handler list,
 			m.log.LogAttrs(ctx, slog.LevelDebug, "unset send to service", slog.Any("uid", svc))
-			if c.Serial != nil && !m.missing[*c.Serial] {
+			if c.Serial != nil && !m.missingSerial[*c.Serial] {
 				err = m.devices[*c.Serial].SendTo(rpc.UID{Module: uid, Service: c.Name}, nil)
 				if err != nil {
 					m.log.LogAttrs(ctx, slog.LevelWarn, "failed unset send to service", slog.Any("uid", svc), slog.Any("error", err))
@@ -333,7 +336,8 @@ func (m *Manager[K, D, B]) boot(ctx context.Context, cfg *config.System) error {
 
 	m.devices = make(map[string]D)
 	m.serviceSerial = make(map[rpc.UID]string)
-	m.missing = make(map[string]bool)
+	m.missingSerial = make(map[string]bool)
+	m.missingService = make(map[rpc.UID]bool)
 	m.log.LogAttrs(ctx, slog.LevelDebug, "set devices", slog.Any("devices", cfg.Kernel.Device))
 	err = m.setDevices(ctx, cfg.Kernel.Device)
 	if err != nil {
@@ -370,7 +374,7 @@ func (m *Manager[K, D, B]) setDevices(ctx context.Context, devices []config.Devi
 		d, err := m.newDevice(ctx, dev.PID, *dev.Serial, m.kernel, m.parentLog)
 		if err != nil {
 			if !dev.Required {
-				m.missing[*dev.Serial] = true
+				m.missingSerial[*dev.Serial] = true
 				continue
 			}
 			// Clean up opened devices.
@@ -427,12 +431,14 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 		uid := ""
 		svc := rpc.UID{Module: uid, Service: cfg.Name}
 		if cfg.Serial != nil {
-			if m.missing[*cfg.Serial] {
+			if m.missingSerial[*cfg.Serial] {
+				m.missingService[svc] = true
 				continue
 			}
 			m.log.LogAttrs(ctx, slog.LevelDebug, "add service to devices handler list", slog.Any("uid", svc), slog.String("serial", *cfg.Serial))
 			m.serviceSerial[svc] = *cfg.Serial
 		}
+		delete(m.missingService, svc)
 		if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreConfig) {
 			// Register requested button events.
 			m.log.LogAttrs(ctx, slog.LevelDebug, "request notifications", slog.String("uid", uid), slog.String("name", cfg.Name), slog.Any("listen", cfg.Listen))
@@ -538,7 +544,7 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 						m.log.LogAttrs(ctx, slog.LevelWarn, "failed configure service", slog.Any("uid", svc), slog.Any("error", err))
 					}
 				}
-				if cfg.Serial != nil && m.missing[*cfg.Serial] {
+				if cfg.Serial != nil && m.missingSerial[*cfg.Serial] {
 					continue
 				}
 				if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreConfig) {
@@ -698,6 +704,11 @@ func (m *Manager[K, D, B]) setBuiltins(ctx context.Context, builtins map[string]
 	return nil
 }
 
+// ErrAllowedMissingDevice is returned by [Manager.DeviceFor] when a a device
+// is not available for a service, but the device has been configured with
+// [config.Device.Required] set to false.
+var ErrAllowedMissingDevice = errors.New("allowed missing device")
+
 // DeviceFor returns the device the service is registered to.
 func (m *Manager[K, D, B]) DeviceFor(svc rpc.UID) (D, error) {
 	m.log.LogAttrs(context.Background(), slog.LevelDebug, "request device", slog.Any("uid", svc))
@@ -706,10 +717,14 @@ func (m *Manager[K, D, B]) DeviceFor(svc rpc.UID) (D, error) {
 	defer m.mu.Unlock()
 	serial, ok := m.serviceSerial[svc]
 	if !ok {
+		if m.missingService[svc] {
+			m.log.LogAttrs(context.Background(), slog.LevelDebug, "no serial", slog.Any("uid", svc))
+			return device, ErrAllowedMissingDevice
+		}
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no serial", slog.Any("uid", svc))
 		return device, fmt.Errorf("no serial for %s", svc)
 	}
-	if m.missing[serial] {
+	if m.missingSerial[serial] {
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no device", slog.Any("uid", svc), slog.Any("serial", serial))
 		return device, fmt.Errorf("no device for %s serial %s", svc, serial)
 	}
@@ -765,7 +780,8 @@ func (m *Manager[K, D, B]) Close() error {
 	var none K
 	m.kernel = none
 	m.devices = nil
-	m.missing = nil
+	m.missingSerial = nil
+	m.missingService = nil
 	return err
 }
 
@@ -775,8 +791,7 @@ func (m *Manager[K, D, B]) close() error {
 	if !m.running {
 		return nil
 	}
-	for serial, d := range m.devices {
-		delete(m.missing, serial)
+	for _, d := range m.devices {
 		d.Close()
 	}
 	err := m.kernel.Close()
