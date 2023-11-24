@@ -1,0 +1,48 @@
+data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+-- src.cel --
+data_src != {"module":"watcher"} ? {} :
+{
+	"afk_timeout":   duration("3m"),
+	"gap_tolerance": duration("0.1s"),
+}.as(params, {
+	"can_continue": last_event.end.is_zero() ?
+                	false
+                :
+                	(curr.time-last_event.end)-period < params.gap_tolerance,
+	"is_afk":   curr.last_input.is_zero() ?
+					true
+				:
+	            	curr.locked || curr.time-curr.last_input > params.afk_timeout,
+	"was_afk":  has(last_event.data.afk) ?
+	            	last_event.data.afk
+	            :
+	            	true,
+}).as(cond, cond.with({
+	"continue": cond.can_continue &&
+	            has(last.locked) && curr.locked == last.locked &&
+	            cond.is_afk == cond.was_afk
+})).as(cond, {
+	"bucket":   bucket, // bucket or empty if no store is required.
+	"start":    cond.continue ? last_event.start : last.time,
+	"end":      curr.time,
+	"data":     {
+		"afk":    cond.is_afk,
+		"locked": curr.locked,
+	},
+	"continue": cond.continue,
+})
+-- want.json --
+{"bucket":"afk","id":1,"start":"2023-11-24T10:06:34.729143+10:30","end":"2023-11-24T10:06:40.731871+10:30","data":{"afk":false,"locked":false}}
+{"bucket":"afk","id":2,"start":"2023-11-24T10:06:40.731871+10:30","end":"2023-11-24T10:06:41.721663+10:30","data":{"afk":true,"locked":true}}
+{"bucket":"afk","id":3,"start":"2023-11-24T10:06:41.721663+10:30","end":"2023-11-24T10:06:43.720224+10:30","data":{"afk":false,"locked":false}}
+-- data.json --
+{"time":"2023-11-24T10:06:34.729143+10:30","details":{"wid":404,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:23.066480773+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:35.727969+10:30","details":{"wid":404,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:23.066102021+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:36.72746+10:30","details":{"wid":404,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:23.06647752+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:37.735344+10:30","details":{"wid":404,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:23.0660213+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:38.728618+10:30","details":{"wid":221,"name":"firefox","class":"Firefox","window":"less","last_input":"2023-11-24T10:06:23.06654325+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:39.719013+10:30","details":{"wid":221,"name":"firefox","class":"Firefox","window":"less","last_input":"2023-11-24T10:06:23.066534374+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:40.731871+10:30","details":{"wid":6851,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:23.066393598+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:41.721663+10:30","details":{"wid":6851,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:23.066315611+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-24T10:06:42.727695+10:30","details":{"wid":6851,"name":"iTerm2","class":"iTerm","window":"less","last_input":"2023-11-24T10:06:42.726160857+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-24T10:06:43.720224+10:30","details":{"wid":404,"name":"iTerm2","class":"iTerm","window":"watcher","last_input":"2023-11-24T10:06:43.652525917+10:30","locked":false},"period":"1s"}

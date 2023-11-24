@@ -253,27 +253,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				}
 			}
 			if m.Body.Options.Web.Rules != nil {
-				opts := []cel.EnvOption{
-					cel.OptionalTypes(cel.OptionalTypesVersion(1)),
-					celext.Lib(d.log),
-					cel.Declarations(
-						decls.NewVar("bucket", decls.String),
-						decls.NewVar("data", decls.NewMapType(decls.String, decls.Dyn)),
-					),
-				}
-				rules := make(map[string]map[string]ruleDetail)
-				for srcBucket, ruleSet := range m.Body.Options.Web.Rules {
-					rules[srcBucket] = make(map[string]ruleDetail)
-					for dstBucket, rule := range ruleSet {
-						prg, err := compile(rule.Src, opts)
-						if err != nil {
-							d.log.LogAttrs(ctx, slog.LevelError, "compiling rule", slog.String("src_bucket", srcBucket), slog.String("dst_bucket", dstBucket), slog.Any("error", err))
-						} else {
-							rules[srcBucket][dstBucket] = ruleDetail{name: rule.Name, prg: prg}
-						}
-					}
-				}
-				d.dashboardRules.Store(rules)
+				d.configureWebRule(ctx, m.Body.Options.Web.Rules)
 			}
 		}
 
@@ -298,73 +278,21 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.Any("error", err))
 				return nil, err
 			}
+
 			path := filepath.Join(dir, "db.sqlite")
 			if db, ok := d.db.Load().(*store.DB); !ok || path != db.Name() {
-				if ok && db != nil {
-					d.log.LogAttrs(ctx, slog.LevelInfo, "close database", slog.String("path", db.Name()))
-					d.db.Store((*store.DB)(nil))
-					db.Close()
-				}
-				// store.Open may need to get the hostname, which may
-				// wait indefinitely due to network unavailability.
-				// So make a timeout and allow the fallback to the
-				// kernel-provided hostname. This fallback is
-				// implemented by store.Open.
-				ctx, cancel := context.WithTimeout(ctx, time.Minute)
-				defer cancel()
-				db, err = store.Open(ctx, path, m.Body.Options.Hostname)
+				err = d.openDB(ctx, db, path, m.Body.Options.Hostname)
 				if err != nil {
-					d.log.LogAttrs(ctx, slog.LevelError, "open database", slog.Any("error", err))
 					return nil, err
 				}
-				d.db.Store(db)
-				d.log.LogAttrs(ctx, slog.LevelInfo, "open database", slog.String("path", path))
 			}
 
 			if m.Body.Options.Rules != nil {
-				opts := []cel.EnvOption{
-					cel.OptionalTypes(cel.OptionalTypesVersion(1)),
-					celext.Lib(d.log),
-					cel.Declarations(
-						decls.NewVar("bucket", decls.String),
-						decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
-						decls.NewVar("period", decls.Duration),
-						decls.NewVar("curr", decls.NewMapType(decls.String, decls.Dyn)),
-						decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
-						decls.NewVar("last_event", decls.NewMapType(decls.String, decls.Dyn)),
-					),
-				}
-				rules := make(map[string]ruleDetail)
-				for bucket, rule := range m.Body.Options.Rules {
-					prg, err := compile(rule.Src, opts)
-					if err != nil {
-						d.log.LogAttrs(ctx, slog.LevelError, "compiling rule", slog.String("bucket", bucket), slog.Any("error", err))
-					} else {
-						rules[bucket] = ruleDetail{name: rule.Name, typ: rule.Type, prg: prg}
-					}
-				}
-				d.rules.Store(rules)
+				d.configureRules(ctx, m.Body.Options.Rules)
 			}
 
 			if db, ok := d.db.Load().(*store.DB); ok {
-				rules, _ := d.rules.Load().(map[string]ruleDetail)
-				for bucket, rule := range rules {
-					d.log.LogAttrs(ctx, slog.LevelDebug, "create bucket", slog.Any("bucket", bucket))
-					m, err := db.CreateBucket(bucket, rule.name, rule.typ, d.uid, time.Now(), nil)
-					var sqlErr *sqlite.Error
-					switch {
-					case err == nil:
-						d.log.LogAttrs(ctx, slog.LevelInfo, "create bucket", slog.Any("metadata", m))
-					case errors.As(err, &sqlErr):
-						if sqlErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
-							d.log.LogAttrs(ctx, slog.LevelInfo, "bucket exists", slog.Any("bucket", bucket), slog.Any("metadata", m), slog.Any("error", err))
-							break
-						}
-						fallthrough
-					default:
-						d.log.LogAttrs(ctx, slog.LevelError, "failed to create bucket", slog.Any("error", err), slog.Any("metadata", m))
-					}
-				}
+				d.configureDB(ctx, db)
 			}
 		}
 
@@ -380,6 +308,99 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 
 	default:
 		return nil, jsonrpc2.ErrNotHandled
+	}
+}
+
+func (d *daemon) configureWebRule(ctx context.Context, rules map[string]map[string]worklog.WebRule) {
+	opts := []cel.EnvOption{
+		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+		celext.Lib(d.log),
+		cel.Declarations(
+			decls.NewVar("bucket", decls.String),
+			decls.NewVar("data", decls.NewMapType(decls.String, decls.Dyn)),
+		),
+	}
+	ruleDetails := make(map[string]map[string]ruleDetail)
+	for srcBucket, ruleSet := range rules {
+		ruleDetails[srcBucket] = make(map[string]ruleDetail)
+		for dstBucket, rule := range ruleSet {
+			prg, err := compile(rule.Src, opts)
+			if err != nil {
+				d.log.LogAttrs(ctx, slog.LevelError, "compiling rule", slog.String("src_bucket", srcBucket), slog.String("dst_bucket", dstBucket), slog.Any("error", err))
+			} else {
+				ruleDetails[srcBucket][dstBucket] = ruleDetail{name: rule.Name, prg: prg}
+			}
+		}
+	}
+	d.dashboardRules.Store(ruleDetails)
+}
+
+func (d *daemon) configureRules(ctx context.Context, rules map[string]worklog.Rule) {
+	opts := []cel.EnvOption{
+		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+		celext.Lib(d.log),
+		cel.Declarations(
+			decls.NewVar("bucket", decls.String),
+			decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
+			decls.NewVar("period", decls.Duration),
+			decls.NewVar("curr", decls.NewMapType(decls.String, decls.Dyn)),
+			decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
+			decls.NewVar("last_event", decls.NewMapType(decls.String, decls.Dyn)),
+		),
+	}
+	ruleDetails := make(map[string]ruleDetail)
+	for bucket, rule := range rules {
+		prg, err := compile(rule.Src, opts)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "compiling rule", slog.String("bucket", bucket), slog.Any("error", err))
+		} else {
+			ruleDetails[bucket] = ruleDetail{name: rule.Name, typ: rule.Type, prg: prg}
+		}
+	}
+	d.rules.Store(ruleDetails)
+}
+
+func (d *daemon) openDB(ctx context.Context, db *store.DB, path, hostname string) error {
+	if db != nil {
+		d.log.LogAttrs(ctx, slog.LevelInfo, "close database", slog.String("path", db.Name()))
+		d.db.Store((*store.DB)(nil))
+		db.Close()
+	}
+	// store.Open may need to get the hostname, which may
+	// wait indefinitely due to network unavailability.
+	// So make a timeout and allow the fallback to the
+	// kernel-provided hostname. This fallback is
+	// implemented by store.Open.
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	db, err := store.Open(ctx, path, hostname)
+	if err != nil {
+		d.log.LogAttrs(ctx, slog.LevelError, "open database", slog.Any("error", err))
+		return err
+	}
+	d.db.Store(db)
+	d.log.LogAttrs(ctx, slog.LevelInfo, "open database", slog.String("path", path))
+	return nil
+}
+
+func (d *daemon) configureDB(ctx context.Context, db *store.DB) {
+	rules, _ := d.rules.Load().(map[string]ruleDetail)
+	for bucket, rule := range rules {
+		d.log.LogAttrs(ctx, slog.LevelDebug, "create bucket", slog.Any("bucket", bucket))
+		m, err := db.CreateBucket(bucket, rule.name, rule.typ, d.uid, time.Now(), nil)
+		var sqlErr *sqlite.Error
+		switch {
+		case err == nil:
+			d.log.LogAttrs(ctx, slog.LevelInfo, "create bucket", slog.Any("metadata", m))
+		case errors.As(err, &sqlErr):
+			if sqlErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+				d.log.LogAttrs(ctx, slog.LevelInfo, "bucket exists", slog.Any("bucket", bucket), slog.Any("metadata", m), slog.Any("error", err))
+				break
+			}
+			fallthrough
+		default:
+			d.log.LogAttrs(ctx, slog.LevelError, "failed to create bucket", slog.Any("error", err), slog.Any("metadata", m))
+		}
 	}
 }
 

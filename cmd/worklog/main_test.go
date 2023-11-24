@@ -5,25 +5,37 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/tools/txtar"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
+	"github.com/kortschak/dex/cmd/worklog/store"
 	"github.com/kortschak/dex/internal/locked"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
 
 var (
+	update  = flag.Bool("update", false, "update tests")
 	verbose = flag.Bool("verbose_log", false, "print full logging")
 	lines   = flag.Bool("show_lines", false, "log source code position")
+	keep    = flag.Bool("keep", false, "keep database directories after tests")
 )
 
 func TestActive(t *testing.T) {
@@ -142,6 +154,131 @@ func TestActive(t *testing.T) {
 			})
 
 			time.Sleep(time.Second) // Let kernel complete final logging.
+		})
+	}
+}
+
+func TestContinuation(t *testing.T) {
+	tests, err := filepath.Glob(filepath.Join("testdata", "*.txtar"))
+	if err != nil {
+		t.Fatalf("failed to get tests: %v", err)
+	}
+	for _, path := range tests {
+		ext := filepath.Ext(path)
+		base := strings.TrimSuffix(path, ext)
+		name := strings.TrimSuffix(filepath.Base(path), ext)
+		t.Run(name, func(t *testing.T) {
+			var (
+				level     slog.LevelVar
+				addSource = slogext.NewAtomicBool(*lines)
+				buf       locked.BytesBuffer
+			)
+			log := slog.New(slogext.NewJSONHandler(&buf, &slogext.HandlerOptions{
+				Level:     slog.LevelDebug,
+				AddSource: addSource,
+			}))
+			defer func() {
+				if *verbose {
+					t.Logf("log:\n%s\n", &buf)
+				}
+				if !*keep {
+					os.RemoveAll(base)
+				}
+			}()
+
+			a, err := txtar.ParseFile(path)
+			if err != nil {
+				t.Fatalf("failed to read test data: %v", err)
+			}
+			var src, data, want []byte
+			for _, f := range a.Files {
+				switch f.Name {
+				case "src.cel":
+					src = f.Data
+				case "data.json":
+					data = f.Data
+				case "want.json":
+					want = f.Data
+				}
+			}
+			if want == nil && !*update {
+				t.Fatal("no want file in test")
+			}
+
+			err = os.RemoveAll(base)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("failed to clean db: %v", err)
+			}
+			err = os.Mkdir(base, 0o755)
+			if err != nil {
+				t.Fatalf("failed to make db directory: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
+			err = d.openDB(ctx, nil, filepath.Join(base, "db.sqlite3"), "localhost")
+			if err != nil {
+				t.Fatalf("failed to create db: %v", err)
+			}
+			d.configureRules(ctx, map[string]worklog.Rule{
+				"afk": {
+					Name: "afk",
+					Type: "afk",
+					Src:  string(src),
+				},
+			})
+			db := d.db.Load().(*store.DB)
+			defer db.Close()
+			d.configureDB(ctx, db)
+
+			dec := json.NewDecoder(bytes.NewReader(data))
+			var last, curr worklog.Report
+			for {
+				err = dec.Decode(&curr)
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					t.Fatalf("unexpected error reading test data: %v", err)
+				}
+				d.record(ctx, rpc.UID{Module: "watcher"}, curr, last)
+				last = curr
+			}
+
+			dump, err := db.Dump()
+			if err != nil {
+				t.Fatalf("failed to dump db: %v", err)
+			}
+			var got bytes.Buffer
+			enc := json.NewEncoder(&got)
+			for _, b := range dump {
+				for _, e := range b.Events {
+					enc.Encode(e)
+				}
+			}
+			if *update {
+				if want == nil {
+					a.Files = append(a.Files, txtar.File{
+						Name: "want.json",
+						Data: got.Bytes(),
+					})
+				} else {
+					for i, f := range a.Files {
+						if f.Name == "want.json" {
+							a.Files[i].Data = got.Bytes()
+						}
+					}
+				}
+				err = os.WriteFile(path, txtar.Format(a), 0o644)
+				if err != nil {
+					t.Fatalf("failed to write updated test: %v", err)
+				}
+				return
+			}
+			if !bytes.Equal(want, got.Bytes()) {
+				t.Errorf("unexpected dump result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got.Bytes()))
+			}
 		})
 	}
 }

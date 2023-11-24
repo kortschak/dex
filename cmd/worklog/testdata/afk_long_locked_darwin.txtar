@@ -1,0 +1,57 @@
+data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+-- src.cel --
+data_src != {"module":"watcher"} ? {} :
+{
+	"afk_timeout":   duration("3m"),
+	"gap_tolerance": duration("0.9s"),
+}.as(params, {
+	"can_continue": last_event.end.is_zero() ?
+                	false
+                :
+                	(curr.time-last_event.end)-period < params.gap_tolerance,
+	"is_afk":   curr.last_input.is_zero() ?
+					true
+				:
+	            	curr.locked || curr.time-curr.last_input > params.afk_timeout,
+	"was_afk":  has(last_event.data.afk) ?
+	            	last_event.data.afk
+	            :
+	            	true,
+}).as(cond, cond.with({
+	"continue": cond.can_continue &&
+	            has(last.locked) && curr.locked == last.locked &&
+	            cond.is_afk == cond.was_afk
+})).as(cond, {
+	"bucket":   bucket, // bucket or empty if no store is required.
+	"start":    cond.continue ? last_event.start : last.time,
+	"end":      curr.time,
+	"data":     {
+		"afk":    cond.is_afk,
+		"locked": curr.locked,
+	},
+	"continue": cond.continue,
+})
+-- want.json --
+{"bucket":"afk","id":1,"start":"2023-11-27T04:12:27.314903+10:30","end":"2023-11-27T04:12:45.04182+10:30","data":{"afk":true,"locked":true}}
+{"bucket":"afk","id":2,"start":"2023-11-27T04:12:45.04182+10:30","end":"2023-11-27T04:26:30.964648+10:30","data":{"afk":true,"locked":true}}
+-- data.json --
+{"time":"2023-11-27T04:12:27.314903+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.07762938+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:28.862039+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.0776979+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:30.208149+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077113018+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:31.711737+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077213598+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:33.061344+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077099495+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:34.860831+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.078874804+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:36.194181+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.076925993+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:37.709853+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077358602+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:39.061321+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.076925003+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:40.807167+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077285945+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:42.129467+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077494745+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:43.658714+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.076584053+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:12:45.04182+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.077939918+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:26.231535+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.487342285+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:26.606776+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.486945612+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:27.080335+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.486471683+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:28.048978+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.486790362+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:28.966803+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.486587668+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:29.953937+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.486730935+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-27T04:26:30.964648+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:15:32.486631402+10:30","locked":true},"period":"1s"}

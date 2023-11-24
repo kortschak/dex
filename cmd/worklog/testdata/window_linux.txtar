@@ -1,0 +1,146 @@
+data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+
+Window ID is not used for window identity here, so terminal changes at 2023-11-26T12:24:36.211097179+10:30 and 2023-11-26T12:24:42.210660725+10:30 are not recorded.
+-- src.cel --
+data_src != {"module":"watcher"} ? {} :
+{
+	"gap_tolerance": duration("0.1s"),
+}.as(params, {
+	"can_continue": last_event.end.is_zero() ?
+                	false
+                :
+                	(curr.time-last_event.end)-period < params.gap_tolerance,
+}).as(cond, cond.with({
+	"continue": cond.can_continue &&
+	            has(last.locked) && curr.locked == last.locked &&
+	            curr.class == last.class &&
+	            curr.window == last.window,
+	"private":  curr.window.matches("(?i:private browsing)"),
+})).as(cond, {
+	"bucket":   cond.private || (curr.locked && has(last.locked) && last.locked) ? "" : bucket,
+	"start":    cond.continue ? last_event.start : last.time,
+	"end":      curr.time,
+	"data":     {
+		"app":   curr.class,
+		"title": curr.window,
+	},
+	"continue": cond.continue,
+})
+-- want.json --
+{"bucket":"afk","id":1,"start":"2023-11-26T12:23:16.211082564+10:30","end":"2023-11-26T12:23:16.211082564+10:30","data":{"app":"Gnome-terminal","title":"Terminal"}}
+{"bucket":"afk","id":2,"start":"2023-11-26T12:23:16.211082564+10:30","end":"2023-11-26T12:23:20.209969362+10:30","data":{"app":"Sublime_text","title":"~/src/github.com/kortschak/dex/cmd/worklog/testdata/afk_linux.txtar (dex) - Sublime Text"}}
+{"bucket":"afk","id":3,"start":"2023-11-26T12:23:20.209969362+10:30","end":"2023-11-26T12:23:23.209638443+10:30","data":{"app":"Sublime_text","title":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text"}}
+{"bucket":"afk","id":4,"start":"2023-11-26T12:23:23.209638443+10:30","end":"2023-11-26T12:23:25.210586406+10:30","data":{"app":"Sublime_text","title":"untitled • - Sublime Text"}}
+{"bucket":"afk","id":5,"start":"2023-11-26T12:23:25.210586406+10:30","end":"2023-11-26T12:23:28.21021362+10:30","data":{"app":"Sublime_text","title":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text"}}
+{"bucket":"afk","id":6,"start":"2023-11-26T12:23:28.21021362+10:30","end":"2023-11-26T12:23:31.209902326+10:30","data":{"app":"Sublime_merge","title":"~/src/github.com/kortschak/dex - Sublime Merge"}}
+{"bucket":"afk","id":7,"start":"2023-11-26T12:23:31.209902326+10:30","end":"2023-11-26T12:23:33.210277553+10:30","data":{"app":"Sublime_text","title":"untitled • - Sublime Text"}}
+{"bucket":"afk","id":8,"start":"2023-11-26T12:23:33.210277553+10:30","end":"2023-11-26T12:23:36.210421385+10:30","data":{"app":"Gnome-terminal","title":"Terminal"}}
+{"bucket":"afk","id":9,"start":"2023-11-26T12:23:36.210421385+10:30","end":"2023-11-26T12:23:42.21052382+10:30","data":{"app":"Sublime_text","title":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text"}}
+{"bucket":"afk","id":10,"start":"2023-11-26T12:23:42.21052382+10:30","end":"2023-11-26T12:23:51.209339314+10:30","data":{"app":"Sublime_text","title":"untitled • - Sublime Text"}}
+{"bucket":"afk","id":11,"start":"2023-11-26T12:23:51.209339314+10:30","end":"2023-11-26T12:23:52.810085233+10:30","data":{"app":"Sublime_text","title":"untitled • - Sublime Text"}}
+{"bucket":"afk","id":12,"start":"2023-11-26T12:23:58.209833368+10:30","end":"2023-11-26T12:24:05.208385879+10:30","data":{"app":"Sublime_text","title":"untitled • - Sublime Text"}}
+{"bucket":"afk","id":13,"start":"2023-11-26T12:24:05.208385879+10:30","end":"2023-11-26T12:24:08.209558541+10:30","data":{"app":"Sublime_text","title":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text"}}
+{"bucket":"afk","id":14,"start":"2023-11-26T12:24:08.209558541+10:30","end":"2023-11-26T12:24:11.211146825+10:30","data":{"app":"Sublime_merge","title":"~/src/github.com/kortschak/dex - Sublime Merge"}}
+{"bucket":"afk","id":15,"start":"2023-11-26T12:24:11.211146825+10:30","end":"2023-11-26T12:24:13.208899082+10:30","data":{"app":"Sublime_text","title":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text"}}
+{"bucket":"afk","id":16,"start":"2023-11-26T12:24:13.208899082+10:30","end":"2023-11-26T12:24:56.208072043+10:30","data":{"app":"Gnome-terminal","title":"Terminal"}}
+-- data.json --
+{"time":"2023-11-26T12:23:16.211082564+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:23:16.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:17.209890955+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/cmd/worklog/testdata/afk_linux.txtar (dex) - Sublime Text","last_input":"2023-11-26T12:23:17.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:18.208301122+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/cmd/worklog/testdata/afk_linux.txtar (dex) - Sublime Text","last_input":"2023-11-26T12:23:17.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:19.210478208+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/cmd/worklog/testdata/afk_linux.txtar (dex) - Sublime Text","last_input":"2023-11-26T12:23:19.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:20.209969362+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/cmd/worklog/testdata/afk_linux.txtar (dex) - Sublime Text","last_input":"2023-11-26T12:23:20.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:21.210187093+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:21+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:22.209611474+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:22+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:23.209638443+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:22.8+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:24.210832785+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:23.8+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:25.210586406+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:25.1+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:26.208228246+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:26+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:27.210343678+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:26+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:28.21021362+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:26+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:29.20941709+10:30","details":{"wid":81788935,"name":"sublime_merge","class":"Sublime_merge","window":"~/src/github.com/kortschak/dex - Sublime Merge","last_input":"2023-11-26T12:23:29.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:30.209707369+10:30","details":{"wid":81788935,"name":"sublime_merge","class":"Sublime_merge","window":"~/src/github.com/kortschak/dex - Sublime Merge","last_input":"2023-11-26T12:23:30+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:31.209902326+10:30","details":{"wid":81788935,"name":"sublime_merge","class":"Sublime_merge","window":"~/src/github.com/kortschak/dex - Sublime Merge","last_input":"2023-11-26T12:23:31.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:32.209055119+10:30","details":{"wid":75497541,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:32.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:33.210277553+10:30","details":{"wid":75497541,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:32.6+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:34.209643554+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:23:33.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:35.209517029+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:23:34.9+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:36.210421385+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:23:36.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:37.20999436+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:37.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:38.20990935+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:37.6+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:39.210043356+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:38.9+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:40.210582872+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:38.9+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:41.209646039+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:40.8+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:42.21052382+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:23:41.3+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:43.211401023+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:42.4+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:44.210192026+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:43.5+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:45.209529719+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:44.4+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:46.210260275+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:46.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:47.209640497+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:47.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:48.208897022+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:48.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:49.209725682+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:49.1+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:50.210827231+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:49.1+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:51.209339314+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:23:52.810085233+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:23:53.209331329+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:23:54.209612734+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:23:55.210244403+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:23:56.20975846+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:23:57.208852215+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:23:58.209833368+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:23:50.4+10:30","locked":true},"period":"1s"}
+{"time":"2023-11-26T12:24:01.2294845+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:24:01.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:01.232431229+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:24:01.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:02.210398576+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:24:02.1+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:03.210525256+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:24:03.1+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:04.208460847+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:24:03.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:05.208385879+10:30","details":{"wid":75497527,"name":"sublime_text","class":"Sublime_text","window":"untitled • - Sublime Text","last_input":"2023-11-26T12:24:03.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:06.208977294+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:24:05.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:07.209555649+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:24:05.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:08.209558541+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:24:05.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:09.208720854+10:30","details":{"wid":81788935,"name":"sublime_merge","class":"Sublime_merge","window":"~/src/github.com/kortschak/dex - Sublime Merge","last_input":"2023-11-26T12:24:08.6+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:10.209638686+10:30","details":{"wid":81788935,"name":"sublime_merge","class":"Sublime_merge","window":"~/src/github.com/kortschak/dex - Sublime Merge","last_input":"2023-11-26T12:24:08.6+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:11.211146825+10:30","details":{"wid":81788935,"name":"sublime_merge","class":"Sublime_merge","window":"~/src/github.com/kortschak/dex - Sublime Merge","last_input":"2023-11-26T12:24:08.6+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:12.209428407+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:24:12.1+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:13.208899082+10:30","details":{"wid":75497555,"name":"sublime_text","class":"Sublime_text","window":"~/src/github.com/kortschak/dex/dex_watcher.log (dex) - Sublime Text","last_input":"2023-11-26T12:24:13.2+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:14.209969931+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:15.209938636+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:16.209605763+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:17.209758982+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:18.208419+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:19.209626528+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:20.209432291+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:21.209479963+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:22.209586639+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:23.209007046+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:24.209648767+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:25.208903088+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:26.210364716+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:27.208735954+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:28.208493953+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:29.209660926+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:30.210167691+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:31.209063729+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:32.210058013+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:33.209107503+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:34.209608644+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:35.209014584+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:36.211097179+10:30","details":{"wid":65021888,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:37.208759471+10:30","details":{"wid":65021888,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:38.210157032+10:30","details":{"wid":65021888,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:39.208824535+10:30","details":{"wid":65021888,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:40.209829741+10:30","details":{"wid":65021888,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:41.210926041+10:30","details":{"wid":65021888,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:42.210660725+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:43.210184923+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:44.207929777+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:45.2106055+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:46.211088164+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:47.208084264+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:48.210479339+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:49.20881837+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:50.210063194+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:51.208682419+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:52.209695715+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:53.208123442+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:54.210019938+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:55.208352285+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
+{"time":"2023-11-26T12:24:56.208072043+10:30","details":{"wid":65012777,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2023-11-26T12:24:13.7+10:30","locked":false},"period":"1s"}
