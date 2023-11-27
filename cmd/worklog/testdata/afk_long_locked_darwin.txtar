@@ -8,6 +8,7 @@ data_src != {"module":"watcher"} ? {} :
 	"can_continue": last_event.end.is_zero() ?
                 	false
                 :
+                	(curr.locked && last.?locked.value()) ||
                 	(curr.time-last_event.end)-period < params.gap_tolerance,
 	"is_afk":   curr.last_input.is_zero() ?
 					true
@@ -32,8 +33,7 @@ data_src != {"module":"watcher"} ? {} :
 	"continue": cond.continue,
 })
 -- want.json --
-{"bucket":"afk","id":1,"start":"2023-11-27T04:12:27.314903+10:30","end":"2023-11-27T04:12:45.04182+10:30","data":{"afk":true,"locked":true}}
-{"bucket":"afk","id":2,"start":"2023-11-27T04:12:45.04182+10:30","end":"2023-11-27T04:26:30.964648+10:30","data":{"afk":true,"locked":true}}
+{"bucket":"afk","id":1,"start":"2023-11-27T04:12:27.314903+10:30","end":"2023-11-27T04:26:30.964648+10:30","data":{"afk":true,"locked":true}}
 -- data.json --
 {"time":"2023-11-27T04:12:27.314903+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.07762938+10:30","locked":true},"period":"1s"}
 {"time":"2023-11-27T04:12:28.862039+10:30","details":{"wid":209,"name":"sublime_text","class":"Sublime Text","window":"","last_input":"2023-11-27T04:01:55.0776979+10:30","locked":true},"period":"1s"}

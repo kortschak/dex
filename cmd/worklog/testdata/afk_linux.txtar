@@ -10,6 +10,7 @@ data_src != {"module":"watcher"} ? {} :
 	"can_continue": last_event.end.is_zero() ?
                 	false
                 :
+                	(curr.locked && last.?locked.value()) ||
                 	(curr.time-last_event.end)-period < params.gap_tolerance,
 	"is_afk":   curr.last_input.is_zero() ?
 					true
