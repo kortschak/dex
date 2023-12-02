@@ -365,8 +365,8 @@ func week(date time.Time) (start, end time.Time) {
 func year(date time.Time) (start, end time.Time) {
 	loc := date.Location()
 	year := date.Year()
-	start = time.Date(year, 0, 0, 0, 0, 0, 0, loc)
-	end = time.Date(year+1, 0, 0, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
+	start = time.Date(year, time.January, 0, 0, 0, 0, 0, loc)
+	end = time.Date(year+1, time.January, 0, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
 	return start, end
 }
 
