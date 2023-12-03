@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"reflect"
 	"sort"
 	"time"
 
@@ -114,7 +115,20 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 				m.Bucket = srcBucket // Label the source of the activity event.
 				m.Data = note.Data
 
-				dayEvents[note.Bucket] = append(dayEvents[note.Bucket], m)
+				wasExtended := false
+				if bucketEvents := dayEvents[note.Bucket]; len(bucketEvents) != 0 {
+					next := bucketEvents[len(bucketEvents)-1]
+					// Compare start with end of previous events. Note that
+					// db.EventsRangeFunc returns events in descending time
+					// order.
+					if next.Start.Equal(m.End) && reflect.DeepEqual(next.Data, m.Data) {
+						bucketEvents[len(bucketEvents)-1].Start = m.Start
+						wasExtended = true
+					}
+				}
+				if !wasExtended {
+					dayEvents[note.Bucket] = append(dayEvents[note.Bucket], m)
+				}
 
 				if afk, ok := m.Data["afk"]; ok && afk == false {
 					atKeyboard = append(atKeyboard, m)
