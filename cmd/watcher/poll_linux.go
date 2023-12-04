@@ -5,8 +5,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -206,7 +206,7 @@ func activeWindow() (watcher.Details, error) {
 	var d C.struct_details
 	flags := C.activeWindow(&d)
 	if flags < 0 {
-		return watcher.Details{}, errors.New("failed to obtain details")
+		return watcher.Details{}, detailError(-flags)
 	}
 	if d.idle > 0 {
 		lastEvent = time.Now().Add(time.Duration(d.idle) * -time.Millisecond).Round(time.Second / 10)
@@ -224,6 +224,20 @@ func activeWindow() (watcher.Details, error) {
 		return active, warning{fmt.Errorf("failed to obtain some details: missing %s", missing(flags))}
 	}
 	return active, nil
+}
+
+type detailError int
+
+func (e detailError) Error() string {
+	if 0 < e && int(e) < len(failureReason) {
+		return "failed to obtain details: " + failureReason[e]
+	}
+	return "failed to obtain details: error " + strconv.Itoa(int(e))
+}
+
+var failureReason = [...]string{
+	1: "no display",
+	2: "no focused window",
 }
 
 // warning is a warn-only error.
