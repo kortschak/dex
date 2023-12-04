@@ -233,13 +233,13 @@ type warning struct {
 
 func missing(flags C.int) string {
 	m := make([]string, 0, 3)
-	if flags&0x001 == 0 {
+	if flags&0b001 == 0 {
 		m = append(m, "window id")
 	}
-	if flags&0x010 == 0 {
+	if flags&0b010 == 0 {
 		m = append(m, "class name")
 	}
-	if flags&0x100 == 0 {
+	if flags&0b100 == 0 {
 		m = append(m, "window name")
 	}
 	return strings.Join(m, ", ")
