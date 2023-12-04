@@ -6,8 +6,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"testing"
@@ -111,7 +113,7 @@ func TestRunner(t *testing.T) {
 				const targetFile = "testfile"
 
 				err := os.Remove(targetFile)
-				if err != nil && !os.IsNotExist(err) {
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					t.Fatalf("failed to remove testfile: %v", err)
 				}
 

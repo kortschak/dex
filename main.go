@@ -6,8 +6,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"maps"
 	"os"
@@ -113,7 +115,7 @@ func main() {
 
 	cfgdir, err := xdg.Config("dex", true)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -134,7 +136,7 @@ func main() {
 
 	datadir, err := xdg.State("dex")
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
