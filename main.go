@@ -146,8 +146,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		cfgdir = filepath.Join(datadir, "dex")
-		err := os.Mkdir(cfgdir, 0o755)
+		err = os.Mkdir(filepath.Join(datadir, "dex"), 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
