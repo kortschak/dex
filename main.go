@@ -75,7 +75,7 @@ func main() {
 			os.Exit(1)
 		}
 		runtimeDir = filepath.Join(runtimeDir, rpc.RuntimeDir)
-		err = os.Mkdir(runtimeDir, 0o700)
+		err = os.MkdirAll(runtimeDir, 0o700)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -125,7 +125,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		err := os.Mkdir(filepath.Join(cfgdir, "dex"), 0o755)
+		err := os.MkdirAll(filepath.Join(cfgdir, "dex"), 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -146,7 +146,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		err = os.Mkdir(filepath.Join(datadir, "dex"), 0o755)
+		err = os.MkdirAll(filepath.Join(datadir, "dex"), 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

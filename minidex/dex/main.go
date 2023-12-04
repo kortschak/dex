@@ -70,7 +70,7 @@ func Main() int {
 			return 1
 		}
 		statedir = filepath.Join(state, "minidex")
-		err = os.Mkdir(statedir, 0o750)
+		err = os.MkdirAll(statedir, 0o750)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to create data store directory: %v\n", err)
 			return 1
