@@ -29,6 +29,9 @@ struct details {
 	int saver_state;
 };
 
+#define enodisplay     1
+#define enoscreensaver 2
+
 Status get_focused_window(Display *display, Window *window_return);
 Status get_window_classname(Display *display, Window window, char **class_ret, char **name_ret);
 Status get_window_name(Display *display, Window window, char **name_ret);
@@ -46,12 +49,20 @@ int activeWindow(struct details *d) {
 
 	Display *display = XOpenDisplay(NULL);
 	if (display == NULL) {
-		return -1;
+		return -enodisplay;
 	}
+	XScreenSaverInfo saver_info;
+	ok = get_screen_saver_info(display, &saver_info);
+	if (!ok) {
+		XCloseDisplay(display);
+		return -enoscreensaver;
+	}
+	d->idle = saver_info.idle;
+	d->saver_state = saver_info.state;
 	ok = get_focused_window(display, &window);
 	if (!ok) {
 		XCloseDisplay(display);
-		return -2;
+		return flags;
 	}
 	flags = 1;
 	d->wid = window;
@@ -62,12 +73,6 @@ int activeWindow(struct details *d) {
 	ok = get_window_name(display, window, &(d->window));
 	if (ok) {
 		flags |= 4;
-	}
-	XScreenSaverInfo saver_info;
-	ok = get_screen_saver_info(display, &saver_info);
-	if (ok) {
-		d->idle = saver_info.idle;
-		d->saver_state = saver_info.state;
 	}
 	XCloseDisplay(display);
 	return flags;
@@ -220,7 +225,7 @@ func activeWindow() (watcher.Details, error) {
 		Locked:     d.saver_state == C.ScreenSaverOn,
 	}
 	C.freeDetails(&d)
-	if flags != 0b111 {
+	if flags != 0b111 && !active.Locked {
 		return active, warning{fmt.Errorf("failed to obtain some details: missing %s", missing(flags))}
 	}
 	return active, nil
@@ -236,8 +241,8 @@ func (e detailError) Error() string {
 }
 
 var failureReason = [...]string{
-	1: "no display",
-	2: "no focused window",
+	C.enodisplay:     "no display",
+	C.enoscreensaver: "no screensaver info",
 }
 
 // warning is a warn-only error.
