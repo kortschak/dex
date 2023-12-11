@@ -721,7 +721,6 @@ func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 					return
 				}
 			}
-			fmt.Println(start, end)
 			dump, err = db.DumpRange(start, end)
 		} else {
 			dump, err = db.Dump()
