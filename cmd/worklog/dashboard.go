@@ -280,12 +280,17 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 		}
 	}
 	yearHours := make(map[string]float64)
+	var yearTotalHours float64
 	for _, a := range mergeIntervals(yearAtKeyboard) {
+		yearTotalHours += a.End.Sub(a.Start).Hours()
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
 			yearHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
 		}
 	}
-	events["year"] = map[string]any{"hours": yearHours}
+	events["year"] = map[string]any{
+		"hours":       yearHours,
+		"total_hours": yearTotalHours,
+	}
 
 	return events, nil
 }
