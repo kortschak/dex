@@ -199,6 +199,34 @@ Modules have an additional setting, [`log_mode`](https://pkg.go.dev/github.com/k
 
 The `log_mode` option is static and set when the module is spawned.
 
+## Setting Up a Service (linux)
+
+On linux you can start `dex` as a service using systemd. Since `dex` handles a single user's interaction with the Stream Deck it should be a user service.
+
+You can place the unit file below either in `~/.config/systemd/user` or in `/etc/systemd/user` and then start the service; run `systemctl --user daemon-reload`, `systemctl --user enable dex.service`, and then start the service with `systemctl --user start dex.service`.
+```
+[Unit]
+Description=Dex Service
+
+[Service]
+Type=simple
+ExecStart=%h/bin/dex
+Restart=on-failure
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+```
+This will log to the system journal, viewable with `journalctl --user -u dex`. It assumes that `dex` is located in your `~/bin`.
+
+If debugging `dex` running as a service, it may be helpful instead to log to a file, in which case replace the `StandardError` setting with
+```
+StandardError=file:%h/.local/state/dex/log/dex.log
+```
+or another more convenient path.
+
+The service can be stopped with `systemctl --user stop dex.service` and disabled with `systemctl --user disable dex.service`.
+
 ## Non-Go Dependencies
 
 Interaction with Stream Deck devices depends on github.com/sstallion/go-hid. This package makes use of [non-Go dependencies](https://github.com/libusb/hidapi/blob/master/BUILD.md#prerequisites).
