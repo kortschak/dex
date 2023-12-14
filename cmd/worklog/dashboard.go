@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -213,6 +215,103 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 
 	start, end = year(date)
+	yearAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
+	if err != nil {
+		return events, err
+	}
+	yearHours := make(map[string]float64)
+	var yearTotalHours float64
+	for _, a := range mergeIntervals(yearAtKeyboard) {
+		yearTotalHours += a.End.Sub(a.Start).Hours()
+		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
+			yearHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
+		}
+	}
+	events["year"] = map[string]any{
+		"hours":       yearHours,
+		"total_hours": yearTotalHours,
+	}
+
+	return events, nil
+}
+
+func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		start, end, err := dateRangeQuery(req.RequestURI)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"error":%q}`, err)
+			return
+		}
+		db, ok := d.db.Load().(*store.DB)
+		if !ok {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		rules, ok := d.dashboardRules.Load().(map[string]map[string]ruleDetail)
+		if !ok {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no dashboard rules"), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		events, err := d.rangeSummary(ctx, db, rules, start, end)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		b, err := json.Marshal(events)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.ServeContent(w, req, "events.json", time.Now(), bytes.NewReader(b))
+	}
+}
+
+func dateRangeQuery(uri string) (start, end time.Time, err error) {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return start, end, err
+	}
+	s := u.Query().Get("start")
+	if s == "" {
+		return start, end, errors.New("missing start parameter")
+	}
+	e := u.Query().Get("end")
+	loc := time.Local // TODO: Resolve how we store time. Probably UTC.
+	if tz := u.Query().Get("tz"); tz != "" {
+		loc, err = time.LoadLocation(tz)
+		if err != nil {
+			return start, end, err
+		}
+	}
+	start, err = time.ParseInLocation(time.DateOnly, s, loc)
+	if err != nil {
+		return start, end, err
+	}
+	if e == "" {
+		// If no end specified, make range from start to now.
+		return start, time.Now().In(loc), nil
+	}
+	end, err = time.ParseInLocation(time.DateOnly, e, loc)
+	end = end.AddDate(0, 0, 1).Add(-time.Nanosecond)
+	return start, end, err
+}
+
+func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) (map[string]any, error) {
+	events := map[string]any{
+		"start": start,
+		"end":   end,
+	}
 	yearAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
 	if err != nil {
 		return events, err

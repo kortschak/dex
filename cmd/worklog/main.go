@@ -650,6 +650,7 @@ func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, er
 	mux.Handle("/", http.FileServer(http.FS(ui)))
 	mux.HandleFunc("/dump/", d.dump(ctx))
 	mux.HandleFunc("/data/", d.dashboardData(ctx))
+	mux.HandleFunc("/summary/", d.summaryData(ctx))
 	mux.HandleFunc("/query", d.query(ctx))
 	mux.HandleFunc("/query/", d.query(ctx))
 
