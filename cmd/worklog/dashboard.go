@@ -194,40 +194,9 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 
 	start, end = week(date)
-	var weekAtKeyboard []worklog.Event
-	for srcBucket, ruleSet := range rules {
-		for dstBucket, rule := range ruleSet {
-			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
-				if m.Start.Before(start) {
-					m.Start = start
-				}
-				if m.End.After(end) {
-					m.End = end
-				}
-
-				act := map[string]any{
-					"bucket": dstBucket,
-					"data":   m.Data,
-				}
-				note, err := eval[worklog.Activity](rule.prg, act)
-				if err != nil {
-					d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("src_bucket", srcBucket), slog.Any("dst_bucket", dstBucket), slog.Any("error", err), slog.Any("act", act))
-					return nil
-				}
-				if note.Bucket == "" || note.Data == nil {
-					return nil
-				}
-				m.Data = note.Data
-
-				if afk, ok := m.Data["afk"]; ok && afk == false {
-					weekAtKeyboard = append(weekAtKeyboard, m)
-				}
-				return nil
-			})
-			if err != nil {
-				return events, err
-			}
-		}
+	weekAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
+	if err != nil {
+		return events, err
 	}
 	weekHours := make(map[string]float64)
 	var weekTotalHours float64
@@ -244,7 +213,28 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 
 	start, end = year(date)
-	var yearAtKeyboard []worklog.Event
+	yearAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
+	if err != nil {
+		return events, err
+	}
+	yearHours := make(map[string]float64)
+	var yearTotalHours float64
+	for _, a := range mergeIntervals(yearAtKeyboard) {
+		yearTotalHours += a.End.Sub(a.Start).Hours()
+		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
+			yearHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
+		}
+	}
+	events["year"] = map[string]any{
+		"hours":       yearHours,
+		"total_hours": yearTotalHours,
+	}
+
+	return events, nil
+}
+
+func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) ([]worklog.Event, error) {
+	var atKeyboard []worklog.Event
 	for srcBucket, ruleSet := range rules {
 		for dstBucket, rule := range ruleSet {
 			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
@@ -270,29 +260,16 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 				m.Data = note.Data
 
 				if afk, ok := m.Data["afk"]; ok && afk == false {
-					yearAtKeyboard = append(yearAtKeyboard, m)
+					atKeyboard = append(atKeyboard, m)
 				}
 				return nil
 			})
 			if err != nil {
-				return events, err
+				return nil, err
 			}
 		}
 	}
-	yearHours := make(map[string]float64)
-	var yearTotalHours float64
-	for _, a := range mergeIntervals(yearAtKeyboard) {
-		yearTotalHours += a.End.Sub(a.Start).Hours()
-		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
-			yearHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
-		}
-	}
-	events["year"] = map[string]any{
-		"hours":       yearHours,
-		"total_hours": yearTotalHours,
-	}
-
-	return events, nil
+	return atKeyboard, nil
 }
 
 // mergeIntervals returns the intervals in events sorted and merged so that
