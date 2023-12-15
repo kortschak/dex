@@ -39,6 +39,18 @@ type Server struct {
 	Request string `json:"request"`
 	// Response is the CEL source to transform the response.
 	Response string `json:"response"`
+
+	// CertPEMBlock and KeyPEMBlock are the PEM-encoded
+	// certificate and private key for the server. If
+	// present the server will use TLS.
+	CertPEMBlock *string `json:"cert_pem,omitempty"`
+	KeyPEMBlock  *string `json:"key_pem,omitempty"`
+	// RootCA is the root certificate to use for mTLS
+	// connections. If present the service will enforce
+	// mTLS using this certificate authority to verify
+	// client certificates. If set, CertPEMBlock and
+	// KeyPEMBlock must also be set.
+	RootCA *string `json:"ca_pem,omitempty"`
 }
 
 // Notification is the RPC parameter for a change call.

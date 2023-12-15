@@ -9,7 +9,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -342,17 +345,68 @@ func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, cu
 			}
 		}
 	}
-	if cfg.Addr != curr.server.Addr {
+	if cfg.Addr != curr.server.Addr || !sameTLS(cfg, curr.server) {
 		if curr.serverCancel != nil {
 			curr.serverCancel()
 		}
-		var err error
-		curr.server.Addr, curr.serverCancel, err = d.serve(cfg.Addr, iuid)
+		tlsConfig, err := mkTLSConfig(cfg)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "configure web server tls", slog.Any("error", err))
+			return curr
+		}
+		curr.server.Addr, curr.serverCancel, err = d.serve(cfg.Addr, iuid, tlsConfig)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelError, "configure web server", slog.Any("error", err))
 		}
 	}
 	return curr
+}
+
+func sameTLS(a, b rest.Server) bool {
+	return samePtrString(a.RootCA, b.RootCA) &&
+		samePtrString(a.CertPEMBlock, b.CertPEMBlock) &&
+		samePtrString(a.KeyPEMBlock, b.KeyPEMBlock)
+
+}
+
+func samePtrString(a, b *string) bool {
+	switch {
+	case a == b:
+		return true
+	case a == nil && b != nil, a != nil && b == nil:
+		return false
+	default:
+		return *a == *b
+	}
+}
+
+func mkTLSConfig(cfg rest.Server) (*tls.Config, error) {
+	if cfg.RootCA == nil && cfg.CertPEMBlock == nil && cfg.KeyPEMBlock == nil {
+		return nil, nil
+	}
+	var tlsConfig tls.Config
+	if cfg.RootCA != nil {
+		if cfg.CertPEMBlock == nil || cfg.KeyPEMBlock == nil {
+			return nil, errors.New("root ca set without certificate or key")
+		}
+		tlsConfig.ClientCAs = x509.NewCertPool()
+		tlsConfig.ClientCAs.AppendCertsFromPEM([]byte(*cfg.RootCA))
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+	if cfg.CertPEMBlock != nil || cfg.KeyPEMBlock != nil {
+		if cfg.CertPEMBlock == nil {
+			return nil, errors.New("missing certificate")
+		}
+		if cfg.KeyPEMBlock == nil {
+			return nil, errors.New("missing key")
+		}
+		cert, err := tls.X509KeyPair([]byte(*cfg.CertPEMBlock), []byte(*cfg.KeyPEMBlock))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	return &tlsConfig, nil
 }
 
 func compile(src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, error) {
@@ -415,10 +469,11 @@ func (jsonLib) decode(arg ref.Val) ref.Val {
 }
 
 // currently only JSON RPC notify is handled
-func (d *daemon) serve(addr string, uid rpc.UID) (string, context.CancelFunc, error) {
+func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string, context.CancelFunc, error) {
 	ctx := d.ctx
 	srv := &http.Server{
-		Addr: addr,
+		Addr:      addr,
+		TLSConfig: tlsConfig,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			servers, _ := d.servers.Load().(map[rpc.UID]serverDetail)
 			detail, ok := servers[uid]
@@ -503,6 +558,7 @@ func (d *daemon) serve(addr string, uid rpc.UID) (string, context.CancelFunc, er
 				}
 			}
 		}),
+		ErrorLog: slog.NewLogLogger(d.log.Handler(), slog.LevelError),
 	}
 
 	ln, err := net.Listen("tcp", addr)
@@ -513,7 +569,11 @@ func (d *daemon) serve(addr string, uid rpc.UID) (string, context.CancelFunc, er
 
 	d.log.LogAttrs(ctx, slog.LevelInfo, "web server listening", slog.Any("addr", addr))
 	go func() {
-		err = srv.Serve(ln)
+		if tlsConfig == nil {
+			err = srv.Serve(ln)
+		} else {
+			err = srv.ServeTLS(ln, "", "")
+		}
 		var lvl slog.Level
 		switch err {
 		case nil:

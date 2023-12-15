@@ -7,14 +7,21 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,6 +31,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/tools/godoc/vfs"
+	"golang.org/x/tools/godoc/vfs/mapfs"
+	"golang.org/x/tools/txtar"
 
 	rest "github.com/kortschak/dex/cmd/rest/api"
 	"github.com/kortschak/dex/internal/locked"
@@ -54,6 +64,40 @@ func Test(t *testing.T) {
 	goCmd, err := exec.LookPath("go")
 	if err != nil {
 		t.Fatalf("failed to find go command: %v", err)
+	}
+
+	// Make certificates and CA.
+	certs, err := testCertificates("state_server", "state_client")
+	if err != nil {
+		t.Fatalf("unexpected error creating certificates: %v", err)
+	}
+	t.Logf("certificates:\n%s", txtar.Format(certs))
+	certFS := txtarFS(certs)
+
+	// Make common CA.
+	caCert, err := fs.ReadFile(certFS, "ca_crt.pem")
+	if err != nil {
+		t.Fatalf("unexpected error reading CA cert: %v", err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	// Get PEM formatted data for configs.
+	srvCert, err := fs.ReadFile(certFS, "state_server_crt.pem")
+	if err != nil {
+		t.Fatalf("unexpected error reading state_server cert: %v", err)
+	}
+	srvKey, err := fs.ReadFile(certFS, "state_server_key.pem")
+	if err != nil {
+		t.Fatalf("unexpected error reading state_server key: %v", err)
+	}
+	cliCert, err := fs.ReadFile(certFS, "state_client_crt.pem")
+	if err != nil {
+		t.Fatalf("unexpected error reading state_client cert: %v", err)
+	}
+	cliKey, err := fs.ReadFile(certFS, "state_client_key.pem")
+	if err != nil {
+		t.Fatalf("unexpected error reading state_client key: %v", err)
 	}
 
 	for _, network := range []string{"unix", "tcp"} {
@@ -172,9 +216,12 @@ func Test(t *testing.T) {
 					Heartbeat: beat,
 					Servers: map[string]rest.Server{
 						"state": {
-							Addr:     ":7474",
-							Request:  `{"method": "state"}`,
-							Response: `response.body`,
+							Addr:         ":7474",
+							Request:      `{"method": "state"}`,
+							Response:     `response.body`,
+							CertPEMBlock: ptr(string(srvCert)),
+							KeyPEMBlock:  ptr(string(srvKey)),
+							RootCA:       ptr(string(caCert)), // Require mTLS.
 						},
 						"change": {
 							Addr:    ":7575",
@@ -240,9 +287,21 @@ func Test(t *testing.T) {
 			// Perform REST queries on the two end points.
 
 			t.Run("state", func(t *testing.T) {
-				resp, err := http.Get("http://localhost:7474/")
+				cert, err := tls.X509KeyPair(cliCert, cliKey)
 				if err != nil {
-					t.Fatalf("unexpected error from GET http://localhost:7474/: %v", err)
+					t.Fatalf("unexpected error making client certificate: %v", err)
+				}
+				cli := &http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{
+							RootCAs:      caCertPool,
+							Certificates: []tls.Certificate{cert},
+						},
+					},
+				}
+				resp, err := cli.Get("https://localhost:7474/")
+				if err != nil {
+					t.Fatalf("unexpected error from GET https://localhost:7474/: %v", err)
 				}
 				var buf bytes.Buffer
 				io.Copy(&buf, resp.Body)
@@ -250,7 +309,7 @@ func Test(t *testing.T) {
 				var got rpc.SysState
 				err = json.Unmarshal(buf.Bytes(), &got)
 				if err != nil {
-					t.Fatalf("unexpected error from unmarshal state: %v", err)
+					t.Fatalf("unexpected error from unmarshal state: %v\n%s", err, buf.Bytes())
 				}
 				addr := kernel.Addr().String()
 				want := rpc.SysState{
@@ -347,4 +406,105 @@ func Test(t *testing.T) {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func testCertificates(names ...string) (*txtar.Archive, error) {
+	const keyBits = 1024
+
+	now := time.Now()
+
+	var ar txtar.Archive
+
+	caCert := &x509.Certificate{
+		SerialNumber: big.NewInt(9001),
+		Subject: pkix.Name{
+			CommonName: "authority",
+		},
+		NotBefore:             now,
+		NotAfter:              now.Add(time.Hour),
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+	}
+	caKey, err := rsa.GenerateKey(rand.Reader, keyBits)
+	if err != nil {
+		return nil, err
+	}
+	caBytes, err := x509.CreateCertificate(rand.Reader, caCert, caCert, &caKey.PublicKey, caKey)
+	if err != nil {
+		return nil, err
+	}
+	ar.Files = append(ar.Files,
+		txtar.File{Name: "ca_crt.pem", Data: pemBytes("CERTIFICATE", caBytes)},
+		txtar.File{Name: "ca_key.pem", Data: pemBytes("RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(caKey))},
+	)
+
+	for i, name := range names {
+		cert := &x509.Certificate{
+			SerialNumber: big.NewInt(int64(i + 1)),
+			Subject: pkix.Name{
+				CommonName: name,
+			},
+			DNSNames:    []string{"localhost"},
+			NotBefore:   now,
+			NotAfter:    now.Add(time.Hour),
+			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+			KeyUsage:    x509.KeyUsageDigitalSignature,
+		}
+		certKey, err := rsa.GenerateKey(rand.Reader, keyBits)
+		if err != nil {
+			return nil, err
+		}
+		certBytes, err := x509.CreateCertificate(rand.Reader, cert, caCert, &certKey.PublicKey, caKey)
+		if err != nil {
+			return nil, err
+		}
+		ar.Files = append(ar.Files,
+			txtar.File{Name: name + "_crt.pem", Data: pemBytes("CERTIFICATE", certBytes)},
+			txtar.File{Name: name + "_key.pem", Data: pemBytes("RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(certKey))},
+		)
+	}
+
+	return &ar, nil
+}
+
+func pemBytes(typ string, data []byte) []byte {
+	var buf bytes.Buffer
+	pem.Encode(&buf, &pem.Block{Type: typ, Bytes: data})
+	return buf.Bytes()
+}
+
+// Placeholder until https://go.dev/issue/44158 is implemented.
+func txtarFS(ar *txtar.Archive) fs.FS {
+	m := make(map[string]string, len(ar.Files))
+	for _, f := range ar.Files {
+		m[f.Name] = string(f.Data)
+	}
+	return fsShim{mapfs.New(m)}
+}
+
+type fsShim struct {
+	vfs.FileSystem
+}
+
+func (fs fsShim) Open(name string) (fs.File, error) {
+	f, err := fs.FileSystem.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := fs.Stat(name)
+	if err != nil {
+		return nil, err
+	}
+	return fileShim{ReadCloser: f, fi: fi}, nil
+}
+
+type fileShim struct {
+	io.ReadCloser
+	fi fs.FileInfo
+}
+
+func (f fileShim) Stat() (fs.FileInfo, error) {
+	return f.fi, nil
 }
