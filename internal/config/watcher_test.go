@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 
 var operations = []struct {
 	name string
-	want Change
+	want map[string]Change
 	fn   func(dir string) error
 }{
 	{
@@ -35,21 +36,41 @@ device = [
 network = "unix"
 `)
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "file1.toml",
-					Op:   fsnotify.Create,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Create,
+					},
+				},
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
 				},
 			},
-			Config: &System{
-				Kernel: &Kernel{
-					Device: []Device{
-						{PID: 0, Serial: ptr("dev1"), Default: nil},
-						{PID: 0, Serial: ptr("dev2"), Default: nil},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Create,
 					},
-					Network: "unix",
-					Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+				},
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
 				},
 			},
 		},
@@ -85,29 +106,58 @@ path = "/path/to/foo"
 options.len = 1
 `)
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "file1.toml",
-					Op:   fsnotify.Write,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Write,
+					},
+				},
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
+					Modules: map[string]*Module{
+						"foo": {
+							Path: "/path/to/foo",
+							Options: map[string]any{
+								"len": int64(1),
+							},
+							Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						},
+					},
 				},
 			},
-			Config: &System{
-				Kernel: &Kernel{
-					Device: []Device{
-						{PID: 0, Serial: ptr("dev1"), Default: nil},
-						{PID: 0, Serial: ptr("dev2"), Default: nil},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Write,
 					},
-					Network: "unix",
-					Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
 				},
-				Modules: map[string]*Module{
-					"foo": {
-						Path: "/path/to/foo",
-						Options: map[string]any{
-							"len": int64(1),
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
 						},
-						Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
+					Modules: map[string]*Module{
+						"foo": {
+							Path: "/path/to/foo",
+							Options: map[string]any{
+								"len": int64(1),
+							},
+							Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						},
 					},
 				},
 			},
@@ -120,19 +170,38 @@ module = "baz"
 serial = "dev1"
 `)
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "file2.toml",
-					Op:   fsnotify.Write,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file2.toml",
+						Op:   fsnotify.Create,
+					},
+				},
+				Config: &System{
+					Services: map[string]*Service{
+						"reject1": {
+							Module: ptr("baz"),
+							Serial: ptr("dev1"),
+							Sum:    mustSum("a96826ccd62221d1a75aa6f4e40ec1e0a59aada2"),
+						},
+					},
 				},
 			},
-			Config: &System{
-				Services: map[string]*Service{
-					"reject1": {
-						Module: ptr("baz"),
-						Serial: ptr("dev1"),
-						Sum:    mustSum("a96826ccd62221d1a75aa6f4e40ec1e0a59aada2"),
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file2.toml",
+						Op:   fsnotify.Write,
+					},
+				},
+				Config: &System{
+					Services: map[string]*Service{
+						"reject1": {
+							Module: ptr("baz"),
+							Serial: ptr("dev1"),
+							Sum:    mustSum("a96826ccd62221d1a75aa6f4e40ec1e0a59aada2"),
+						},
 					},
 				},
 			},
@@ -142,11 +211,21 @@ serial = "dev1"
 		name: "delete_reject", fn: func(dir string) error {
 			return rm(dir, "file2.toml")
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "file2.toml",
-					Op:   fsnotify.Remove,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file2.toml",
+						Op:   fsnotify.Remove,
+					},
+				},
+			},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file2.toml",
+						Op:   fsnotify.Remove,
+					},
 				},
 			},
 		},
@@ -155,33 +234,62 @@ serial = "dev1"
 		name: "rename_kernel", fn: func(dir string) error {
 			return mv(dir, "file1.toml", "kernel.toml")
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "file1.toml",
-					Op:   fsnotify.Rename,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "kernel.toml",
+						Op:   fsnotify.Create,
+					},
 				},
-				{
-					Name: "kernel.toml",
-					Op:   fsnotify.Create,
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
+					Modules: map[string]*Module{
+						"foo": {
+							Path: "/path/to/foo",
+							Options: map[string]any{
+								"len": int64(1),
+							},
+							Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						},
+					},
 				},
 			},
-			Config: &System{
-				Kernel: &Kernel{
-					Device: []Device{
-						{PID: 0, Serial: ptr("dev1"), Default: nil},
-						{PID: 0, Serial: ptr("dev2"), Default: nil},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Rename,
 					},
-					Network: "unix",
-					Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					{
+						Name: "kernel.toml",
+						Op:   fsnotify.Create,
+					},
 				},
-				Modules: map[string]*Module{
-					"foo": {
-						Path: "/path/to/foo",
-						Options: map[string]any{
-							"len": int64(1),
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
 						},
-						Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
+					Modules: map[string]*Module{
+						"foo": {
+							Path: "/path/to/foo",
+							Options: map[string]any{
+								"len": int64(1),
+							},
+							Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						},
 					},
 				},
 			},
@@ -191,11 +299,21 @@ serial = "dev1"
 		name: "delete_kernel", fn: func(dir string) error {
 			return rm(dir, "kernel.toml")
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "kernel.toml",
-					Op:   fsnotify.Remove,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "kernel.toml",
+						Op:   fsnotify.Remove,
+					},
+				},
+			},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "kernel.toml",
+						Op:   fsnotify.Remove,
+					},
 				},
 			},
 		},
@@ -207,11 +325,21 @@ serial = "dev1"
 		name: "delete_confdir", fn: func(dir string) error {
 			return rm(dir, "")
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: ".",
-					Op:   fsnotify.Remove,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: ".",
+						Op:   fsnotify.Remove,
+					},
+				},
+			},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: ".",
+						Op:   fsnotify.Remove,
+					},
 				},
 			},
 		},
@@ -228,21 +356,41 @@ device = [
 network = "unix"
 `)
 		},
-		want: Change{
-			Event: []fsnotify.Event{
-				{
-					Name: "file1.toml",
-					Op:   fsnotify.Write,
+		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Create,
+					},
+				},
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
 				},
 			},
-			Config: &System{
-				Kernel: &Kernel{
-					Device: []Device{
-						{PID: 0, Serial: ptr("dev1"), Default: nil},
-						{PID: 0, Serial: ptr("dev2"), Default: nil},
+			"linux": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Write,
 					},
-					Network: "unix",
-					Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+				},
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
 				},
 			},
 		},
@@ -301,7 +449,7 @@ func TestWatcher(t *testing.T) {
 		case got = <-stream:
 			timer.Stop()
 		}
-		if got.isZero() != op.want.isZero() {
+		if got.isZero() != op.want[runtime.GOOS].isZero() {
 			if got.isZero() {
 				t.Errorf("did not receive %q event in time", op.name)
 			} else {
@@ -319,8 +467,8 @@ func TestWatcher(t *testing.T) {
 			}
 		}
 
-		if !cmp.Equal(op.want, got) {
-			t.Errorf("unexpected result for %q:\n--- want:\n+++ got:\n%s", op.name, cmp.Diff(op.want, got))
+		if !cmp.Equal(op.want[runtime.GOOS], got) {
+			t.Errorf("unexpected result for %q:\n--- want:\n+++ got:\n%s", op.name, cmp.Diff(op.want[runtime.GOOS], got))
 		}
 	}
 }
