@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/sys/execabs"
 	"golang.org/x/tools/godoc/vfs"
 	"golang.org/x/tools/godoc/vfs/mapfs"
 	"golang.org/x/tools/txtar"
@@ -62,7 +62,7 @@ func Test(t *testing.T) {
 		})
 	}
 
-	goCmd, err := exec.LookPath("go")
+	goCmd, err := execabs.LookPath("go")
 	if err != nil {
 		t.Fatalf("failed to find go command: %v", err)
 	}

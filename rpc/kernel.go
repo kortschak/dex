@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/sys/execabs"
 
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/xdg"
@@ -48,7 +48,7 @@ type Kernel struct {
 
 type daemon struct {
 	uid     string
-	cmd     *exec.Cmd
+	cmd     *execabs.Cmd
 	builtin *Daemon
 
 	// conn is the connection to the daemon
@@ -421,7 +421,7 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name 
 		"-uid", uid,
 		"-network", k.network,
 		"-addr", k.listener.Addr().String())
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := execabs.CommandContext(ctx, name, args...)
 	k.log.LogAttrs(ctx, slog.LevelInfo, "spawn", slog.String("command", cmd.String()), slog.String("uid", uid))
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr

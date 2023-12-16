@@ -15,13 +15,13 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/sys/execabs"
 
 	runner "github.com/kortschak/dex/cmd/runner/api"
 	"github.com/kortschak/dex/config"
@@ -112,7 +112,7 @@ func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *at
 		level:     level,
 		addSource: addSource,
 		cancel:    cancel,
-		waiting:   make(map[*exec.Cmd]context.CancelFunc),
+		waiting:   make(map[*execabs.Cmd]context.CancelFunc),
 	}
 }
 
@@ -142,7 +142,7 @@ type daemon struct {
 	cancel    context.CancelFunc
 
 	wMu     sync.Mutex
-	waiting map[*exec.Cmd]context.CancelFunc
+	waiting map[*execabs.Cmd]context.CancelFunc
 
 	hMu       sync.Mutex
 	heartbeat time.Duration
@@ -201,7 +201,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			cctx, cancel = context.WithCancel(cctx)
 		}
 
-		cmd := exec.CommandContext(cctx, p.Path, p.Args...)
+		cmd := execabs.CommandContext(cctx, p.Path, p.Args...)
 		cmd.Env = p.Env
 		cmd.Dir = p.Dir
 		cmd.WaitDelay = p.WaitDelay
@@ -232,7 +232,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		err = cmd.Run()
-		var exitErr *exec.ExitError
+		var exitErr *execabs.ExitError
 		if errors.As(err, &exitErr) {
 			d.log.LogAttrs(ctx, slog.LevelError, err.Error(), slog.Any("cmd", p))
 			return nil, err

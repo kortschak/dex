@@ -14,7 +14,7 @@ import (
 )
 
 // Params defines the RPC messages passed to start an executable by the runner
-// module. Fields correspond to fields in [os/exec.Cmd].
+// module. Fields correspond to fields in [os/execabs.Cmd].
 type Params struct {
 	Path      string        `json:"path"`
 	Args      []string      `json:"args,omitempty"`
