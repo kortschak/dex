@@ -119,13 +119,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		var ok bool
-		cfgdir, ok = xdg.ConfigHome()
-		if !ok {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		err := os.MkdirAll(filepath.Join(cfgdir, "dex"), 0o755)
+		cfgdir, err = xdgMkdir(xdg.ConfigHome, "dex", 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -140,13 +134,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		var ok bool
-		datadir, ok = xdg.StateHome()
-		if !ok {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		err = os.MkdirAll(filepath.Join(datadir, "dex"), 0o755)
+		datadir, err = xdgMkdir(xdg.StateHome, "dex", 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -212,6 +200,19 @@ func main() {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "manager configure error", slog.Any("error", err))
 		}
 	}
+}
+
+func xdgMkdir(parent func() (dir string, ok bool), path string, perm fs.FileMode) (dir string, err error) {
+	dir, ok := parent()
+	if !ok {
+		return "", syscall.ENOENT
+	}
+	dir = filepath.Join(dir, path)
+	err = os.MkdirAll(dir, perm)
+	if err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 func mergeFuncs[K sys.Kernel, D sys.Device[B], B sys.Button](
