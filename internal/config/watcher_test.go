@@ -25,15 +25,16 @@ var operations = []struct {
 	want Change
 	fn   func(dir string) error
 }{
-	{name: "kernel", fn: func(dir string) error {
-		return create(dir, "file1.toml", 0o644, `[kernel]
+	{
+		name: "kernel", fn: func(dir string) error {
+			return create(dir, "file1.toml", 0o644, `[kernel]
 device = [
 	{serial = "dev1"},
 	{serial = "dev2"}
 ]
 network = "unix"
 `)
-	},
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -53,8 +54,9 @@ network = "unix"
 			},
 		},
 	},
-	{name: "kernel_no_semantic_change", fn: func(dir string) error {
-		return create(dir, "file1.toml", 0o644, `[kernel]
+	{
+		name: "kernel_no_semantic_change", fn: func(dir string) error {
+			return create(dir, "file1.toml", 0o644, `[kernel]
 device = [
 	{serial = "dev1"},
 	{serial = "dev2"}
@@ -62,12 +64,16 @@ device = [
 
 network = "unix"
 `)
-	}},
-	{name: "non-config", fn: func(dir string) error {
-		return create(dir, "file1.yaml", 0o644, "config: value")
-	}},
-	{name: "module_foo", fn: func(dir string) error {
-		return create(dir, "file1.toml", 0o644, `[kernel]
+		},
+	},
+	{
+		name: "non-config", fn: func(dir string) error {
+			return create(dir, "file1.yaml", 0o644, "config: value")
+		},
+	},
+	{
+		name: "module_foo", fn: func(dir string) error {
+			return create(dir, "file1.toml", 0o644, `[kernel]
 device = [
 	{serial = "dev1"},
 	{serial = "dev2"}
@@ -78,7 +84,7 @@ network = "unix"
 path = "/path/to/foo"
 options.len = 1
 `)
-	},
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -107,12 +113,13 @@ options.len = 1
 			},
 		},
 	},
-	{name: "reject_instance", fn: func(dir string) error {
-		return create(dir, "file2.toml", 0o644, `[service.reject1]
+	{
+		name: "reject_instance", fn: func(dir string) error {
+			return create(dir, "file2.toml", 0o644, `[service.reject1]
 module = "baz"
 serial = "dev1"
 `)
-	},
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -131,9 +138,10 @@ serial = "dev1"
 			},
 		},
 	},
-	{name: "delete_reject", fn: func(dir string) error {
-		return rm(dir, "file2.toml")
-	},
+	{
+		name: "delete_reject", fn: func(dir string) error {
+			return rm(dir, "file2.toml")
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -143,9 +151,10 @@ serial = "dev1"
 			},
 		},
 	},
-	{name: "rename_kernel", fn: func(dir string) error {
-		return mv(dir, "file1.toml", "kernel.toml")
-	},
+	{
+		name: "rename_kernel", fn: func(dir string) error {
+			return mv(dir, "file1.toml", "kernel.toml")
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -178,9 +187,10 @@ serial = "dev1"
 			},
 		},
 	},
-	{name: "delete_kernel", fn: func(dir string) error {
-		return rm(dir, "kernel.toml")
-	},
+	{
+		name: "delete_kernel", fn: func(dir string) error {
+			return rm(dir, "kernel.toml")
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -193,9 +203,10 @@ serial = "dev1"
 	{name: "delete_extraneous", fn: func(dir string) error {
 		return rm(dir, "file1.yaml")
 	}},
-	{name: "delete_confdir", fn: func(dir string) error {
-		return rm(dir, "")
-	},
+	{
+		name: "delete_confdir", fn: func(dir string) error {
+			return rm(dir, "")
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{
@@ -205,17 +216,18 @@ serial = "dev1"
 			},
 		},
 	},
-	{name: "replace_kernel", fn: func(dir string) error {
-		// Make sure the directory has time to be recreated.
-		time.Sleep(100 * time.Millisecond)
-		return create(dir, "file1.toml", 0o644, `[kernel]
+	{
+		name: "replace_kernel", fn: func(dir string) error {
+			// Make sure the directory has time to be recreated.
+			time.Sleep(100 * time.Millisecond)
+			return create(dir, "file1.toml", 0o644, `[kernel]
 device = [
 	{serial = "dev1"},
 	{serial = "dev2"}
 ]
 network = "unix"
 `)
-	},
+		},
 		want: Change{
 			Event: []fsnotify.Event{
 				{

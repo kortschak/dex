@@ -77,7 +77,6 @@ var envOrDefaultTests = []struct {
 }
 
 func TestEnvOrDefault(t *testing.T) {
-
 	for i, test := range envOrDefaultTests {
 		for k, v := range test.set {
 			if _, ok := os.LookupEnv(k); ok {

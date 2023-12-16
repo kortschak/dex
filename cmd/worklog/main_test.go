@@ -126,7 +126,7 @@ func TestActive(t *testing.T) {
 				}
 			})
 
-			clock := time.Date(2023, 5, 14, 15, 03, 31, 0, time.UTC)
+			clock := time.Date(2023, time.May, 14, 15, 3, 31, 0, time.UTC)
 			now := func(delta time.Duration) time.Time {
 				clock = clock.Add(delta)
 				return clock

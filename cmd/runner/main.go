@@ -171,7 +171,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			d.log.LogAttrs(ctx, slog.LevelError, "run", slog.Any("error", err))
 			return nil, err
 		}
-		var typ = "notify"
+		typ := "notify"
 		if req.IsCall() {
 			typ = "call"
 		}
