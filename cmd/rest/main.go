@@ -366,7 +366,6 @@ func sameTLS(a, b rest.Server) bool {
 	return samePtrString(a.RootCA, b.RootCA) &&
 		samePtrString(a.CertPEMBlock, b.CertPEMBlock) &&
 		samePtrString(a.KeyPEMBlock, b.KeyPEMBlock)
-
 }
 
 func samePtrString(a, b *string) bool {

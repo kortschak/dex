@@ -329,7 +329,7 @@ func TestDB(t *testing.T) {
 			}
 
 			t.Run("dynamic_query", func(t *testing.T) {
-				var dynamicTests = []struct {
+				dynamicTests := []struct {
 					name  string
 					sql   string
 					query Query
