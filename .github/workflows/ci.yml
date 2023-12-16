@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        go-version: [1.21.x]
+        platform: [ubuntu-latest]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+    - name: install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: checkout code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+
+    - name: non-Go dependencies
+      if: matrix.platform == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -qq libudev-dev
+
+    - name: unit tests
+      run: |
+        go test ./rpc ./internal/... ./cmd/*/api ./cmd/worklog/store
