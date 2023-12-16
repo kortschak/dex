@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -97,7 +98,10 @@ func TestActive(t *testing.T) {
 				t.Fatal("failed to get daemon conn")
 			}
 
-			var gotChanges int
+			var (
+				gotChanges int
+				changeWg   sync.WaitGroup
+			)
 			kernel.Funcs(rpc.Funcs{
 				"change": func(ctx context.Context, id jsonrpc2.ID, m json.RawMessage) (*rpc.Message[any], error) {
 					var v rpc.Message[map[string]any]
@@ -106,6 +110,7 @@ func TestActive(t *testing.T) {
 						return nil, err
 					}
 					gotChanges++
+					changeWg.Done()
 					return nil, nil
 				},
 				// store is a simulation. In practice this would use an [rpc.Forward]
@@ -122,6 +127,7 @@ func TestActive(t *testing.T) {
 			})
 
 			const changes = 5
+			changeWg.Add(changes)
 			go func() {
 				for i := 0; i < changes; i++ {
 					time.Sleep(time.Second)
@@ -182,6 +188,15 @@ func TestActive(t *testing.T) {
 				}
 			})
 
+			done := make(chan struct{})
+			go func() {
+				changeWg.Wait()
+				close(done)
+			}()
+			select {
+			case <-time.After(time.Second):
+			case <-done:
+			}
 			const wantChanges = changes
 			if gotChanges < wantChanges {
 				t.Errorf("failed to get %d changes: got:%d", wantChanges, gotChanges)

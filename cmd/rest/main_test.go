@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -165,7 +166,10 @@ func Test(t *testing.T) {
 			}
 			defer store.Close()
 
-			var gotChanges int
+			var (
+				gotChanges int
+				changeWg   sync.WaitGroup
+			)
 			kernel.Funcs(rpc.Funcs{
 				"change": func(ctx context.Context, id jsonrpc2.ID, m json.RawMessage) (*rpc.Message[any], error) {
 					var v rpc.Message[map[string]any]
@@ -174,6 +178,7 @@ func Test(t *testing.T) {
 						return nil, err
 					}
 					gotChanges++
+					changeWg.Done()
 					return nil, nil
 				},
 
@@ -342,6 +347,7 @@ func Test(t *testing.T) {
 
 			t.Run("changes", func(t *testing.T) {
 				const changes = 5
+				changeWg.Add(changes)
 				for i := 0; i < changes; i++ {
 					resp, err := http.Get("http://localhost:7575/")
 					if err != nil {
@@ -349,6 +355,15 @@ func Test(t *testing.T) {
 					}
 					io.Copy(io.Discard, resp.Body)
 					resp.Body.Close()
+				}
+				done := make(chan struct{})
+				go func() {
+					changeWg.Wait()
+					close(done)
+				}()
+				select {
+				case <-time.After(time.Second):
+				case <-done:
 				}
 				if gotChanges != changes {
 					t.Errorf("unexpected number of changes: got:%d want:%d", gotChanges, changes)
