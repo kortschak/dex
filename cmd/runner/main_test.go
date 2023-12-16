@@ -12,10 +12,12 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/sys/execabs"
 
 	runner "github.com/kortschak/dex/cmd/runner/api"
 	"github.com/kortschak/dex/internal/locked"
@@ -134,13 +136,17 @@ func TestRunner(t *testing.T) {
 					t.Errorf("failed run call: %v", err)
 				}
 
+				// Get the command output directly to avoid
+				// system differences causing problems.
+				var stdout strings.Builder
+				cmd := execabs.Command("ls", ".")
+				cmd.Stdout = &stdout
+				err = cmd.Run()
+				if err != nil {
+					t.Errorf("failed run exec: %v", err)
+				}
 				want := runner.Return{
-					// Keep this in sync with the contents of the directory.
-					Stdout: `api
-main.go
-main_test.go
-README.md
-` + targetFile + "\n",
+					Stdout: stdout.String(),
 					Stderr: "",
 					Err:    "",
 				}
