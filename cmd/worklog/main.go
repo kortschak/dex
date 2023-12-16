@@ -655,8 +655,9 @@ func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, er
 	mux.HandleFunc("/query/", d.query(ctx))
 
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:     addr,
+		Handler:  mux,
+		ErrorLog: slog.NewLogLogger(d.log.Handler(), slog.LevelError),
 	}
 
 	ln, err := net.Listen("tcp", addr)
