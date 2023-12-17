@@ -117,6 +117,7 @@ func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *at
 }
 
 func (d *daemon) dial(ctx context.Context, network, addr string, dialer net.Dialer) error {
+	d.log.LogAttrs(ctx, slog.LevelDebug, "dial", slog.String("network", network), slog.String("addr", addr))
 	var err error
 	d.conn, err = jsonrpc2.Dial(ctx, jsonrpc2.NetDialer(network, addr, dialer), d)
 	if err != nil {
