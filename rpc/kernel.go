@@ -109,6 +109,7 @@ func NewKernel(ctx context.Context, network string, options jsonrpc2.NetListenOp
 	}
 	k.server = jsonrpc2.NewServer(ctx, k.listener, &k)
 
+	k.log.LogAttrs(ctx, slog.LevelDebug, "new kernel", slog.String("network", k.network), slog.String("addr", k.listener.Addr().String()))
 	return &k, nil
 }
 
@@ -153,6 +154,7 @@ func (k *Kernel) dial(ctx context.Context, dialer net.Dialer) (*jsonrpc2.Connect
 // Bind binds the kernel's handler to a connection and the reverse connection
 // to a daemon's UID.
 func (k *Kernel) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
+	k.log.LogAttrs(ctx, slog.LevelDebug, "binding")
 	go k.bind(ctx, conn)
 	return jsonrpc2.ConnectionOptions{
 		Handler: k,
@@ -162,6 +164,7 @@ func (k *Kernel) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.C
 func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection) {
 	var daemon Message[None]
 	err := conn.Call(ctx, Who, NewMessage(kernelUID, None{})).Await(ctx, &daemon)
+	k.log.LogAttrs(ctx, slog.LevelDebug, "binding response", slog.Any("message", daemon))
 	switch {
 	case err == nil:
 	case errors.Is(err, context.Canceled):
@@ -180,7 +183,12 @@ func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection) {
 	k.log.LogAttrs(ctx, slog.LevelInfo, "binding", slog.Any("uid", daemon.UID))
 	k.dMu.Lock()
 	defer k.dMu.Unlock()
-	if k.daemons[daemon.UID.Module].conn != nil {
+	d := k.daemons[daemon.UID.Module]
+	if d == nil {
+		k.log.LogAttrs(ctx, slog.LevelError, "unexpected connection", slog.Any("uid", daemon.UID))
+		return
+	}
+	if d.conn != nil {
 		// UID is already registered, log and ask the second to stop.
 		k.log.LogAttrs(ctx, slog.LevelError, "duplicate uid", slog.String("uid", daemon.UID.Module))
 		err := conn.Notify(ctx, Stop, NewMessage(kernelUID, "duplicate"))
@@ -437,7 +445,9 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name 
 	go func() {
 		// Use the process's wait method to avoid data races in
 		// the exec.Cmd type.
+		k.log.LogAttrs(ctx, slog.LevelDebug, "waiting for termination", slog.String("uid", uid))
 		cmd.Process.Wait()
+		k.log.LogAttrs(ctx, slog.LevelDebug, "terminating", slog.String("uid", uid))
 
 		k.dMu.Lock()
 		defer k.dMu.Unlock()
@@ -478,6 +488,7 @@ func (k *Kernel) Builtin(ctx context.Context, uid string, dialer net.Dialer, bin
 // Kill terminates the daemon identified by uid. If no corresponding daemon
 // exists, it is a no-op.
 func (k *Kernel) Kill(uid string) {
+	k.log.LogAttrs(context.Background(), slog.LevelDebug, "kill", slog.String("uid", uid))
 	k.dMu.Lock()
 	if d, ok := k.daemons[uid]; ok {
 		k.kill(uid, d)
@@ -487,6 +498,7 @@ func (k *Kernel) Kill(uid string) {
 
 // Close closes the kernel, terminating all spawned daemons.
 func (k *Kernel) Close() error {
+	k.log.LogAttrs(context.Background(), slog.LevelDebug, "close")
 	k.dMu.Lock()
 	for uid, d := range k.daemons {
 		k.kill(uid, d)
