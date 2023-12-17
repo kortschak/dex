@@ -51,7 +51,7 @@ var (
 	keep    = flag.Bool("keep", false, "keep workdir after tests")
 )
 
-func Test(t *testing.T) {
+func TestDaemon(t *testing.T) {
 	err := os.Mkdir(workDir, 0o755)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		t.Fatalf("failed to make dir: %v", err)
@@ -62,9 +62,10 @@ func Test(t *testing.T) {
 		})
 	}
 
-	goCmd, err := execabs.LookPath("go")
+	exePath := filepath.Join(t.TempDir(), "rest")
+	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to find go command: %v", err)
+		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}
 
 	// Make certificates and CA.
@@ -108,12 +109,13 @@ func Test(t *testing.T) {
 				kernLogBuf locked.BytesBuffer
 				restLogBuf locked.BytesBuffer
 			)
+			level.Set(slog.LevelDebug)
 			log := slog.New(slogext.NewJSONHandler(&kernLogBuf, &slogext.HandlerOptions{
-				Level:     slog.LevelDebug,
+				Level:     &level,
 				AddSource: slogext.NewAtomicBool(*lines),
 			}))
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			ctx, cancel := context.WithTimeoutCause(context.Background(), 20*time.Second, errors.New("test waited too long"))
 			defer cancel()
 
 			kernel, err := rpc.NewKernel(ctx, network, jsonrpc2.NetListenOptions{}, log)
@@ -145,10 +147,9 @@ func Test(t *testing.T) {
 				}
 			}()
 
-			level.Set(slog.LevelDebug)
 			uid := rpc.UID{Module: "rest"}
 			err = kernel.Spawn(ctx, os.Stdout, &restLogBuf, uid.Module,
-				"go", "run", "-race", ".", "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
+				exePath, "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
 			)
 			if err != nil {
 				t.Fatalf("failed to spawn rest: %v", err)
@@ -156,7 +157,7 @@ func Test(t *testing.T) {
 
 			conn, _, ok := kernel.Conn(ctx, uid.Module)
 			if !ok {
-				t.Fatal("failed to get daemon conn")
+				t.Fatalf("failed to get daemon conn: %v: %v", ctx.Err(), context.Cause(ctx))
 			}
 
 			storeUID := rpc.UID{Module: "kernel", Service: "store"}
@@ -323,7 +324,7 @@ func Test(t *testing.T) {
 					Daemons: map[string]rpc.DaemonState{
 						"rest": {
 							UID:           "rest",
-							Command:       ptr(goCmd + " run -race . -log " + level.Level().String() + " -lines=false -uid rest -network " + network + " -addr " + addr),
+							Command:       ptr(exePath + " -log " + level.Level().String() + " -lines=false -uid rest -network " + network + " -addr " + addr),
 							LastHeartbeat: &time.Time{},
 							Deadline:      &time.Time{},
 						},

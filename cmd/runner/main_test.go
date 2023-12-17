@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,13 @@ var (
 	lines   = flag.Bool("show_lines", false, "log source code position")
 )
 
-func TestRunner(t *testing.T) {
+func TestDaemon(t *testing.T) {
+	exePath := filepath.Join(t.TempDir(), "runner")
+	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to build daemon: %v\n%s", err, out)
+	}
+
 	for _, network := range []string{"unix", "tcp"} {
 		t.Run(network, func(t *testing.T) {
 			var (
@@ -38,12 +45,13 @@ func TestRunner(t *testing.T) {
 				kernLogBuf   locked.BytesBuffer
 				runnerLogBuf locked.BytesBuffer
 			)
+			level.Set(slog.LevelDebug)
 			log := slog.New(slogext.NewJSONHandler(&kernLogBuf, &slogext.HandlerOptions{
-				Level:     slog.LevelDebug,
+				Level:     &level,
 				AddSource: slogext.NewAtomicBool(*lines),
 			}))
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			ctx, cancel := context.WithTimeoutCause(context.Background(), 20*time.Second, errors.New("test waited too long"))
 			defer cancel()
 
 			kernel, err := rpc.NewKernel(ctx, network, jsonrpc2.NetListenOptions{}, log)
@@ -77,7 +85,7 @@ func TestRunner(t *testing.T) {
 
 			uid := rpc.UID{Module: "runner"}
 			err = kernel.Spawn(ctx, os.Stdout, &runnerLogBuf, uid.Module,
-				"go", "run", "-race", ".", "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
+				exePath, "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
 			)
 			if err != nil {
 				t.Fatalf("failed to spawn runner: %v", err)
@@ -85,7 +93,7 @@ func TestRunner(t *testing.T) {
 
 			conn, _, ok := kernel.Conn(ctx, uid.Module)
 			if !ok {
-				t.Fatal("failed to get daemon conn")
+				t.Fatalf("failed to get daemon conn: %v: %v", ctx.Err(), context.Cause(ctx))
 			}
 
 			t.Run("configure", func(t *testing.T) {

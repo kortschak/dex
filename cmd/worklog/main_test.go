@@ -22,6 +22,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/sys/execabs"
 	"golang.org/x/tools/txtar"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
@@ -38,7 +39,13 @@ var (
 	keep    = flag.Bool("keep", false, "keep database directories after tests")
 )
 
-func TestActive(t *testing.T) {
+func TestDaemon(t *testing.T) {
+	exePath := filepath.Join(t.TempDir(), "worklog")
+	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to build daemon: %v\n%s", err, out)
+	}
+
 	for _, network := range []string{"unix", "tcp"} {
 		t.Run(network, func(t *testing.T) {
 			var (
@@ -46,12 +53,13 @@ func TestActive(t *testing.T) {
 				kernLogBuf    locked.BytesBuffer
 				watcherLogBuf locked.BytesBuffer
 			)
+			level.Set(slog.LevelDebug)
 			log := slog.New(slogext.NewJSONHandler(&kernLogBuf, &slogext.HandlerOptions{
-				Level:     slog.LevelDebug,
+				Level:     &level,
 				AddSource: slogext.NewAtomicBool(*lines),
 			}))
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			ctx, cancel := context.WithTimeoutCause(context.Background(), 20*time.Second, errors.New("test waited too long"))
 			defer cancel()
 
 			kernel, err := rpc.NewKernel(ctx, network, jsonrpc2.NetListenOptions{}, log)
@@ -85,7 +93,7 @@ func TestActive(t *testing.T) {
 
 			uid := rpc.UID{Module: "worklog"}
 			err = kernel.Spawn(ctx, os.Stdout, &watcherLogBuf, uid.Module,
-				"go", "run", "-race", ".", "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
+				exePath, "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
 			)
 			if err != nil {
 				t.Fatalf("failed to spawn worklog: %v", err)
@@ -93,7 +101,7 @@ func TestActive(t *testing.T) {
 
 			conn, _, ok := kernel.Conn(ctx, uid.Module)
 			if !ok {
-				t.Fatal("failed to get daemon conn")
+				t.Fatalf("failed to get daemon conn: %v: %v", ctx.Err(), context.Cause(ctx))
 			}
 
 			t.Run("configure", func(t *testing.T) {

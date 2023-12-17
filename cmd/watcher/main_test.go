@@ -7,10 +7,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -29,17 +31,18 @@ var (
 	lines   = flag.Bool("show_lines", false, "log source code position")
 )
 
-func TestActive(t *testing.T) {
-	err := execabs.Command("go", "build", "-o", "./tester/tester", "./tester").Run()
+func TestDaemon(t *testing.T) {
+	tmp := t.TempDir()
+	exePath := filepath.Join(tmp, "worklog")
+	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
-		t.Fatalf("failed to build tester: %v", err)
+		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}
-	t.Cleanup(func() {
-		err := os.Remove("./tester/tester")
-		if err != nil {
-			t.Errorf("failed to clean up tester: %v", err)
-		}
-	})
+	testerPath := filepath.Join(tmp, "tester")
+	out, err = execabs.Command("go", "build", "-o", testerPath, "./tester").CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to build tester: %v\n%s", err, out)
+	}
 
 	for _, network := range []string{"unix", "tcp"} {
 		t.Run(network, func(t *testing.T) {
@@ -48,12 +51,13 @@ func TestActive(t *testing.T) {
 				kernLogBuf    locked.BytesBuffer
 				watcherLogBuf locked.BytesBuffer
 			)
+			level.Set(slog.LevelDebug)
 			log := slog.New(slogext.NewJSONHandler(&kernLogBuf, &slogext.HandlerOptions{
-				Level:     slog.LevelDebug,
+				Level:     &level,
 				AddSource: slogext.NewAtomicBool(*lines),
 			}))
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			ctx, cancel := context.WithTimeoutCause(context.Background(), 20*time.Second, errors.New("test waited too long"))
 			defer cancel()
 
 			kernel, err := rpc.NewKernel(ctx, network, jsonrpc2.NetListenOptions{}, log)
@@ -87,7 +91,7 @@ func TestActive(t *testing.T) {
 
 			uid := rpc.UID{Module: "watcher"}
 			err = kernel.Spawn(ctx, os.Stdout, &watcherLogBuf, uid.Module,
-				"go", "run", "-race", ".", "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
+				exePath, "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
 			)
 			if err != nil {
 				t.Fatalf("failed to spawn watcher: %v", err)
@@ -95,7 +99,7 @@ func TestActive(t *testing.T) {
 
 			conn, _, ok := kernel.Conn(ctx, uid.Module)
 			if !ok {
-				t.Fatal("failed to get daemon conn")
+				t.Fatalf("failed to get daemon conn: %v: %v", ctx.Err(), context.Cause(ctx))
 			}
 
 			var (
@@ -131,7 +135,7 @@ func TestActive(t *testing.T) {
 			go func() {
 				for i := 0; i < changes; i++ {
 					time.Sleep(time.Second)
-					cmd := execabs.Command("./tester/tester", "-title", fmt.Sprintf("tester:%d", i))
+					cmd := execabs.Command(testerPath, "-title", fmt.Sprintf("tester:%d", i))
 					err := cmd.Start()
 					if err != nil {
 						t.Errorf("failed to start terminal %d", i)

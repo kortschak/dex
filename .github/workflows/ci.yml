@@ -8,10 +8,17 @@ jobs:
   build:
     strategy:
       matrix:
+        test-type:
+        - general
+        # - with-display
         go-version: [1.21.x]
         platform: [ubuntu-latest]
 
     runs-on: ${{ matrix.platform }}
+
+    env:
+      DISPLAY: ':99.0'
+      EGL_PLATFORM: 'x11'
 
     steps:
     - name: install Go
@@ -29,7 +36,24 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -qq libudev-dev
+    - name: non-Go display test dependencies
+      if: matrix.platform == 'ubuntu-latest' && matrix.test-type == 'with-display'
+      run: |
+        sudo apt-get install -qq libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
+        # Start a virtual frame buffer.
+        Xvfb :99 -screen 0 1920x1024x24 &
 
     - name: unit tests
+      if: matrix.test-type == 'general'
       run: |
         go test ./rpc ./internal/... ./cmd/*/api ./cmd/worklog/store
+
+    - name: integration tests
+      if: matrix.test-type == 'general'
+      run: |
+        go test -p=1 -run TestDaemon ./cmd/{rest,runner,worklog} -verbose_log
+
+    - name: dislay integration tests
+      if: matrix.test-type == 'with-display'
+      run: |
+        go test -p=1 -run TestDaemon ./cmd/watcher -verbose_log
