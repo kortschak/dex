@@ -7,12 +7,15 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
+        go-version: [1.21.x]
         test-type:
         - general
         # - with-display
-        go-version: [1.21.x]
-        platform: [ubuntu-latest]
+        platform:
+        - ubuntu-latest
+        - macos-latest
 
     runs-on: ${{ matrix.platform }}
 
@@ -31,12 +34,12 @@ jobs:
       with:
         fetch-depth: 1
 
-    - name: non-Go dependencies
+    - name: non-Go linux dependencies
       if: matrix.platform == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -qq libudev-dev
-    - name: non-Go display test dependencies
+    - name: non-Go linux display test dependencies
       if: matrix.platform == 'ubuntu-latest' && matrix.test-type == 'with-display'
       run: |
         sudo apt-get install -qq libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
