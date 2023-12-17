@@ -92,7 +92,7 @@ func NewKernel(ctx context.Context, network string, options jsonrpc2.NetListenOp
 			dir = filepath.Join(dir, RuntimeDir)
 			err = os.Mkdir(dir, 0o700)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to create runtime directory: %w", err)
 			}
 		}
 		k.sock, err = os.MkdirTemp(dir, fmt.Sprintf("sock-%d-*", os.Getpid()))

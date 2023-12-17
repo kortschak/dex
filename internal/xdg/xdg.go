@@ -83,7 +83,7 @@ func Runtime(name string) (string, error) {
 
 // RuntimeDir returns the path corresponding to XDG_RUNTIME_DIR.
 func RuntimeDir() (string, bool) {
-	return envOrDefault(key_XDG_RUNTIME_DIR, def_XDG_RUNTIME_DIR, "")
+	return envOrDefault(key_XDG_RUNTIME_DIR, def_XDG_RUNTIME_DIR, _HOME)
 }
 
 // finc returns the path to the named file found first in the list of paths
@@ -129,7 +129,7 @@ func envOrDefault(key, def, home string) (string, bool) {
 	if def == "" {
 		return "", false
 	}
-	if home == "" {
+	if home == "" || filepath.IsAbs(def) {
 		return def, true
 	}
 	base, ok := os.LookupEnv(home)
