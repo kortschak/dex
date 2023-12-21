@@ -13,7 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
+	"runtime"
 	"testing"
 	"time"
 
@@ -44,6 +44,7 @@ func TestDaemon(t *testing.T) {
 		t.Fatalf("failed to build tester: %v\n%s", err, out)
 	}
 
+	cold := true
 	for _, network := range []string{"unix", "tcp"} {
 		t.Run(network, func(t *testing.T) {
 			var (
@@ -102,9 +103,13 @@ func TestDaemon(t *testing.T) {
 				t.Fatalf("failed to get daemon conn: %v: %v", ctx.Err(), context.Cause(ctx))
 			}
 
+			const (
+				changes     = 5
+				wantChanges = changes
+			)
 			var (
-				gotChanges int
-				changeWg   sync.WaitGroup
+				gotChanges  int
+				doneChanges = make(chan struct{})
 			)
 			kernel.Funcs(rpc.Funcs{
 				"change": func(ctx context.Context, id jsonrpc2.ID, m json.RawMessage) (*rpc.Message[any], error) {
@@ -113,8 +118,11 @@ func TestDaemon(t *testing.T) {
 					if err != nil {
 						return nil, err
 					}
+					log.LogAttrs(ctx, slog.LevelInfo, "change", slog.Any("details", v.Body))
 					gotChanges++
-					changeWg.Done()
+					if gotChanges == wantChanges {
+						close(doneChanges)
+					}
 					return nil, nil
 				},
 				// store is a simulation. In practice this would use an [rpc.Forward]
@@ -130,24 +138,8 @@ func TestDaemon(t *testing.T) {
 				},
 			})
 
-			const changes = 5
-			changeWg.Add(changes)
-			go func() {
-				for i := 0; i < changes; i++ {
-					time.Sleep(time.Second)
-					cmd := execabs.Command(testerPath, "-title", fmt.Sprintf("tester:%d", i))
-					err := cmd.Start()
-					if err != nil {
-						t.Errorf("failed to start terminal %d", i)
-					}
-					t.Cleanup(func() {
-						cmd.Process.Kill()
-					})
-				}
-			}()
-
 			t.Run("configure", func(t *testing.T) {
-				period := &rpc.Duration{Duration: time.Second}
+				period := &rpc.Duration{Duration: time.Second / 2}
 				beat := &rpc.Duration{Duration: 5 * time.Second}
 
 				var resp rpc.Message[string]
@@ -163,7 +155,7 @@ func TestDaemon(t *testing.T) {
 						Heartbeat: beat,
 						Rules: map[string]string{
 							"change": `
-								name.contains('tester') && window_id != last.window_id ?
+								name.contains('tester') && (name != last.name || window_id != last.window_id || window != last.window) ?
 									[{"method":"change","params":{"page":"tester","details":{"name":name,"window":window}}}]
 								:
 									[{}]`,
@@ -183,7 +175,37 @@ func TestDaemon(t *testing.T) {
 				}
 			})
 
-			time.Sleep(10 * time.Second) // Let some updates and heartbeats past.
+			// MacOS, most (but not all) of the time fails to notice the first
+			// run of the tester. So run it once to get started.
+			if cold && runtime.GOOS == "darwin" {
+				cmd := execabs.Command(testerPath, "-title", "tester:cold")
+				err := cmd.Start()
+				if err != nil {
+					t.Error("failed to start tester cold")
+				}
+				time.Sleep(time.Second)
+				cmd.Process.Kill()
+			}
+			cold = false
+			for i := 0; i < changes; i++ {
+				if runtime.GOOS == "darwin" {
+					// On MacOS, the applescript used to get the PID returns
+					// the same PID for all the testers resulting in the
+					// application and window names being identical, so wait
+					// for at least a polling period to allow a different
+					// window to be observed. This is obviously horrible.
+					time.Sleep(time.Second)
+				}
+				cmd := execabs.Command(testerPath, "-title", fmt.Sprintf("tester:%d", i))
+				err := cmd.Start()
+				if err != nil {
+					t.Errorf("failed to start tester %d", i)
+				}
+				time.Sleep(time.Second)
+				cmd.Process.Kill()
+			}
+
+			time.Sleep(5 * time.Second) // Let some updates and heartbeats past.
 
 			t.Run("stop", func(t *testing.T) {
 				err := conn.Notify(ctx, "stop", rpc.NewMessage(uid, rpc.None{}))
@@ -192,16 +214,10 @@ func TestDaemon(t *testing.T) {
 				}
 			})
 
-			done := make(chan struct{})
-			go func() {
-				changeWg.Wait()
-				close(done)
-			}()
 			select {
 			case <-time.After(time.Second):
-			case <-done:
+			case <-doneChanges:
 			}
-			const wantChanges = changes
 			if gotChanges < wantChanges {
 				t.Errorf("failed to get %d changes: got:%d", wantChanges, gotChanges)
 			}

@@ -12,10 +12,14 @@ jobs:
         go-version: [1.21.x]
         test-type:
         - general
-        # - with-display
+        - with-display
         platform:
         - ubuntu-latest
         - macos-latest
+
+        exclude:
+        - platform: ubuntu-latest
+          test-type: with-display
 
     runs-on: ${{ matrix.platform }}
 
@@ -56,7 +60,7 @@ jobs:
       run: |
         go test -p=1 -run TestDaemon ./cmd/{rest,runner,worklog} -verbose_log
 
-    - name: dislay integration tests
+    - name: display integration tests
       if: matrix.test-type == 'with-display'
       run: |
         go test -p=1 -run TestDaemon ./cmd/watcher -verbose_log
