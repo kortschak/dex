@@ -17,10 +17,6 @@ jobs:
         - ubuntu-latest
         - macos-latest
 
-        exclude:
-        - platform: ubuntu-latest
-          test-type: with-display
-
     runs-on: ${{ matrix.platform }}
 
     env:
@@ -46,9 +42,14 @@ jobs:
     - name: non-Go linux display test dependencies
       if: matrix.platform == 'ubuntu-latest' && matrix.test-type == 'with-display'
       run: |
-        sudo apt-get install -qq libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
-        # Start a virtual frame buffer.
+        sudo apt-get install -qq libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev xdotool x11-utils xdotool i3-wm
+        echo "DISPLAY=${DISPLAY}"
+        # Start a virtual frame buffer and wait a bit for it to be ready...
         Xvfb :99 -screen 0 1920x1024x24 &
+        sleep 1
+        # and a window manager to get focus for testers and wait again.
+        i3 &
+        sleep 1
 
     - name: unit tests
       if: matrix.test-type == 'general'
