@@ -125,7 +125,10 @@ func TestDaemon(t *testing.T) {
 			}
 			// Catch failures to terminate.
 			closed := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				select {
 				case <-ctx.Done():
 					t.Error("failed to close server")
@@ -139,7 +142,7 @@ func TestDaemon(t *testing.T) {
 					t.Errorf("failed to close kernel: %v", err)
 				}
 				close(closed)
-
+				wg.Wait()
 				if verbose.Load() {
 					t.Logf("log:\n%s\n", &buf)
 				}
