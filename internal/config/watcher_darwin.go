@@ -54,6 +54,12 @@ func (p *streamProcessor) process(ctx context.Context, watcher *fsnotify.Watcher
 						p.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{p.hashes}))
 						p.hashes[ev.Name] = sum
 					}
+
+					// Darwin appears to sometimes fuse chmod into a write. This
+					// has no impact on our logic, but can cause tests to fail,
+					// so unset that bit.
+					ev.Op &^= fsnotify.Chmod
+
 					p.changes <- Change{
 						Event:  []fsnotify.Event{ev},
 						Config: cfg,
