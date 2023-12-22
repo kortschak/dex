@@ -6,6 +6,7 @@
 package slogext
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -214,10 +215,36 @@ func (h *PrefixHandler) Handle(ctx context.Context, rec slog.Record) error {
 }
 
 // Write implements the io.Writer interface, writing to the group's io.Writer.
-// Each write to h is prefixed with the receiver's prefix string.
+// Each write to h is prefixed with the receiver's prefix string. If a write
+// spans multiple lines each line is prefixed.
 func (h *PrefixHandler) Write(b []byte) (int, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.w.Write([]byte(h.prefix))
-	return h.w.Write(b)
+	lines := bytes.Split(bytes.TrimSuffix(b, []byte{'\n'}), []byte{'\n'})
+	var (
+		n   int
+		err error
+	)
+	for i, l := range lines {
+		_, err = h.w.Write([]byte(h.prefix))
+		if err != nil {
+			break
+		}
+		n += len(l)
+		_, err = h.w.Write(l)
+		if err != nil {
+			break
+		}
+		_, err = h.w.Write([]byte{'\n'})
+		if err != nil {
+			break
+		}
+		if i != len(lines)-1 {
+			n++
+		}
+	}
+	if bytes.HasSuffix(b, []byte{'\n'}) {
+		n++
+	}
+	return n, err
 }
