@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 
 	"github.com/kortschak/goroutine"
@@ -143,4 +144,80 @@ func NewAtomicBool(t bool) *atomic.Bool {
 	var x atomic.Bool
 	x.Store(t)
 	return &x
+}
+
+// PrefixHandlerGroup is a coordinated set of slog.Handlers sharing
+// a single io.Writer.
+type PrefixHandlerGroup struct {
+	mu sync.Mutex
+	w  io.Writer
+	h  slog.Handler
+}
+
+// NewPrefixHandlerGroup returns a handler group sharing w and h. w must be the
+// io.Writer used to initialise h.
+func NewPrefixHandlerGroup(w io.Writer, h slog.Handler) *PrefixHandlerGroup {
+	return &PrefixHandlerGroup{w: w, h: h}
+}
+
+// Prefix is a slog.Handler that logs messages with a prefix.
+type PrefixHandler struct {
+	prefix string
+
+	mu *sync.Mutex
+	w  io.Writer
+	h  slog.Handler
+}
+
+// NewHandler returns a PrefixHandler within g's group. Log messages written
+// to the handler will be prefixed with the provided string.
+func (g *PrefixHandlerGroup) NewHandler(prefix string) *PrefixHandler {
+	return &PrefixHandler{
+		prefix: prefix,
+		mu:     &g.mu,
+		w:      g.w,
+		h:      g.h,
+	}
+}
+
+// Enabled reports whether the handler handles records at the given level.
+// The handler ignores records whose level is lower.
+func (h *PrefixHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.h.Enabled(ctx, level)
+}
+
+// WithAttrs returns a new JSONHandler whose attributes consists
+// of h's attributes followed by attrs.
+func (h *PrefixHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	c := *h
+	c.h = h.h.WithAttrs(attrs)
+	return &c
+}
+
+// WithGroup returns a new Handler with the given group appended to
+// h's existing groups.
+func (h *PrefixHandler) WithGroup(name string) slog.Handler {
+	c := *h
+	c.h = h.h.WithGroup(name)
+	return &c
+}
+
+// Handle formats its according to the group's handler, but prefixed with the
+// prefix used to initialise h.
+//
+// See [slog.JSONHandler.Handle] for details.
+func (h *PrefixHandler) Handle(ctx context.Context, rec slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.w.Write([]byte(h.prefix))
+	return h.h.Handle(ctx, rec)
+}
+
+// Write implements the io.Writer interface, writing to the group's io.Writer.
+// Each write to h is prefixed with the receiver's prefix string.
+func (h *PrefixHandler) Write(b []byte) (int, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.w.Write([]byte(h.prefix))
+	return h.w.Write(b)
 }

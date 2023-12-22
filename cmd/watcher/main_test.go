@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,7 +22,6 @@ import (
 	"golang.org/x/sys/execabs"
 
 	watcher "github.com/kortschak/dex/cmd/watcher/api"
-	"github.com/kortschak/dex/internal/locked"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
@@ -47,16 +47,18 @@ func TestDaemon(t *testing.T) {
 	cold := true
 	for _, network := range []string{"unix", "tcp"} {
 		t.Run(network, func(t *testing.T) {
+			verbose := slogext.NewAtomicBool(*verbose)
 			var (
-				level         slog.LevelVar
-				kernLogBuf    locked.BytesBuffer
-				watcherLogBuf locked.BytesBuffer
+				level slog.LevelVar
+				buf   bytes.Buffer
 			)
-			level.Set(slog.LevelDebug)
-			log := slog.New(slogext.NewJSONHandler(&kernLogBuf, &slogext.HandlerOptions{
+			h := slogext.NewJSONHandler(&buf, &slogext.HandlerOptions{
 				Level:     &level,
 				AddSource: slogext.NewAtomicBool(*lines),
-			}))
+			})
+			g := slogext.NewPrefixHandlerGroup(&buf, h)
+			level.Set(slog.LevelDebug)
+			log := slog.New(g.NewHandler("🔷 "))
 
 			ctx, cancel := context.WithTimeoutCause(context.Background(), 20*time.Second, errors.New("test waited too long"))
 			defer cancel()
@@ -71,9 +73,7 @@ func TestDaemon(t *testing.T) {
 				select {
 				case <-ctx.Done():
 					t.Error("failed to close server")
-					*verbose = true
-					t.Logf("kernel log:\n%s\n", &kernLogBuf)
-					t.Logf("watcher log:\n%s", &watcherLogBuf)
+					verbose.Store(true)
 				case <-closed:
 				}
 			}()
@@ -84,14 +84,13 @@ func TestDaemon(t *testing.T) {
 				}
 				close(closed)
 
-				if *verbose {
-					t.Logf("kernel log:\n%s\n", &kernLogBuf)
-					t.Logf("watcher log:\n%s", &watcherLogBuf)
+				if verbose.Load() {
+					t.Logf("log:\n%s\n", &buf)
 				}
 			}()
 
 			uid := rpc.UID{Module: "watcher"}
-			err = kernel.Spawn(ctx, os.Stdout, &watcherLogBuf, uid.Module,
+			err = kernel.Spawn(ctx, os.Stdout, g.NewHandler("🔶 "), uid.Module,
 				exePath, "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
 			)
 			if err != nil {
