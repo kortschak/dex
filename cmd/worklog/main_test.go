@@ -170,7 +170,7 @@ func TestDaemon(t *testing.T) {
 }
 
 func TestContinuation(t *testing.T) {
-	tests, err := filepath.Glob(filepath.Join("testdata", "*.txtar"))
+	tests, err := filepath.Glob(filepath.Join("testdata", "continuation", "*.txtar"))
 	if err != nil {
 		t.Fatalf("failed to get tests: %v", err)
 	}
