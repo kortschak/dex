@@ -1,0 +1,173 @@
+dashboard_data -rules rules.toml -data data.json -tz Australia/Adelaide 2023-11-26 
+cmp stdout want.json
+
+-- rules.toml --
+[afk.afk]
+src = """
+{
+	"bucket": bucket,
+	"data":   data,
+}
+"""
+[afk.locked]
+src = """
+{
+	"bucket": bucket,
+	"data":   {
+		"activity": data.locked ? "locked" : "not-locked",
+		"afk":      data.locked,
+	},
+}
+"""
+-- data.json --
+[
+	{
+		"id": "afk_localhost",
+		"name": "afk",
+		"type": "afk",
+		"client": "worklog",
+		"hostname": "localhost",
+		"events": [
+			{
+				"bucket": "afk",
+				"start": "2023-11-26T12:23:16.211082564+10:30",
+				"end": "2023-11-26T12:23:51.209339314+10:30",
+				"data": {
+					"afk": false,
+					"locked": false
+				}
+			},
+			{
+				"bucket": "afk",
+				"start": "2023-11-26T12:23:51.209339314+10:30",
+				"end": "2023-11-26T12:23:58.209833368+10:30",
+				"data": {
+					"afk": true,
+					"locked": true
+				}
+			},
+			{
+				"bucket": "afk",
+				"start": "2023-11-26T12:23:58.209833368+10:30",
+				"end": "2023-11-26T12:24:43.210184923+10:30",
+				"data": {
+					"afk": false,
+					"locked": false
+				}
+			},
+			{
+				"bucket": "afk",
+				"start": "2023-11-26T12:24:43.210184923+10:30",
+				"end": "2023-11-26T12:24:56.208072043+10:30",
+				"data": {
+					"afk": true,
+					"locked": false
+				}
+			}
+		]
+	}
+]
+-- want.json --
+{
+	"date": "2023-11-26T00:00:00+10:30",
+	"day": {
+		"events": {
+			"afk": [
+				{
+					"bucket": "afk",
+					"id": 4,
+					"start": "2023-11-26T12:24:43.210184923+10:30",
+					"end": "2023-11-26T12:24:56.208072043+10:30",
+					"data": {
+						"afk": true,
+						"locked": false
+					}
+				},
+				{
+					"bucket": "afk",
+					"id": 3,
+					"start": "2023-11-26T12:23:58.209833368+10:30",
+					"end": "2023-11-26T12:24:43.210184923+10:30",
+					"data": {
+						"afk": false,
+						"locked": false
+					}
+				},
+				{
+					"bucket": "afk",
+					"id": 2,
+					"start": "2023-11-26T12:23:51.209339314+10:30",
+					"end": "2023-11-26T12:23:58.209833368+10:30",
+					"data": {
+						"afk": true,
+						"locked": true
+					}
+				},
+				{
+					"bucket": "afk",
+					"id": 1,
+					"start": "2023-11-26T12:23:16.211082564+10:30",
+					"end": "2023-11-26T12:23:51.209339314+10:30",
+					"data": {
+						"afk": false,
+						"locked": false
+					}
+				}
+			],
+			"locked": [
+				{
+					"bucket": "afk",
+					"id": 4,
+					"start": "2023-11-26T12:23:58.209833368+10:30",
+					"end": "2023-11-26T12:24:56.208072043+10:30",
+					"data": {
+						"activity": "not-locked",
+						"afk": false
+					}
+				},
+				{
+					"bucket": "afk",
+					"id": 2,
+					"start": "2023-11-26T12:23:51.209339314+10:30",
+					"end": "2023-11-26T12:23:58.209833368+10:30",
+					"data": {
+						"activity": "locked",
+						"afk": true
+					}
+				},
+				{
+					"bucket": "afk",
+					"id": 1,
+					"start": "2023-11-26T12:23:16.211082564+10:30",
+					"end": "2023-11-26T12:23:51.209339314+10:30",
+					"data": {
+						"activity": "not-locked",
+						"afk": false
+					}
+				}
+			]
+		},
+		"flow": {},
+		"minutes": {
+			"12:00:00": 1.5499415904166667
+		},
+		"total_hours": 0.025832359840277777,
+		"transitions": {
+			"nodes": [],
+			"links": [],
+			"categories": []
+		}
+	},
+	"week": {
+		"hours": {
+			"2023-11-26 12:00:00": 0.025832359840277777
+		},
+		"total_hours": 0.025832359840277777
+	},
+	"year": {
+		"hours": {
+			"2023-11-26": 0.025832359840277777
+		},
+		"total_hours": 0.025832359840277777
+	}
+}

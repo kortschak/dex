@@ -12,24 +12,22 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/BurntSushi/toml"
 	"github.com/kortschak/jsonrpc2"
 	"github.com/rogpeppe/go-internal/testscript"
 	"golang.org/x/sys/execabs"
-	"golang.org/x/tools/txtar"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 	"github.com/kortschak/dex/cmd/worklog/store"
-	"github.com/kortschak/dex/internal/locked"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
@@ -172,7 +170,8 @@ func TestDaemon(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"merge_afk": mergeAfk,
+		"merge_afk":      mergeAfk,
+		"dashboard_data": dashboardData,
 	}))
 }
 
@@ -282,4 +281,233 @@ func mergeAfk() int {
 		}
 	}
 	return 0
+}
+
+func TestDashboardData(t *testing.T) {
+	t.Parallel()
+
+	p := testscript.Params{
+		Dir:           filepath.Join("testdata", "dashboard"),
+		UpdateScripts: *update,
+		TestWork:      *keep,
+		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
+			"gen_testdata": generateData,
+		},
+	}
+	testscript.Run(t, p)
+}
+
+func dashboardData() int {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
+
+  %[1]s [-verbose] -rules <rules.toml> -data <dump.json> <date>
+
+`, os.Args[0])
+		flag.PrintDefaults()
+	}
+	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
+	datePath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
+	tz := flag.String("tz", "", "timezone for date")
+	verbose := flag.Bool("verbose", false, "print full logging")
+	flag.Parse()
+	if *rulesPath == "" {
+		flag.Usage()
+		return 2
+	}
+	if *datePath == "" {
+		flag.Usage()
+		return 2
+	}
+	if len(flag.Args()) != 1 || flag.Args()[0] == "" {
+		flag.Usage()
+		return 2
+	}
+
+	data, err := os.ReadFile(*datePath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	ruleBytes, err := os.ReadFile(*rulesPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	loc := time.UTC
+	if *tz != "" {
+		loc, err = locationFor(*tz)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+	}
+	date, err := time.ParseInLocation(time.DateOnly, strings.TrimSpace(flag.Args()[0]), loc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse date: %v\n", err)
+		return 2
+	}
+
+	var (
+		level     slog.LevelVar
+		addSource = slogext.NewAtomicBool(*lines)
+		logDst    = io.Discard
+	)
+	if *verbose {
+		logDst = os.Stderr
+	}
+	log := slog.New(slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: addSource,
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
+	err = d.openDB(ctx, nil, "db.sqlite3", "localhost")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
+		return 1
+	}
+	db := d.db.Load().(*store.DB)
+	defer db.Close()
+	d.configureDB(ctx, db)
+
+	var buckets []worklog.BucketMetadata
+	err = json.Unmarshal(data, &buckets)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal db dump: %v\n", err)
+		return 1
+	}
+	err = db.Load(buckets)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load db dump: %v\n", err)
+		return 1
+	}
+
+	var rules map[string]map[string]worklog.WebRule
+	err = toml.Unmarshal(ruleBytes, &rules)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal rules: %v\n", err)
+		return 1
+	}
+	d.configureWebRule(ctx, rules)
+
+	var webRules map[string]map[string]ruleDetail
+	switch rules := d.dashboardRules.Load().(type) {
+	case map[string]map[string]ruleDetail:
+		webRules = rules
+	default:
+		fmt.Fprintf(os.Stderr, "invalid web rule type: %T\n", rules)
+		return 1
+	}
+	events, err := d.eventData(ctx, db, webRules, date)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
+		return 1
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "\t")
+	err = enc.Encode(events)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to encode events: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func generateData(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("unsupported: ! gen_data")
+	}
+
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	cen := flags.String("cen", "", "centre date of generated data")
+	tz := flags.String("tz", "UTC", "timezone for date")
+	radius := flags.Int("radius", 7, "radius of generated data")
+	tmplt := flags.String("tmplt", "", "generated data template")
+	err := flags.Parse(args)
+	if err != nil {
+		ts.Check(err)
+	}
+	if *tmplt == "" || len(flags.Args()) != 1 {
+		ts.Fatalf(`Usage of gen_data:
+
+  gen_data -cen <date> -tz <timezone> -radius <days> -tmplt <template.json> <outfile>
+
+`)
+	}
+	path := flags.Arg(0)
+
+	loc, err := locationFor(*tz)
+	ts.Check(err)
+	t, err := time.ParseInLocation(time.DateOnly, *cen, loc)
+	ts.Check(err)
+	start := t.AddDate(0, 0, -*radius)
+
+	data, err := os.ReadFile(ts.MkAbs(*tmplt))
+	ts.Check(err)
+	var template struct {
+		Buckets map[string]worklog.BucketMetadata `json:"buckets"`
+		Offsets []time.Duration                   `json:"offsets"`
+		Pattern []map[string]any                  `json:"pattern"`
+	}
+	ts.Check(json.Unmarshal(data, &template))
+	names := make([]string, 0, len(template.Buckets))
+	for n, b := range template.Buckets {
+		names = append(names, n)
+		b.Created = start
+		template.Buckets[n] = b
+	}
+	sort.Strings(names)
+	buckets := make([]worklog.BucketMetadata, len(names))
+	bucketIndex := make(map[string]int, len(names))
+	for i, n := range names {
+		bucketIndex[n] = i
+		buckets[i] = template.Buckets[n]
+	}
+
+	for d := start; d.Before(start.AddDate(0, 0, *radius*2)); d = d.AddDate(0, 0, 1) {
+		for _, h := range template.Offsets {
+			for _, e := range template.Pattern {
+				var delta time.Duration
+				ed, ok := e["duration"]
+				if ok {
+					switch d := ed.(type) {
+					case time.Duration:
+						delta = d
+					case float64:
+						delta = time.Duration(d)
+					default:
+						ts.Fatalf("duration is not time.Duration: %T", ed)
+					}
+				}
+				for _, n := range names {
+					if _, ok := e[n]; !ok {
+						continue
+					}
+					data, ok := e[n].(map[string]any)
+					if !ok {
+						ts.Fatalf("%s is not map[string]any: %T", n, e[n])
+					}
+					event := worklog.Event{
+						Bucket: n,
+						Start:  d.Add(h),
+						End:    d.Add(h + delta),
+						Data:   data,
+					}
+					buckets[bucketIndex[n]].Events = append(buckets[bucketIndex[n]].Events, event)
+				}
+				h += delta
+			}
+		}
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "\t")
+	err = enc.Encode(buckets)
+	ts.Check(err)
+	ts.Check(os.WriteFile(ts.MkAbs(path), buf.Bytes(), 0o640))
 }

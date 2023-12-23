@@ -81,7 +81,7 @@ func dateQuery(u *url.URL) (time.Time, error) {
 func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time) (map[string]any, error) {
 	start, end := day(date)
 	events := map[string]any{
-		"date": start,
+		"date": zoneTranslatedTime(start, date.Location()),
 	}
 	atKeyboard, dayEvents, windowEvents, transitions, err := d.dayData(ctx, db, rules, start, end)
 	if err != nil {
@@ -181,12 +181,16 @@ func (d *daemon) dayData(ctx context.Context, db *store.DB, rules map[string]map
 		for dstBucket, rule := range ruleSet {
 			var nextApp worklog.Event // EventsRange is sorted descending.
 			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
-				m.Continue = nil
-				if m.Start.Before(start) {
-					m.Start = start
-				}
-				if m.End.After(end) {
-					m.End = end
+				// canonicalise to the time zone that the event was
+				// recorded in for the purposes of the dashboard.
+				// See comment in atKeyboard.
+				m.Start = maxTime(m.Start, zoneTranslatedTime(start, m.Start.Location()))
+				m.End = minTime(m.End, zoneTranslatedTime(end, m.End.Location()))
+				if !m.End.After(m.Start) {
+					// This also excludes events that have zero
+					// length. These are most likely uninteresting
+					// artifacts of the watcher.
+					return nil
 				}
 
 				act := map[string]any{
@@ -293,7 +297,7 @@ func dateRangeQuery(uri string) (start, end time.Time, err error) {
 	e := u.Query().Get("end")
 	loc := time.Local // TODO: Resolve how we store time. Probably UTC.
 	if tz := u.Query().Get("tz"); tz != "" {
-		loc, err = time.LoadLocation(tz)
+		loc, err = locationFor(tz)
 		if err != nil {
 			return start, end, err
 		}
@@ -309,6 +313,22 @@ func dateRangeQuery(uri string) (start, end time.Time, err error) {
 	end, err = time.ParseInLocation(time.DateOnly, e, loc)
 	end = end.AddDate(0, 0, 1).Add(-time.Nanosecond)
 	return start, end, err
+}
+
+func locationFor(tz string) (*time.Location, error) {
+	var errs [2]error
+	loc, err := time.LoadLocation(tz)
+	if err == nil {
+		return loc, nil
+	}
+	errs[0] = err
+	t, err := time.Parse("-07:00", tz)
+	if err == nil {
+		_, offset := t.Zone()
+		return time.FixedZone(tz, offset), nil
+	}
+	errs[1] = err
+	return nil, errors.Join(errs[:]...)
 }
 
 func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) (map[string]any, error) {
@@ -341,11 +361,22 @@ func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]
 	for srcBucket, ruleSet := range rules {
 		for dstBucket, rule := range ruleSet {
 			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
-				if m.Start.Before(start) {
-					m.Start = start
-				}
-				if m.End.After(end) {
-					m.End = end
+				// atKeyboard is used for week and year intervals which
+				// may involve work spanning multiple time zones. We
+				// canonicalise to the time zone that the event was
+				// recorded in for the purposes of the dashboard. This
+				// is not the correct solution — there is no correct
+				// solution — but it provides a reasonable representation
+				// of the data with the low risk of having hours or days
+				// showing more than their interval's worth of time worked
+				// if a set work intervals span multiple time zones.
+				m.Start = maxTime(m.Start, zoneTranslatedTime(start, m.Start.Location()))
+				m.End = minTime(m.End, zoneTranslatedTime(end, m.End.Location()))
+				if !m.End.After(m.Start) {
+					// This also excludes events that have zero
+					// length. These are most likely uninteresting
+					// artifacts of the watcher.
+					return nil
 				}
 
 				act := map[string]any{
@@ -373,6 +404,14 @@ func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]
 		}
 	}
 	return atKeyboard, nil
+}
+
+// zoneTranslatedTime returns the civil time of t in loc. This is not the
+// same as t.In(loc) which refers to the same instance in a different
+// location.
+func zoneTranslatedTime(t time.Time, loc *time.Location) time.Time {
+	year, month, day := t.Date()
+	return time.Date(year, month, day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
 }
 
 // mergeIntervals returns the intervals in events sorted and merged so that
@@ -419,7 +458,11 @@ func mergeIntervals(events []worklog.Event) []worklog.Event {
 // timezone so that timezone-independent date and time values can be used.
 func tzRound(t time.Time, res time.Duration) time.Time {
 	_, off := t.Zone()
-	return t.Round(res).Add(-(time.Duration(off) * time.Second) % res)
+	t = t.Round(res)
+	if off < 0 {
+		return t.Add(-(time.Duration(off)*time.Second)%res - res)
+	}
+	return t.Add(-(time.Duration(off) * time.Second) % res)
 }
 
 func part(binstart, binend, start, end time.Time) time.Duration {
@@ -444,28 +487,37 @@ func maxTime(a, b time.Time) time.Time {
 	return b
 }
 
+// day provides the start and end time of the provided date in locations
+// spanning all time zones. The returned start is at the east dateline and
+// the end is at the west dateline.
 func day(date time.Time) (start, end time.Time) {
-	loc := date.Location()
 	year, month, day := date.Date()
-	start = time.Date(year, month, day, 0, 0, 0, 0, loc)
-	end = time.Date(year, month, day+1, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
+	const dateLineOffset = int(12 * time.Hour / time.Second)
+	start = time.Date(year, month, day, 0, 0, 0, 0, time.FixedZone("east", dateLineOffset))
+	end = time.Date(year, month, day+1, 0, 0, 0, 0, time.FixedZone("west", -dateLineOffset)).Add(-time.Nanosecond)
 	return start, end
 }
 
+// week provides the start and end time of the week of the provided date in
+// locations spanning all time zones. The returned start is at the east dateline
+// and the end is at the west dateline.
 func week(date time.Time) (start, end time.Time) {
-	loc := date.Location()
 	year, month, day := date.Date()
 	day -= int(date.Weekday())
-	start = time.Date(year, month, day, 0, 0, 0, 0, loc)
-	end = time.Date(year, month, day+7, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
+	const dateLineOffset = int(12 * time.Hour / time.Second)
+	start = time.Date(year, month, day, 0, 0, 0, 0, time.FixedZone("east", dateLineOffset))
+	end = time.Date(year, month, day+7, 0, 0, 0, 0, time.FixedZone("west", -dateLineOffset)).Add(-time.Nanosecond)
 	return start, end
 }
 
+// year provides the start and end time of the year of the provided date in
+// locations spanning all time zones. The returned start is at the east dateline
+// and the end is at the west dateline.
 func year(date time.Time) (start, end time.Time) {
-	loc := date.Location()
 	year := date.Year()
-	start = time.Date(year, time.January, 0, 0, 0, 0, 0, loc)
-	end = time.Date(year+1, time.January, 0, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
+	const dateLineOffset = int(12 * time.Hour / time.Second)
+	start = time.Date(year, time.January, 0, 0, 0, 0, 0, time.FixedZone("east", dateLineOffset))
+	end = time.Date(year+1, time.January, 0, 0, 0, 0, 0, time.FixedZone("west", -dateLineOffset)).Add(-time.Nanosecond)
 	return start, end
 }
 
