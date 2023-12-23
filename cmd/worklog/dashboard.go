@@ -28,7 +28,7 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		date, err := dateQuery(req.RequestURI)
+		date, err := dateQuery(req.URL)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusBadRequest)
@@ -62,17 +62,14 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 	}
 }
 
-func dateQuery(uri string) (time.Time, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return time.Time{}, err
-	}
+func dateQuery(u *url.URL) (time.Time, error) {
 	d := u.Query().Get("date")
 	if d == "" {
 		return time.Now(), nil
 	}
 	loc := time.Local // TODO: Resolve how we store time. Probably UTC.
 	if tz := u.Query().Get("tz"); tz != "" {
+		var err error
 		loc, err = time.LoadLocation(tz)
 		if err != nil {
 			return time.Time{}, err
