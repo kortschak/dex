@@ -83,68 +83,9 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	events := map[string]any{
 		"date": start,
 	}
-	dayEvents := make(map[string][]worklog.Event)
-	windowEvents := make(map[string][]worklog.Event)
-	var atKeyboard []worklog.Event
-	transitions := newGraph(rng{min: 5, max: 30}, rng{min: 1, max: 5})
-	for srcBucket, ruleSet := range rules {
-		for dstBucket, rule := range ruleSet {
-			var nextApp worklog.Event // EventsRange is sorted descending.
-			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
-				m.Continue = nil
-				if m.Start.Before(start) {
-					m.Start = start
-				}
-				if m.End.After(end) {
-					m.End = end
-				}
-
-				act := map[string]any{
-					"bucket": dstBucket,
-					"data":   m.Data,
-				}
-				note, err := eval[worklog.Activity](rule.prg, act)
-				if err != nil {
-					d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("bucket", srcBucket), slog.Any("error", err), slog.Any("act", act))
-					return nil
-				}
-				if note.Bucket == "" || note.Data == nil {
-					return nil
-				}
-				m.Bucket = srcBucket // Label the source of the activity event.
-				m.Data = note.Data
-
-				wasExtended := false
-				if bucketEvents := dayEvents[note.Bucket]; len(bucketEvents) != 0 {
-					next := bucketEvents[len(bucketEvents)-1]
-					// Compare start with end of previous events. Note that
-					// db.EventsRangeFunc returns events in descending time
-					// order.
-					if next.Start.Equal(m.End) && reflect.DeepEqual(next.Data, m.Data) {
-						bucketEvents[len(bucketEvents)-1].Start = m.Start
-						wasExtended = true
-					}
-				}
-				if !wasExtended {
-					dayEvents[note.Bucket] = append(dayEvents[note.Bucket], m)
-				}
-
-				if afk, ok := m.Data["afk"]; ok && afk == false {
-					atKeyboard = append(atKeyboard, m)
-				}
-				if app, ok := m.Data["app"].(string); ok {
-					if !nextApp.Start.IsZero() {
-						transitions.connect(m, nextApp)
-					}
-					nextApp = m
-					windowEvents[app] = append(windowEvents[app], m)
-				}
-				return nil
-			})
-			if err != nil {
-				return events, err
-			}
-		}
+	atKeyboard, dayEvents, windowEvents, transitions, err := d.dayData(ctx, db, rules, start, end)
+	if err != nil {
+		return events, err
 	}
 	dayMinutes := make(map[string]float64)
 	var dayTotalHours float64
@@ -230,6 +171,72 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 
 	return events, nil
+}
+
+func (d *daemon) dayData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) (atKeyboard []worklog.Event, dayEvents, windowEvents map[string][]worklog.Event, transitions graph, err error) {
+	dayEvents = make(map[string][]worklog.Event)
+	windowEvents = make(map[string][]worklog.Event)
+	transitions = newGraph(rng{min: 5, max: 30}, rng{min: 1, max: 5})
+	for srcBucket, ruleSet := range rules {
+		for dstBucket, rule := range ruleSet {
+			var nextApp worklog.Event // EventsRange is sorted descending.
+			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
+				m.Continue = nil
+				if m.Start.Before(start) {
+					m.Start = start
+				}
+				if m.End.After(end) {
+					m.End = end
+				}
+
+				act := map[string]any{
+					"bucket": dstBucket,
+					"data":   m.Data,
+				}
+				note, err := eval[worklog.Activity](rule.prg, act)
+				if err != nil {
+					d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("bucket", srcBucket), slog.Any("error", err), slog.Any("act", act))
+					return nil
+				}
+				if note.Bucket == "" || note.Data == nil {
+					return nil
+				}
+				m.Bucket = srcBucket // Label the source of the activity event.
+				m.Data = note.Data
+
+				wasExtended := false
+				if bucketEvents := dayEvents[note.Bucket]; len(bucketEvents) != 0 {
+					next := bucketEvents[len(bucketEvents)-1]
+					// Compare start with end of previous events. Note that
+					// db.EventsRangeFunc returns events in descending time
+					// order.
+					if next.Start.Equal(m.End) && reflect.DeepEqual(next.Data, m.Data) {
+						bucketEvents[len(bucketEvents)-1].Start = m.Start
+						wasExtended = true
+					}
+				}
+				if !wasExtended {
+					dayEvents[note.Bucket] = append(dayEvents[note.Bucket], m)
+				}
+
+				if afk, ok := m.Data["afk"]; ok && afk == false {
+					atKeyboard = append(atKeyboard, m)
+				}
+				if app, ok := m.Data["app"].(string); ok {
+					if !nextApp.Start.IsZero() {
+						transitions.connect(m, nextApp)
+					}
+					nextApp = m
+					windowEvents[app] = append(windowEvents[app], m)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, nil, nil, graph{}, err
+			}
+		}
+	}
+	return atKeyboard, dayEvents, windowEvents, transitions, nil
 }
 
 func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
