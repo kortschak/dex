@@ -437,6 +437,7 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name 
 	if err != nil {
 		return err
 	}
+	k.log.LogAttrs(ctx, slog.LevelDebug, "started", slog.String("uid", uid), slog.Int("pid", cmd.Process.Pid))
 
 	d := &daemon{uid: uid, cmd: cmd, ready: make(chan struct{})}
 	k.daemons[uid] = d
