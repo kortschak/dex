@@ -1,6 +1,10 @@
-data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+# data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
 
-Window ID is not used for window identity here, so terminal changes at 2023-11-26T12:24:36.211097179+10:30 and 2023-11-26T12:24:42.210660725+10:30 are not recorded.
+# Window ID is not used for window identity here, so terminal changes at 2023-11-26T12:24:36.211097179+10:30 and 2023-11-26T12:24:42.210660725+10:30 are not recorded.
+
+merge_afk -data data.json src.cel
+cmp stdout want.json
+
 -- src.cel --
 data_src != {"module":"watcher"} ? {} :
 {

@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
+	"github.com/rogpeppe/go-internal/testscript"
 	"golang.org/x/sys/execabs"
 	"golang.org/x/tools/txtar"
 
@@ -169,127 +170,116 @@ func TestDaemon(t *testing.T) {
 	}
 }
 
+func TestMain(m *testing.M) {
+	os.Exit(testscript.RunMain(m, map[string]func() int{
+		"merge_afk": mergeAfk,
+	}))
+}
+
 func TestContinuation(t *testing.T) {
-	tests, err := filepath.Glob(filepath.Join("testdata", "continuation", "*.txtar"))
+	t.Parallel()
+
+	p := testscript.Params{
+		Dir:           filepath.Join("testdata", "continuation"),
+		UpdateScripts: *update,
+		TestWork:      *keep,
+	}
+	testscript.Run(t, p)
+}
+
+func mergeAfk() int {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
+
+  %[1]s [-verbose] -data <data.json> <src.cel>
+
+`, os.Args[0])
+		flag.PrintDefaults()
+	}
+	dataPath := flag.String("data", "", "path to JSON stream data holding input events")
+	verbose := flag.Bool("verbose", false, "print full logging")
+	flag.Parse()
+	if *dataPath == "" {
+		flag.Usage()
+		return 2
+	}
+	if len(flag.Args()) != 1 {
+		flag.Usage()
+		return 2
+	}
+
+	src, err := os.ReadFile(flag.Args()[0])
 	if err != nil {
-		t.Fatalf("failed to get tests: %v", err)
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
-	for _, path := range tests {
-		ext := filepath.Ext(path)
-		base := strings.TrimSuffix(path, ext)
-		name := strings.TrimSuffix(filepath.Base(path), ext)
-		t.Run(name, func(t *testing.T) {
-			var (
-				level     slog.LevelVar
-				addSource = slogext.NewAtomicBool(*lines)
-				buf       locked.BytesBuffer
-			)
-			log := slog.New(slogext.NewJSONHandler(&buf, &slogext.HandlerOptions{
-				Level:     slog.LevelDebug,
-				AddSource: addSource,
-			}))
-			defer func() {
-				if *verbose {
-					t.Logf("log:\n%s\n", &buf)
-				}
-				if !*keep {
-					os.RemoveAll(base)
-				}
-			}()
-
-			a, err := txtar.ParseFile(path)
-			if err != nil {
-				t.Fatalf("failed to read test data: %v", err)
-			}
-			var src, data, want []byte
-			for _, f := range a.Files {
-				switch f.Name {
-				case "src.cel":
-					src = f.Data
-				case "data.json":
-					data = f.Data
-				case "want.json":
-					want = f.Data
-				}
-			}
-			if want == nil && !*update {
-				t.Fatal("no want file in test")
-			}
-
-			err = os.RemoveAll(base)
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				t.Fatalf("failed to clean db: %v", err)
-			}
-			err = os.Mkdir(base, 0o755)
-			if err != nil {
-				t.Fatalf("failed to make db directory: %v", err)
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
-			err = d.openDB(ctx, nil, filepath.Join(base, "db.sqlite3"), "localhost")
-			if err != nil {
-				t.Fatalf("failed to create db: %v", err)
-			}
-			d.configureRules(ctx, map[string]worklog.Rule{
-				"afk": {
-					Name: "afk",
-					Type: "afk",
-					Src:  string(src),
-				},
-			})
-			db := d.db.Load().(*store.DB)
-			defer db.Close()
-			d.configureDB(ctx, db)
-
-			dec := json.NewDecoder(bytes.NewReader(data))
-			var last, curr worklog.Report
-			for {
-				err = dec.Decode(&curr)
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					t.Fatalf("unexpected error reading test data: %v", err)
-				}
-				d.record(ctx, rpc.UID{Module: "watcher"}, curr, last)
-				last = curr
-			}
-
-			dump, err := db.Dump()
-			if err != nil {
-				t.Fatalf("failed to dump db: %v", err)
-			}
-			var got bytes.Buffer
-			enc := json.NewEncoder(&got)
-			for _, b := range dump {
-				for _, e := range b.Events {
-					enc.Encode(e)
-				}
-			}
-			if *update {
-				if want == nil {
-					a.Files = append(a.Files, txtar.File{
-						Name: "want.json",
-						Data: got.Bytes(),
-					})
-				} else {
-					for i, f := range a.Files {
-						if f.Name == "want.json" {
-							a.Files[i].Data = got.Bytes()
-						}
-					}
-				}
-				err = os.WriteFile(path, txtar.Format(a), 0o644)
-				if err != nil {
-					t.Fatalf("failed to write updated test: %v", err)
-				}
-				return
-			}
-			if !bytes.Equal(want, got.Bytes()) {
-				t.Errorf("unexpected dump result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got.Bytes()))
-			}
-		})
+	data, err := os.ReadFile(*dataPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
 	}
+
+	var (
+		level     slog.LevelVar
+		addSource = slogext.NewAtomicBool(*lines)
+		logDst    = io.Discard
+	)
+	if *verbose {
+		logDst = os.Stderr
+	}
+	log := slog.New(slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: addSource,
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
+	err = d.openDB(ctx, nil, "db.sqlite3", "localhost")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
+		return 1
+	}
+	d.configureRules(ctx, map[string]worklog.Rule{
+		"afk": {
+			Name: "afk",
+			Type: "afk",
+			Src:  string(src),
+		},
+	})
+	db := d.db.Load().(*store.DB)
+	defer db.Close()
+	d.configureDB(ctx, db)
+
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var last, curr worklog.Report
+	for {
+		err = dec.Decode(&curr)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			fmt.Fprintf(os.Stderr, "unexpected error reading test data: %v\n", err)
+			return 1
+		}
+		d.record(ctx, rpc.UID{Module: "watcher"}, curr, last)
+		last = curr
+	}
+
+	dump, err := db.Dump()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to dump db: %v\n", err)
+		return 1
+	}
+	enc := json.NewEncoder(os.Stdout)
+	for _, b := range dump {
+		for _, e := range b.Events {
+			err := enc.Encode(e)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to encode event: %v\n", err)
+				return 1
+			}
+		}
+	}
+	return 0
 }

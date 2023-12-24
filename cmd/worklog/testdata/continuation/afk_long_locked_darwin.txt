@@ -1,4 +1,8 @@
-data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+# data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+
+merge_afk -data data.json src.cel
+cmp stdout want.json
+
 -- src.cel --
 data_src != {"module":"watcher"} ? {} :
 {

@@ -1,6 +1,10 @@
-data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
+# data.json obtained from real watcher DEBUG logs with `jq -c 'select(.msg == "watcher details") | {time: .time, details: .details, period: "1s"}'`.
 
-TODO: Change from unlocked to locked at 2023-11-26T12:23:51.209339314+10:30 occurs one watch note before the actual transition at 2023-11-26T12:23:52.810085233+10:30. This should be fixed.
+# TODO: Change from unlocked to locked at 2023-11-26T12:23:51.209339314+10:30 occurs one watch note before the actual transition at 2023-11-26T12:23:52.810085233+10:30. This should be fixed.
+
+merge_afk -data data.json src.cel
+cmp stdout want.json
+
 -- src.cel --
 data_src != {"module":"watcher"} ? {} :
 {
