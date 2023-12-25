@@ -105,7 +105,7 @@ Status get_focused_window(Display *display, Window *window_return) {
 
 	int done = False;
 	while (!done) {
-		if (window == 0) {
+		if (window == None || window == PointerRoot) {
 			return 0;
 		}
 
