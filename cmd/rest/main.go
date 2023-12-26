@@ -10,9 +10,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -40,6 +38,7 @@ import (
 	rest "github.com/kortschak/dex/cmd/rest/api"
 	"github.com/kortschak/dex/config"
 	"github.com/kortschak/dex/internal/celext"
+	"github.com/kortschak/dex/internal/mtls"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/rpc"
@@ -384,29 +383,17 @@ func mkTLSConfig(cfg rest.Server) (*tls.Config, error) {
 	if cfg.RootCA == nil && cfg.CertPEMBlock == nil && cfg.KeyPEMBlock == nil {
 		return nil, nil
 	}
-	var tlsConfig tls.Config
+	var rootPEM, certPEMBlock, keyPEMBlock []byte
 	if cfg.RootCA != nil {
-		if cfg.CertPEMBlock == nil || cfg.KeyPEMBlock == nil {
-			return nil, errors.New("root ca set without certificate or key")
-		}
-		tlsConfig.ClientCAs = x509.NewCertPool()
-		tlsConfig.ClientCAs.AppendCertsFromPEM([]byte(*cfg.RootCA))
-		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		rootPEM = []byte(*cfg.RootCA)
 	}
-	if cfg.CertPEMBlock != nil || cfg.KeyPEMBlock != nil {
-		if cfg.CertPEMBlock == nil {
-			return nil, errors.New("missing certificate")
-		}
-		if cfg.KeyPEMBlock == nil {
-			return nil, errors.New("missing key")
-		}
-		cert, err := tls.X509KeyPair([]byte(*cfg.CertPEMBlock), []byte(*cfg.KeyPEMBlock))
-		if err != nil {
-			return nil, err
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
+	if cfg.CertPEMBlock != nil {
+		certPEMBlock = []byte(*cfg.CertPEMBlock)
 	}
-	return &tlsConfig, nil
+	if cfg.KeyPEMBlock != nil {
+		keyPEMBlock = []byte(*cfg.KeyPEMBlock)
+	}
+	return mtls.NewServerConfig(rootPEM, certPEMBlock, keyPEMBlock)
 }
 
 func compile(src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, error) {

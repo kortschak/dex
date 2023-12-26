@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -37,6 +36,7 @@ import (
 	"golang.org/x/tools/txtar"
 
 	rest "github.com/kortschak/dex/cmd/rest/api"
+	"github.com/kortschak/dex/internal/mtls"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/state"
 	"github.com/kortschak/dex/rpc"
@@ -80,8 +80,6 @@ func TestDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error reading CA cert: %v", err)
 	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
 
 	// Get PEM formatted data for configs.
 	srvCert, err := fs.ReadFile(certFS, "state_server_crt.pem")
@@ -294,16 +292,13 @@ func TestDaemon(t *testing.T) {
 			// Perform REST queries on the two end points.
 
 			t.Run("state", func(t *testing.T) {
-				cert, err := tls.X509KeyPair(cliCert, cliKey)
+				tlsCfg, err := mtls.NewClientConfig(caCert, cliCert, cliKey)
 				if err != nil {
 					t.Fatalf("unexpected error making client certificate: %v", err)
 				}
 				cli := &http.Client{
 					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							RootCAs:      caCertPool,
-							Certificates: []tls.Certificate{cert},
-						},
+						TLSClientConfig: tlsCfg,
 					},
 				}
 				resp, err := cli.Get("https://localhost:7474/")
