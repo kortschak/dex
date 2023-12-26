@@ -5,10 +5,12 @@
 package celext
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -18,12 +20,15 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/interpreter"
+	"github.com/kortschak/jsonrpc2"
 	"github.com/rogpeppe/go-internal/testscript"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/kortschak/dex/internal/slogext"
+	"github.com/kortschak/dex/internal/state"
+	"github.com/kortschak/dex/rpc"
 )
 
 var update = flag.Bool("update", false, "update testscript output files")
@@ -46,7 +51,7 @@ func TestScripts(t *testing.T) {
 
 const root = "data"
 
-func celMain() int {
+func celMain() (status int) {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
 
@@ -83,22 +88,91 @@ func celMain() int {
 		input = map[string]any{root: input}
 	}
 
+	ctx := context.Background()
+	klog := slog.New(slogext.NewJSONHandler(os.Stderr, &slogext.HandlerOptions{
+		Level: slog.LevelError,
+	}))
+	kernel, err := rpc.NewKernel(ctx, "tcp", jsonrpc2.NetListenOptions{}, klog)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to start kernel: %v\n", err)
+		return 1
+	}
+	defer func() {
+		err = kernel.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close kernel: %v\n", err)
+			status = 1
+		}
+	}()
+	clientUID := rpc.UID{Module: "test-module"}
+	var kernelConn *jsonrpc2.Connection
+	err = kernel.Builtin(ctx, "test-module", net.Dialer{}, jsonrpc2.BinderFunc(func(ctx context.Context, kernel *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
+		kernelConn = kernel
+		uid := clientUID
+		return jsonrpc2.ConnectionOptions{
+			Handler: jsonrpc2.HandlerFunc(func(ctx context.Context, req *jsonrpc2.Request) (any, error) {
+				if !req.IsCall() {
+					return nil, jsonrpc2.ErrNotHandled
+				}
+				if req.Method == rpc.Who {
+					return rpc.NewMessage(uid, rpc.None{}), nil
+				}
+				return nil, jsonrpc2.ErrNotHandled
+			}),
+		}
+	}))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to install test-module: %v\n", err)
+		return 1
+	}
+
+	store, err := state.Open("test_db.sqlite3", klog)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to open store: %v\n", err)
+		return 1
+	}
+	defer store.Close()
+	err = store.Set(clientUID, "key", []byte("exciting value"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to store sample item: %v\n", err)
+		return 1
+	}
+
+	storeUID := rpc.UID{Module: "test", Service: "store"}
+	kernel.Funcs(rpc.Funcs{
+		"get": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+			var m rpc.Message[state.GetMessage]
+			err := rpc.UnmarshalMessage(params, &m)
+			if err != nil {
+				return nil, err
+			}
+			val, err := store.Get(m.UID, m.Body.Item)
+			if err != nil {
+				return nil, err
+			}
+			return rpc.NewMessage[any](storeUID, state.GetResult{Value: val}), nil
+		},
+	})
+
 	log := slog.New(slogext.NewJSONHandler(os.Stderr, &slogext.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
-	res, err := eval(string(b), root, input, log)
+	res, err := eval(ctx, clientUID, kernelConn, string(b), root, input, log)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	fmt.Println(res)
+
 	return 0
 }
 
-func eval(src, root string, input any, log *slog.Logger) (string, error) {
+func eval(ctx context.Context, uid rpc.UID, conn *jsonrpc2.Connection, src, root string, input any, log *slog.Logger) (string, error) {
 	env, err := cel.NewEnv(
 		cel.Declarations(decls.NewVar(root, decls.Dyn)),
+		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		Lib(log),
+		StateLib(ctx, uid, conn, log),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create env: %v", err)

@@ -7,8 +7,10 @@ package celext
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"reflect"
+	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common"
@@ -18,7 +20,12 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
 	"github.com/google/cel-go/parser"
+	"github.com/kortschak/jsonrpc2"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/kortschak/dex/internal/state"
+	"github.com/kortschak/dex/internal/sys"
+	"github.com/kortschak/dex/rpc"
 )
 
 // Lib returns a cel.EnvOption to configure extended functions to ease
@@ -254,4 +261,76 @@ func (l lib) logDebug(arg0, arg1 ref.Val) ref.Val {
 		l.log.LogAttrs(context.Background(), slog.LevelDebug, "cel debug log", slog.String("tag", string(tag)), slog.Any("value", val))
 	}
 	return arg1
+}
+
+// StateLib returns a cel.EnvOption to configure extended functions to allow
+// access to the rpc kernel state store get RPC call method over the provided
+// JSON-RPC2.0 connection.
+//
+// # Get State
+//
+// The parameter is the key to the value stored in the state store for the
+// service configured with the UID:
+//
+//	get_state(<string>) -> <optional<bytes>>
+//
+// Examples:
+//
+//	get_state("key") -> optional.of(b"value")
+//	get_state("missing key") -> optional.none
+func StateLib(ctx context.Context, uid rpc.UID, conn *jsonrpc2.Connection, log *slog.Logger) cel.EnvOption {
+	return cel.Lib(stateLib{
+		ctx:  ctx,
+		uid:  uid,
+		conn: conn,
+		log:  log,
+	})
+}
+
+type stateLib struct {
+	ctx  context.Context
+	uid  rpc.UID
+	conn *jsonrpc2.Connection
+
+	log *slog.Logger
+}
+
+func (l stateLib) CompileOptions() []cel.EnvOption {
+	return []cel.EnvOption{
+		cel.Function("get_state",
+			cel.Overload(
+				"get_state_string_bytes",
+				[]*cel.Type{cel.StringType},
+				cel.OptionalType(cel.BytesType),
+				cel.UnaryBinding(l.getState),
+				cel.OverloadIsNonStrict(),
+			),
+		),
+	}
+}
+
+func (stateLib) ProgramOptions() []cel.ProgramOption { return nil }
+
+func (l stateLib) getState(arg ref.Val) ref.Val {
+	key, ok := arg.(types.String)
+	if !ok {
+		return types.ValOrErr(key, "no such overload")
+	}
+	if l.conn == nil {
+		l.log.LogAttrs(l.ctx, slog.LevelError, "failed get", slog.String("key", string(key)), slog.String("error", "no conn to kernel"))
+		return types.OptionalOf(types.NewErr("failed get: no conn to kernel"))
+	}
+	var resp rpc.Message[state.GetResult]
+	err := l.conn.Call(l.ctx, "get", rpc.Message[state.GetMessage]{
+		Time: time.Now(), UID: l.uid,
+		Body: state.GetMessage{Item: string(key)},
+	}).Await(l.ctx, &resp)
+	if err != nil {
+		if !errors.Is(err, sys.ErrNotFound) {
+			return types.NewErr("failed get: %w", err)
+		}
+		l.log.LogAttrs(l.ctx, slog.LevelInfo, "failed get", slog.String("key", string(key)), slog.Any("error", err))
+		return types.OptionalNone
+	}
+	return types.OptionalOf(types.Bytes(resp.Body.Value))
 }
