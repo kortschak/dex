@@ -108,15 +108,22 @@ func main() {
 				t.AddDate(0, 0, -4),
 				t.AddDate(0, 0, 4),
 			} {
-				f, err := os.Create(fmt.Sprintf("generated_%s_%s_%s.txt", data.tzName, query.tzName, queryDate.Format(time.DateOnly)))
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer f.Close()
+				for _, raw := range []bool{false, true} {
+					var name string
+					if raw {
+						name = fmt.Sprintf("generated_%s_%s_%s_raw.txt", data.tzName, query.tzName, queryDate.Format(time.DateOnly))
+					} else {
+						name = fmt.Sprintf("generated_%s_%s_%s.txt", data.tzName, query.tzName, queryDate.Format(time.DateOnly))
+					}
+					f, err := os.Create(name)
+					if err != nil {
+						log.Fatal(err)
+					}
+					defer f.Close()
 
-				_, err = fmt.Fprintf(f, `gen_testdata -cen %s -tz %s -radius 7 -tmplt template.json data.json
+					_, err = fmt.Fprintf(f, `gen_testdata -cen %s -tz %s -radius 7 -tmplt template.json data.json
 
-dashboard_data -rules rules.toml -data data.json -tz %s %s
+dashboard_data -rules rules.toml -raw=%t -data data.json -tz %s %s
 cmp stdout want.json
 
 -- rules.toml --
@@ -157,9 +164,10 @@ src = """
 -- template.json --
 %s
 -- want.json --
-`, dataDate, data.tz, query.tz, queryDate.Format(time.DateOnly), b)
-				if err != nil {
-					log.Fatal(f)
+`, dataDate, data.tz, raw, query.tz, queryDate.Format(time.DateOnly), b)
+					if err != nil {
+						log.Fatal(f)
+					}
 				}
 			}
 		}

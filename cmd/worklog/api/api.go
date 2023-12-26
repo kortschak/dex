@@ -71,7 +71,7 @@ type Event struct {
 	ID       int64          `json:"id,omitempty"`
 	Start    time.Time      `json:"start"`
 	End      time.Time      `json:"end"`
-	Data     map[string]any `json:"data"`
+	Data     map[string]any `json:"data,omitempty"`
 	Continue *bool          `json:"continue,omitempty"`
 }
 

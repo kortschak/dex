@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"reflect"
 	"sort"
+	"strconv"
 	"time"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
@@ -34,6 +35,12 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		raw, err := rawQuery(req.URL)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		db, ok := d.db.Load().(*store.DB)
 		if !ok {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
@@ -46,7 +53,7 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		events, err := d.eventData(ctx, db, rules, date)
+		events, err := d.eventData(ctx, db, rules, date, raw)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -78,7 +85,18 @@ func dateQuery(u *url.URL) (time.Time, error) {
 	return time.ParseInLocation(time.DateOnly, d, loc)
 }
 
-func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time) (map[string]any, error) {
+func rawQuery(u *url.URL) (bool, error) {
+	r := u.Query().Get("raw")
+	if r == "" {
+		return false, nil
+	}
+	return strconv.ParseBool(r)
+}
+
+func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time, raw bool) (map[string]any, error) {
+	if raw {
+		return d.rawEventData(ctx, db, rules, date)
+	}
 	start, end := day(date)
 	events := map[string]any{
 		"date": zoneTranslatedTime(start, date.Location()),
@@ -169,6 +187,37 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 		"hours":       yearHours,
 		"total_hours": yearTotalHours,
 	}
+
+	return events, nil
+}
+
+func (d *daemon) rawEventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time) (map[string]any, error) {
+	start, end := day(date)
+	events := map[string]any{
+		"date": zoneTranslatedTime(start, date.Location()),
+	}
+	_, dayEvents, windowEvents, transitions, err := d.dayData(ctx, db, rules, start, end)
+	if err != nil {
+		return events, err
+	}
+	for app, events := range windowEvents {
+		windowEvents[app] = mergeIntervals(events)
+	}
+	events["day"] = map[string]any{
+		"events":      dayEvents,
+		"flow":        windowEvents,
+		"transitions": transitions,
+	}
+
+	weekStart, weekEnd := week(date)
+	yearStart, yearEnd := year(date)
+	start = minTime(weekStart, yearStart)
+	end = maxTime(weekEnd, yearEnd)
+	yearAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
+	if err != nil {
+		return events, err
+	}
+	events["at_keyboard"] = mergeIntervals(yearAtKeyboard)
 
 	return events, nil
 }

@@ -301,12 +301,13 @@ func dashboardData() int {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
 
-  %[1]s [-verbose] -rules <rules.toml> -data <dump.json> <date>
+  %[1]s [-verbose] -rules <rules.toml> -raw <bool> -data <dump.json> <date>
 
 `, os.Args[0])
 		flag.PrintDefaults()
 	}
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
+	raw := flag.Bool("raw", false, "collect raw event data")
 	datePath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	tz := flag.String("tz", "", "timezone for date")
 	verbose := flag.Bool("verbose", false, "print full logging")
@@ -401,7 +402,7 @@ func dashboardData() int {
 		fmt.Fprintf(os.Stderr, "invalid web rule type: %T\n", rules)
 		return 1
 	}
-	events, err := d.eventData(ctx, db, webRules, date)
+	events, err := d.eventData(ctx, db, webRules, date, *raw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
 		return 1

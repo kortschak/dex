@@ -1,6 +1,6 @@
 gen_testdata -cen 2023-12-31 -tz UTC -radius 7 -tmplt template.json data.json
 
-dashboard_data -rules rules.toml -data data.json -tz UTC 2023-12-27
+dashboard_data -rules rules.toml -raw=false -data data.json -tz UTC 2023-12-27
 cmp stdout want.json
 
 -- rules.toml --
