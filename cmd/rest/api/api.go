@@ -51,6 +51,9 @@ type Server struct {
 	// client certificates. If set, CertPEMBlock and
 	// KeyPEMBlock must also be set.
 	RootCA *string `json:"ca_pem,omitempty"`
+	// Insecure allows configuration of non-loopback
+	// servers without mTLS.
+	Insecure bool `json:"insecure"`
 }
 
 // Notification is the RPC parameter for a change call.

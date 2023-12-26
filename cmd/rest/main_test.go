@@ -229,11 +229,12 @@ func TestDaemon(t *testing.T) {
 							RootCA:       ptr(string(caCert)), // Require mTLS.
 						},
 						"change": {
-							Addr:    ":7575",
-							Request: `{"method": "change"}`,
+							Addr:     ":7575",
+							Insecure: true,
+							Request:  `{"method": "change"}`,
 						},
 						"store": {
-							Addr: ":7676",
+							Addr: "localhost:7676",
 							Request: `{
 								"method": "set",
 								"params": {
@@ -262,7 +263,7 @@ func TestDaemon(t *testing.T) {
 					Active: ptr(true),
 					Options: serviceOptions{
 						Server: rest.Server{
-							Addr: ":7777",
+							Addr: "localhost:7777",
 							Request: `has(request.URL.Path) && request.URL.Path == "/set" ?
 								debug("set", {
 									"method": "set",

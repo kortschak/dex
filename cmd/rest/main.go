@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -349,6 +350,20 @@ func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, cu
 		if curr.serverCancel != nil {
 			curr.serverCancel()
 		}
+		err := checkServerSecurityPolicy(ctx, cfg)
+		switch err := err.(type) {
+		case nil:
+		case *addrError:
+			if err.Err == errInsecureAllowed {
+				d.log.LogAttrs(ctx, slog.LevelWarn, "configure web server tls", slog.Any("error", err))
+			} else {
+				d.log.LogAttrs(ctx, slog.LevelError, "refusing to start insecure server", slog.Any("error", err))
+				return curr
+			}
+		default:
+			d.log.LogAttrs(ctx, slog.LevelError, "configure web server tls", slog.Any("error", err))
+			return curr
+		}
 		tlsConfig, err := mkTLSConfig(cfg)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelError, "configure web server tls", slog.Any("error", err))
@@ -377,6 +392,62 @@ func samePtrString(a, b *string) bool {
 	default:
 		return *a == *b
 	}
+}
+
+var (
+	errInsecureAllowed = errors.New("insecure server allowed")
+	errInsecure        = errors.New("must use mTLS connection on non-loopback device")
+)
+
+func checkServerSecurityPolicy(ctx context.Context, cfg rest.Server) error {
+	if cfg.RootCA != nil {
+		return nil
+	}
+	secErr := errInsecure
+	if cfg.Insecure {
+		secErr = errInsecureAllowed
+	}
+
+	host, _, err := net.SplitHostPort(cfg.Addr)
+	if err != nil {
+		return err
+	}
+	if host == "" {
+		return &addrError{Err: secErr, Addr: cfg.Addr}
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return err
+	}
+	for _, ip := range ips {
+		if !ip.IsLoopback() {
+			return &addrError{Err: secErr, Addr: cfg.Addr}
+		}
+	}
+	return nil
+}
+
+type addrError struct {
+	Err  error
+	Addr string
+}
+
+func (e *addrError) Error() string {
+	if e == nil || e.Err == nil {
+		return "<nil>"
+	}
+	s := e.Err.Error()
+	if e.Addr != "" {
+		s = "address " + e.Addr + ": " + s
+	}
+	return s
+}
+
+func (e *addrError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 func mkTLSConfig(cfg rest.Server) (*tls.Config, error) {
@@ -554,7 +625,7 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 	}
 	addr = ln.Addr().String()
 
-	d.log.LogAttrs(ctx, slog.LevelInfo, "web server listening", slog.Any("addr", addr))
+	d.log.LogAttrs(ctx, slog.LevelInfo, "web server listening", slog.String("addr", addr))
 	go func() {
 		if tlsConfig == nil {
 			err = srv.Serve(ln)
