@@ -185,7 +185,7 @@ type Button interface {
 }
 
 // ErrNotFound is returned by Store.Get if the item is not found.
-var ErrNotFound = errors.New("item not found")
+var ErrNotFound = jsonrpc2.NewError(rpc.ErrCodeNotFound, "item not found")
 
 // Store is a common persistent data store held by the manager.
 type Store interface {

@@ -1,0 +1,23 @@
+# state is set up in celext_test.go for {"module":"test-module"} as
+# {"key":"exciting value"}.
+
+cel src.cel
+stderr '"level":"INFO","msg":"failed get","key":"nokey","error":"item not found"'
+cmp stdout want.txt
+
+-- src.cel --
+{
+	"ok":    string(get_state("key").orValue(b"missing")),
+	"bad":   string(get_state("nokey").orValue(b"missing")),
+	?"cond": get_state("nokey").as(v,
+		v.hasValue() ?
+			optional.of(string(v.value()))
+		:
+			optional.none()
+	),
+}
+-- want.txt --
+{
+	"bad": "missing",
+	"ok": "exciting value"
+}
