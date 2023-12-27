@@ -333,7 +333,7 @@ func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, cu
 			decls.NewVar("time", decls.Timestamp),
 			decls.NewVar("request", decls.NewMapType(decls.String, decls.Dyn)),
 		)
-		reqPrg, err := compile(cfg.Request, decls, d.log)
+		reqPrg, err := d.compile(curr.euid, cfg.Request, decls, d.log)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelError, "compiling server rule", slog.String("name", curr.name), slog.Any("error", err))
 		} else {
@@ -350,7 +350,7 @@ func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, cu
 				decls.NewVar("time", decls.Timestamp),
 				decls.NewVar("response", decls.NewMapType(decls.String, decls.Dyn)),
 			)
-			respPrg, err := compile(cfg.Response, decls, d.log)
+			respPrg, err := d.compile(curr.euid, cfg.Response, decls, d.log)
 			if err != nil {
 				d.log.LogAttrs(ctx, slog.LevelError, "compiling server rule", slog.String("name", curr.name), slog.Any("error", err))
 			} else {
@@ -480,10 +480,11 @@ func mkTLSConfig(cfg rest.Server) (*tls.Config, error) {
 	return mtls.NewServerConfig(rootPEM, certPEMBlock, keyPEMBlock)
 }
 
-func compile(src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, error) {
+func (d *daemon) compile(uid rpc.UID, src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, error) {
 	env, err := cel.NewEnv(
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(log),
+		celext.StateLib(d.ctx, uid, d.conn, log),
 		cel.Lib(extLib{}),
 		decls,
 	)
