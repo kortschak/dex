@@ -378,6 +378,7 @@ func (d *daemon) configureRules(ctx context.Context, rules map[string]worklog.Ru
 	opts := []cel.EnvOption{
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(d.log),
+		celext.StateLib(ctx, rpc.UID{Module: d.uid}, d.conn, d.log),
 		cel.Declarations(
 			decls.NewVar("bucket", decls.String),
 			decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
