@@ -171,11 +171,12 @@ func main() {
 
 	changes := make(chan config.Change)
 	go func() {
-		err := config.Watch(ctx, cfgdir, changes, -1, log)
+		w, err := config.NewWatcher(ctx, cfgdir, changes, -1, log)
 		if err != nil {
 			mlog.LogAttrs(ctx, slog.LevelError, err.Error())
 			os.Exit(1)
 		}
+		w.Watch(ctx)
 	}()
 
 	for cfg := range changes {

@@ -431,10 +431,11 @@ func TestWatcher(t *testing.T) {
 	defer cancel()
 	stream := make(chan Change)
 	go func() {
-		err := Watch(ctx, dir, stream, -1, log)
+		w, err := NewWatcher(ctx, dir, stream, -1, log)
 		if err != nil {
 			t.Errorf("unexpected error returned by Watch: %v", err)
 		}
+		w.Watch(ctx)
 	}()
 
 	for _, op := range operations {

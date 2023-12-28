@@ -14,20 +14,25 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// process watches the streamProcessor's fsnotify.Watcher events performing
+// Watch processes the receiver's fsnotify.Watcher events, performing
 // aggregation and semantic filtering.
-func (p *streamProcessor) process(ctx context.Context, watcher *fsnotify.Watcher) error {
+func (w *Watcher) Watch(ctx context.Context) error {
+	defer func() {
+		w.watcher.Close()
+		close(w.changes)
+	}()
+
 	renames := make(map[Sum]fsnotify.Event)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case ev := <-watcher.Events:
+		case ev := <-w.watcher.Events:
 			if filepath.Ext(ev.Name) == ".toml" {
 				if ev.Has(fsnotify.Write | fsnotify.Create) {
 					fi, err := os.Stat(ev.Name)
 					if err != nil {
-						p.changes <- Change{Err: err}
+						w.changes <- Change{Err: err}
 						continue
 					}
 					if fi.IsDir() {
@@ -37,25 +42,25 @@ func (p *streamProcessor) process(ctx context.Context, watcher *fsnotify.Watcher
 
 				switch {
 				case ev.Has(fsnotify.Write):
-					p.log.LogAttrs(ctx, slog.LevelDebug, "write", slog.String("name", ev.Name))
-					time.Sleep(p.debounce)
+					w.log.LogAttrs(ctx, slog.LevelDebug, "write", slog.String("name", ev.Name))
+					time.Sleep(w.debounce)
 
 					b, err := os.ReadFile(ev.Name)
 					if err != nil {
-						p.log.LogAttrs(ctx, slog.LevelError, "read file", slog.Any("error", err))
-						p.changes <- Change{Err: err}
+						w.log.LogAttrs(ctx, slog.LevelError, "read file", slog.Any("error", err))
+						w.changes <- Change{Err: err}
 						continue
 					}
-					cfg, sum, err := unmarshalConfigs(p.hash, b)
-					if p.hashes[ev.Name] == sum {
-						p.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{p.hashes}))
+					cfg, sum, err := unmarshalConfigs(w.hash, b)
+					if w.hashes[ev.Name] == sum {
+						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 						continue
 					}
 					if cfg != nil {
-						p.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{p.hashes}))
-						p.hashes[ev.Name] = sum
+						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.hashes[ev.Name] = sum
 					}
-					p.changes <- Change{
+					w.changes <- Change{
 						Event:  []fsnotify.Event{ev},
 						Config: cfg,
 						Err:    err,
@@ -65,56 +70,56 @@ func (p *streamProcessor) process(ctx context.Context, watcher *fsnotify.Watcher
 				// independent of a write are not informative, so we handle
 				// those in the write case.
 				case ev.Has(fsnotify.Rename):
-					p.log.LogAttrs(ctx, slog.LevelDebug, "rename", slog.String("name", ev.Name))
-					sum := p.hashes[ev.Name]
-					p.log.LogAttrs(ctx, slog.LevelDebug, "set renames", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{p.hashes}), slog.Any("renames", renamesValue{renames}))
+					w.log.LogAttrs(ctx, slog.LevelDebug, "rename", slog.String("name", ev.Name))
+					sum := w.hashes[ev.Name]
+					w.log.LogAttrs(ctx, slog.LevelDebug, "set renames", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}), slog.Any("renames", renamesValue{renames}))
 					renames[sum] = ev
-					delete(p.hashes, ev.Name)
+					delete(w.hashes, ev.Name)
 				case ev.Has(fsnotify.Create):
-					p.log.LogAttrs(ctx, slog.LevelDebug, "create", slog.String("name", ev.Name))
+					w.log.LogAttrs(ctx, slog.LevelDebug, "create", slog.String("name", ev.Name))
 					b, err := os.ReadFile(ev.Name)
 					if err != nil {
-						p.log.LogAttrs(ctx, slog.LevelError, "read file", slog.Any("error", err))
-						p.changes <- Change{Err: err}
+						w.log.LogAttrs(ctx, slog.LevelError, "read file", slog.Any("error", err))
+						w.changes <- Change{Err: err}
 						continue
 					}
-					cfg, sum, err := unmarshalConfigs(p.hash, b)
+					cfg, sum, err := unmarshalConfigs(w.hash, b)
 					prev, ok := renames[sum]
 					if !ok {
-						p.log.LogAttrs(ctx, slog.LevelDebug, "no renames", slog.Any("sum", sumValue{sum}), slog.Any("renames", renamesValue{renames}))
+						w.log.LogAttrs(ctx, slog.LevelDebug, "no renames", slog.Any("sum", sumValue{sum}), slog.Any("renames", renamesValue{renames}))
 						continue
 					}
 					delete(renames, sum)
-					p.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{p.hashes}))
-					p.hashes[ev.Name] = sum
-					p.changes <- Change{
+					w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+					w.hashes[ev.Name] = sum
+					w.changes <- Change{
 						Event:  []fsnotify.Event{prev, ev},
 						Config: cfg,
 						Err:    err,
 					}
 
 				case ev.Has(fsnotify.Remove):
-					p.log.LogAttrs(ctx, slog.LevelDebug, "remove", slog.String("name", ev.Name))
-					p.changes <- Change{Event: []fsnotify.Event{ev}}
-					delete(p.hashes, ev.Name)
+					w.log.LogAttrs(ctx, slog.LevelDebug, "remove", slog.String("name", ev.Name))
+					w.changes <- Change{Event: []fsnotify.Event{ev}}
+					delete(w.hashes, ev.Name)
 				}
-			} else if ev.Has(fsnotify.Remove) && ev.Name == p.dir {
-				p.log.LogAttrs(ctx, slog.LevelDebug, "remove config directory", slog.String("name", ev.Name))
-				p.changes <- Change{Event: []fsnotify.Event{ev}}
-				err := os.Mkdir(p.dir, 0o755)
+			} else if ev.Has(fsnotify.Remove) && ev.Name == w.dir {
+				w.log.LogAttrs(ctx, slog.LevelDebug, "remove config directory", slog.String("name", ev.Name))
+				w.changes <- Change{Event: []fsnotify.Event{ev}}
+				err := os.Mkdir(w.dir, 0o755)
 				if err != nil {
-					p.log.LogAttrs(ctx, slog.LevelError, "replace config dir", slog.String("path", p.dir), slog.Any("error", err))
+					w.log.LogAttrs(ctx, slog.LevelError, "replace config dir", slog.String("path", w.dir), slog.Any("error", err))
 					continue
 				}
-				err = watcher.Add(p.dir)
+				err = w.watcher.Add(w.dir)
 				if err != nil {
-					p.log.LogAttrs(ctx, slog.LevelError, "replace watch", slog.Any("error", err))
+					w.log.LogAttrs(ctx, slog.LevelError, "replace watch", slog.Any("error", err))
 					continue
 				}
 			}
 
-		case err := <-watcher.Errors:
-			p.changes <- Change{Err: err}
+		case err := <-w.watcher.Errors:
+			w.changes <- Change{Err: err}
 		}
 	}
 }

@@ -51,50 +51,42 @@ func (c Change) Op() fsnotify.Op {
 	}
 }
 
-// Watch starts an fsnotify.Watcher for the provided directory, sending change
+// NewWatcher starts an fsnotify.Watcher for the provided directory, sending change
 // events on the changes channel. If dir is deleted, it is recreated as a new
 // directory and a new watcher is set. The debounce parameter specifies how
 // long to wait after an fsnotify.Event before reading the file to ensure that
 // writes will be reflected in the state checksum. If it is less than zero,
 // FileDebounce is used.
-func Watch(ctx context.Context, dir string, changes chan<- Change, debounce time.Duration, log *slog.Logger) error {
-	defer close(changes)
-
+func NewWatcher(ctx context.Context, dir string, changes chan<- Change, debounce time.Duration, log *slog.Logger) (*Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer watcher.Close()
 
 	_, err = os.Stat(dir)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			return err
+			return nil, err
 		}
 		err = os.Mkdir(dir, 0o755)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	err = watcher.Add(dir)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	p, err := newStreamProcessor(changes, dir, debounce, log).init(ctx)
-	if err != nil {
-		return err
-	}
-
-	return p.process(ctx, watcher)
+	return newWatcher(changes, watcher, dir, debounce, log).init(ctx)
 }
 
-// streamProcessor collects raw fsnotify.Events and aggregates and filters
-// for semantically meaningful configuration changes.
-type streamProcessor struct {
+// Watcher collects raw fsnotify.Events and aggregates and filters for
+// semantically meaningful configuration changes.
+type Watcher struct {
 	dir      string
 	debounce time.Duration
+	watcher  *fsnotify.Watcher
 	changes  chan<- Change
 	hash     hash.Hash
 	hashes   map[string]Sum
@@ -103,14 +95,15 @@ type streamProcessor struct {
 
 var watcherUID = rpc.UID{Module: "kernel", Service: "config_watcher"}
 
-// newStreamProcessor returns a new streamProcessor.
-func newStreamProcessor(changes chan<- Change, dir string, debounce time.Duration, log *slog.Logger) *streamProcessor {
+// newWatcher returns a new Watcher.
+func newWatcher(changes chan<- Change, w *fsnotify.Watcher, dir string, debounce time.Duration, log *slog.Logger) *Watcher {
 	if debounce < 0 {
 		debounce = FileDebounce
 	}
-	return &streamProcessor{
+	return &Watcher{
 		dir:      dir,
 		debounce: debounce,
+		watcher:  w,
 		changes:  changes,
 		log:      log.With(slog.String("component", watcherUID.String())),
 		hash:     sha1.New(),
@@ -120,44 +113,45 @@ func newStreamProcessor(changes chan<- Change, dir string, debounce time.Duratio
 
 // init performs an initial scan of the streamProcessor's directory, sending
 // create events for all toml files found in the directory.
-func (p *streamProcessor) init(ctx context.Context) (*streamProcessor, error) {
-	de, err := os.ReadDir(p.dir)
+func (w *Watcher) init(ctx context.Context) (*Watcher, error) {
+	de, err := os.ReadDir(w.dir)
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range de {
-		name := e.Name()
-		if filepath.Ext(name) != ".toml" {
-			continue
-		}
+	go func() {
+		for _, e := range de {
+			name := e.Name()
+			if filepath.Ext(name) != ".toml" {
+				continue
+			}
 
-		path := filepath.Join(p.dir, name)
-		fi, err := os.Stat(path)
-		if err != nil {
-			p.changes <- Change{Err: err}
-			continue
+			path := filepath.Join(w.dir, name)
+			fi, err := os.Stat(path)
+			if err != nil {
+				w.changes <- Change{Err: err}
+				continue
+			}
+			if fi.IsDir() {
+				continue
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				w.log.LogAttrs(ctx, slog.LevelError, "read file", slog.Any("error", err))
+				w.changes <- Change{Err: err}
+				continue
+			}
+			cfg, sum, err := unmarshalConfigs(w.hash, b)
+			if cfg != nil {
+				w.hashes[path] = sum
+			}
+			w.changes <- Change{
+				Event:  []fsnotify.Event{{Name: path, Op: fsnotify.Create}},
+				Config: cfg,
+				Err:    err,
+			}
 		}
-		if fi.IsDir() {
-			continue
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			p.log.LogAttrs(ctx, slog.LevelError, "read file", slog.Any("error", err))
-			p.changes <- Change{Err: err}
-			continue
-		}
-		cfg, sum, err := unmarshalConfigs(p.hash, b)
-		if cfg != nil {
-			p.hashes[path] = sum
-		}
-		p.changes <- Change{
-			Event:  []fsnotify.Event{{Name: path, Op: fsnotify.Create}},
-			Config: cfg,
-			Err:    err,
-		}
-	}
-
-	return p, nil
+	}()
+	return w, nil
 }
 
 // unmarshalConfigs returns a, potentially partial, configuration and its
