@@ -1,0 +1,12 @@
+[darwin] skip 'darwin has no separate runtime directory'
+
+env HOME=${WORK}
+
+env XDG_CONFIG_HOME=${HOME}/.config
+env XDG_STATE_HOME=${HOME}/.local/state
+
+mkdir ${XDG_CONFIG_HOME}
+mkdir ${XDG_STATE_HOME}
+
+! dex -log debug -lines
+stderr 'no xdg runtime directory'

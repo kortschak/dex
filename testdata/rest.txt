@@ -1,0 +1,109 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+go install github.com/kortschak/dex/cmd/rest@latest
+
+dex -log debug -lines &dex&
+sleep 1s
+
+GET -json http://localhost:7373
+cmp stdout want_system.json
+
+GET -json http://localhost:7474
+cp stdout got_state.json
+grep_from_file want_state.pattern got_state.json
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[module.rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.rest.options.server.system]
+addr = "localhost:7373"
+request = """
+{"method": "system"}
+"""
+response = """
+response.body
+"""
+[module.rest.options.server.state]
+addr = "localhost:7474"
+request = """
+{"method": "state"}
+"""
+response = """
+response.body
+"""
+-- want_system.json --
+{
+	"kernel": {
+		"network": "tcp",
+		"sum": "0594902707f6e8141ba872ac25ad05fac265885d"
+	},
+	"module": {
+		"rest": {
+			"log_add_source": true,
+			"log_level": "DEBUG",
+			"log_mode": "log",
+			"options": {
+				"server": {
+					"state": {
+						"addr": "localhost:7474",
+						"request": "{\"method\": \"state\"}\n",
+						"response": "response.body\n"
+					},
+					"system": {
+						"addr": "localhost:7373",
+						"request": "{\"method\": \"system\"}\n",
+						"response": "response.body\n"
+					}
+				}
+			},
+			"path": "rest",
+			"sum": "d92fd9a89eaa3e1e55caa0e451184e11350972fc"
+		}
+	}
+}
+-- want_state.pattern --
+{
+	"addr": "127\.0\.0\.1:.*",
+	"daemons": {
+		"rest": {
+			"command": ".*/bin/rest -log_stdout -uid rest -network tcp -addr 127\.0\.0\.1:.*",
+			"has_drop": false,
+			"uid": "rest"
+		}
+	},
+	"funcs": \[
+		"brightness",
+		"delete",
+		"draw",
+		"drop",
+		"drop_module",
+		"get",
+		"page",
+		"page_details",
+		"page_names",
+		"put",
+		"set",
+		"sleep",
+		"system"
+	\],
+	"network": "tcp"
+}

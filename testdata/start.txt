@@ -1,0 +1,22 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_STATE_HOME=${HOME}/.local/state
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+
+[linux] mkdir ${XDG_CONFIG_HOME}
+[linux] mkdir ${XDG_STATE_HOME}
+[linux] mkdir ${XDG_RUNTIME_DIR}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+#stderr 'created config dir'
+#stderr 'created data dir'
+#stderr 'terminating'
+
+[linux] exists ${HOME}/.config/dex
+[linux] exists ${HOME}/.local/state/dex/state.sqlite3
+
+[darwin] exists ${HOME}'/Library/Application Support/dex'
+[darwin] exists ${HOME}'/Library/Application Support/dex/state.sqlite3'

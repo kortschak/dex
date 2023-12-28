@@ -50,4 +50,5 @@ jobs:
 
     - name: integration tests
       run: |
+        go test -v .
         go test -p=1 -run TestDaemon ./cmd/* -verbose_log

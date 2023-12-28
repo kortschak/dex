@@ -1,0 +1,17 @@
+env HOME=${WORK}
+
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+
+mkdir ${XDG_RUNTIME_DIR}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+-- .config/dex/kernel.toml --
+[kernel]
+device = []
+network = "unix"
+-- Library/Application Support/dex/kernel.toml --
+[kernel]
+device = []
+network = "unix"
