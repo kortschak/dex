@@ -74,7 +74,18 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 			err = store.Set(m.UID, m.Body.Item, m.Body.Value)
-			return nil, err
+			if err != nil {
+				return nil, rpc.NewError(rpc.ErrCodeInternal,
+					err.Error(),
+					map[string]any{
+						"type": rpc.ErrCodeStoreErr,
+						"op":   "set",
+						"key":  m.Body.Item,
+						"uid":  m.UID,
+					},
+				)
+			}
+			return nil, nil
 		},
 
 		// Get(owner rpc.UID, item string) (val []byte, err error)
@@ -87,7 +98,20 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			val, err := store.Get(m.UID, m.Body.Item)
 			if err != nil {
-				return nil, err
+				code := int64(rpc.ErrCodeNotFound)
+				data := map[string]any{
+					"op":  "get",
+					"key": m.Body.Item,
+					"uid": m.UID,
+				}
+				if err != sys.ErrNotFound {
+					code = rpc.ErrCodeInternal
+					data["type"] = rpc.ErrCodeStoreErr
+				}
+				return nil, rpc.NewError(code,
+					err.Error(),
+					data,
+				)
 			}
 			return rpc.NewMessage[any](storeUID, GetResult{val}), nil
 		},
@@ -102,7 +126,15 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			val, written, err := store.Put(m.UID, m.Body.Item, m.Body.Value)
 			if err != nil {
-				return nil, err
+				return nil, rpc.NewError(rpc.ErrCodeInternal,
+					err.Error(),
+					map[string]any{
+						"type": rpc.ErrCodeStoreErr,
+						"op":   "put",
+						"key":  m.Body.Item,
+						"uid":  m.UID,
+					},
+				)
 			}
 			return rpc.NewMessage[any](storeUID, PutResult{val, written}), nil
 		},
@@ -116,7 +148,18 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 			err = store.Delete(m.UID, m.Body.Item)
-			return nil, err
+			if err != nil {
+				return nil, rpc.NewError(rpc.ErrCodeInternal,
+					err.Error(),
+					map[string]any{
+						"type": rpc.ErrCodeStoreErr,
+						"op":   "delete",
+						"key":  m.Body.Item,
+						"uid":  m.UID,
+					},
+				)
+			}
+			return nil, nil
 		},
 
 		// Drop(owner rpc.UID) error
@@ -128,7 +171,17 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 			err = store.Drop(m.UID)
-			return nil, err
+			if err != nil {
+				return nil, rpc.NewError(rpc.ErrCodeInternal,
+					err.Error(),
+					map[string]any{
+						"type": rpc.ErrCodeStoreErr,
+						"op":   "drop",
+						"uid":  m.UID,
+					},
+				)
+			}
+			return nil, nil
 		},
 
 		// DropModule(module string) error
@@ -140,6 +193,16 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 			err = store.DropModule(m.UID.Module)
+			if err != nil {
+				return nil, rpc.NewError(rpc.ErrCodeInternal,
+					err.Error(),
+					map[string]any{
+						"type": rpc.ErrCodeStoreErr,
+						"op":   "drop_module",
+						"uid":  m.UID.Module,
+					},
+				)
+			}
 			return nil, err
 		},
 	}

@@ -192,7 +192,12 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 
 		p := m.Body
 		if p.Path == "" {
-			err = errors.New("missing executable path")
+			err = rpc.NewError(rpc.ErrCodeInvalidMessage,
+				"missing executable path",
+				map[string]any{
+					"type": rpc.ErrCodeParameters,
+				},
+			)
 			d.log.LogAttrs(ctx, slog.LevelError, err.Error())
 			return nil, err
 		}
@@ -226,7 +231,12 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			err = cmd.Start()
 			if err != nil {
 				cancel()
-				return nil, err
+				return nil, rpc.NewError(rpc.ErrCodeInternal,
+					err.Error(),
+					map[string]any{
+						"type": rpc.ErrCodeProcess,
+					},
+				)
 			}
 			go func() {
 				d.wMu.Lock()
@@ -248,7 +258,14 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		var exitErr *execabs.ExitError
 		if errors.As(err, &exitErr) {
 			d.log.LogAttrs(ctx, slog.LevelError, err.Error(), slog.Any("cmd", p))
-			return nil, err
+			return nil, rpc.NewError(rpc.ErrCodeInternal,
+				err.Error(),
+				map[string]any{
+					"type":      rpc.ErrCodeProcess,
+					"exit_code": exitErr.ExitCode(),
+					"stderr":    stderr.String(),
+				},
+			)
 		}
 		resp := runner.Return{
 			Stdout: stdout.String(),

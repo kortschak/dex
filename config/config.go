@@ -126,7 +126,13 @@ type Service struct {
 // If err is nil and ok is false, the request is a module configuration.
 func IsService(req *jsonrpc2.Request) (ok bool, err error) {
 	if req.Method != rpc.Configure {
-		return false, fmt.Errorf("not a configuration request: %s", req.Method)
+		return false, rpc.NewError(rpc.ErrCodeInvalidMessage,
+			fmt.Sprintf("not a configuration request: %s", req.Method),
+			map[string]any{
+				"type":   rpc.ErrCodeMethod,
+				"method": req.Method,
+			},
+		)
 	}
 	var probe rpc.Message[struct {
 		// Name is the service name if the

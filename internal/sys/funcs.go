@@ -46,7 +46,12 @@ func Funcs[K Kernel, D Device[B], B Button](redact bool) func(manager *Manager[K
 					if redact {
 						current, err = private.Redact(current, "json")
 						if err != nil {
-							return nil, err
+							return nil, rpc.NewError(rpc.ErrCodeInternal,
+								err.Error(),
+								map[string]any{
+									"uid": m.UID,
+								},
+							)
 						}
 					}
 					return rpc.NewMessage[any](kernelUID, current), nil

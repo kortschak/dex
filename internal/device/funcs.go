@@ -7,7 +7,6 @@ package device
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -90,22 +89,60 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			p, ok := dev.Page(m.Body.Page)
 			if !ok {
-				return nil, fmt.Errorf("no page %s for %s", m.Body.Page, m.UID)
+				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+					fmt.Sprintf("no page %s for %s", m.Body.Page, m.UID),
+					map[string]any{
+						"type":   rpc.ErrCodeBounds,
+						"uid":    m.UID,
+						"serial": dev.Serial(),
+						"page":   m.Body.Page,
+					},
+				)
 			}
 			rows, cols := dev.Layout()
 			if m.Body.Row < 0 || rows <= m.Body.Row {
-				return nil, fmt.Errorf("row out of bound: %d", m.Body.Row)
+				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+					fmt.Sprintf("row out of bound: %d", m.Body.Row),
+					map[string]any{
+						"type":   rpc.ErrCodeBounds,
+						"uid":    m.UID,
+						"serial": dev.Serial(),
+						"row":    m.Body.Row,
+					},
+				)
 			}
 			if m.Body.Col < 0 || cols <= m.Body.Col {
-				return nil, fmt.Errorf("column out of bound: %d", m.Body.Col)
+				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+					fmt.Sprintf("column out of bound: %d", m.Body.Col),
+					map[string]any{
+						"type":   rpc.ErrCodeBounds,
+						"uid":    m.UID,
+						"serial": dev.Serial(),
+						"col":    m.Body.Col,
+					},
+				)
 			}
 			bounds, err := dev.Bounds()
 			if err != nil {
-				return nil, fmt.Errorf("no bounds for %s: %v", m.UID, err)
+				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+					fmt.Sprintf("no bounds for %s: %v", m.UID, err),
+					map[string]any{
+						"type":   rpc.ErrCodeNoDisplay,
+						"uid":    m.UID,
+						"serial": dev.Serial(),
+					},
+				)
 			}
 			img, err := DecodeImage(bounds, m.Body.Image, filepath.Join(manager.Datadir(), m.UID.Module))
 			if !ok {
-				return nil, fmt.Errorf("%w for %s", err, m.UID)
+				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+					fmt.Sprintf("%v for %s", err, m.UID),
+					map[string]any{
+						"message": err.Error(),
+						"uid":     m.UID,
+						"serial":  dev.Serial(),
+					},
+				)
 			}
 			p.Button(m.Body.Row, m.Body.Col).Draw(ctx, img)
 			var resp *rpc.Message[any]
@@ -135,7 +172,17 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			err = dev.SetDisplayTo(ctx, m.Body.Page)
 			var resp *rpc.Message[any]
-			if err == nil && id.IsValid() {
+			if err != nil {
+				err = rpc.NewError(rpc.ErrCodeInvalidData,
+					err.Error(),
+					map[string]any{
+						"type":   rpc.ErrCodeNoPage,
+						"page":   m.Body.Page,
+						"serial": dev.Serial(),
+						"uid":    m.UID,
+					},
+				)
+			} else if id.IsValid() {
 				resp = rpc.NewMessage[any](kernelUID, "ok")
 			}
 			return resp, err
@@ -200,7 +247,12 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			switch m.Body.Action {
 			case "get", "add":
 				if store == nil {
-					return nil, errors.New("no store")
+					return nil, rpc.NewError(rpc.ErrCodeInternal,
+						"no store",
+						map[string]any{
+							"type": rpc.ErrCodeNoStore,
+						},
+					)
 				}
 			}
 
@@ -217,10 +269,29 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				var val []byte
 				val, err = store.Get(devUID, "brightness")
 				if err != nil {
+					code := int64(rpc.ErrCodeNotFound)
+					data := map[string]any{
+						"op":  "get",
+						"key": "brightness",
+						"uid": m.UID,
+					}
+					if err != sys.ErrNotFound {
+						code = rpc.ErrCodeInternal
+						data["type"] = rpc.ErrCodeStoreErr
+					}
+					err = rpc.NewError(code,
+						err.Error(),
+						data,
+					)
 					break
 				}
 				if len(val) != 1 {
-					err = fmt.Errorf("unexpected brightness value length: %d != 1", len(val))
+					err = rpc.NewError(rpc.ErrCodeInternal,
+						fmt.Sprintf("unexpected brightness value length: %d != 1", len(val)),
+						map[string]any{
+							"uid": m.UID,
+						},
+					)
 					break
 				}
 				if m.Body.Action == "get" {
@@ -236,12 +307,37 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				fallthrough
 			case "set":
 				if m.Body.Brightness < 0 || 100 < m.Body.Brightness {
-					return nil, fmt.Errorf("brightness out of bounds: %d", m.Body.Brightness)
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("brightness out of bounds: %d", m.Body.Brightness),
+						map[string]any{
+							"brightness": m.Body.Brightness,
+							"type":       rpc.ErrCodeBounds,
+							"uid":        m.UID,
+							"serial":     dev.Serial(),
+						},
+					)
 				}
 				err = dev.SetBrightness(m.Body.Brightness)
-				if err == nil {
+				if err != nil {
+					err = rpc.NewError(rpc.ErrCodeDevice,
+						err.Error(),
+						map[string]any{
+							"serial": dev.Serial(),
+							"uid":    m.UID,
+						},
+					)
+				} else {
 					if store != nil {
-						store.Set(devUID, "brightness", []byte{byte(m.Body.Brightness)})
+						err = store.Set(devUID, "brightness", []byte{byte(m.Body.Brightness)})
+						if err != nil {
+							err = rpc.NewError(rpc.ErrCodeInternal,
+								err.Error(),
+								map[string]any{
+									"serial": dev.Serial(),
+									"uid":    m.UID,
+								},
+							)
+						}
 					}
 				}
 			default:
@@ -276,10 +372,24 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			case "clear":
 				err = dev.Clear()
 			default:
-				return nil, fmt.Errorf("invalid state request: %q", m.Body.State)
+				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+					fmt.Sprintf("invalid state request: %q", m.Body.State),
+					map[string]any{
+						"type":  rpc.ErrCodeBounds,
+						"state": m.Body.State,
+						"uid":   m.UID,
+					},
+				)
 			}
 			var resp *rpc.Message[any]
-			if err == nil && id.IsValid() {
+			if err != nil {
+				err = rpc.NewError(rpc.ErrCodeDevice,
+					err.Error(),
+					map[string]any{
+						"uid": m.UID,
+					},
+				)
+			} else if id.IsValid() {
 				resp = rpc.NewMessage[any](kernelUID, "ok")
 			}
 			return resp, err

@@ -282,10 +282,23 @@ func (k *Kernel) call(ctx context.Context, req *jsonrpc2.Request, m Message[Forw
 	conn, heartbeat, ok := k.Conn(ctx, m.Body.UID.Module)
 	if !ok {
 		if heartbeat.IsZero() {
-			return nil, fmt.Errorf("no daemon %s", m.Body.UID)
+			return nil, NewError(ErrCodeInvalidData,
+				fmt.Sprintf("no daemon %s", m.Body.UID),
+				map[string]any{
+					"type": ErrCodeNoDaemon,
+					"uid":  m.Body.UID,
+				},
+			)
 		}
-		return nil, fmt.Errorf("no daemon %s: last heartbeat: %v (%v)",
-			m.Body.UID, heartbeat, time.Since(heartbeat))
+		return nil, NewError(ErrCodeInvalidData,
+			fmt.Sprintf("no daemon %s: last heartbeat: %v (%v)",
+				m.Body.UID, heartbeat, time.Since(heartbeat)),
+			map[string]any{
+				"type":      ErrCodeNoDaemon,
+				"heartbeat": heartbeat,
+				"uid":       m.Body.UID,
+			},
+		)
 	}
 	if !req.IsCall() {
 		if req.Method == Call {
@@ -296,8 +309,10 @@ func (k *Kernel) call(ctx context.Context, req *jsonrpc2.Request, m Message[Forw
 			if heartbeat.IsZero() {
 				return nil, err
 			}
-			return nil, fmt.Errorf("%w: last heartbeat: %v (%v)",
-				err, heartbeat, time.Since(heartbeat))
+			return nil, AddWireErrorDetail(err, map[string]any{
+				"heartbeat": heartbeat,
+				"uid":       m.Body.UID,
+			})
 		}
 		return nil, nil
 	}
@@ -308,8 +323,10 @@ func (k *Kernel) call(ctx context.Context, req *jsonrpc2.Request, m Message[Forw
 		if heartbeat.IsZero() {
 			return nil, err
 		}
-		return nil, fmt.Errorf("%w: last heartbeat: %v (%v)",
-			err, heartbeat, time.Since(heartbeat))
+		return nil, AddWireErrorDetail(err, map[string]any{
+			"heartbeat": heartbeat,
+			"uid":       m.Body.UID,
+		})
 	}
 	return NewMessage(kernelUID, resp), nil
 }

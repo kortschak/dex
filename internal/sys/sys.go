@@ -742,16 +742,36 @@ func (m *Manager[K, D, B]) DeviceFor(svc rpc.UID) (D, error) {
 			return device, ErrAllowedMissingDevice
 		}
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no serial", slog.Any("uid", svc))
-		return device, fmt.Errorf("no serial for %s", svc)
+		return device, rpc.NewError(rpc.ErrCodeInvalidData,
+			fmt.Sprintf("no serial for %s", svc),
+			map[string]any{
+				"type": rpc.ErrCodeNoDevice,
+				"uid":  svc,
+			},
+		)
 	}
 	if m.missingSerial[serial] {
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no device", slog.Any("uid", svc), slog.Any("serial", serial))
-		return device, fmt.Errorf("no device for %s serial %s", svc, serial)
+		return device, rpc.NewError(rpc.ErrCodeInvalidData,
+			fmt.Sprintf("no device for %s serial %s", svc, serial),
+			map[string]any{
+				"type":   rpc.ErrCodeNoDevice,
+				"uid":    svc,
+				"serial": serial,
+			},
+		)
 	}
 	device, ok = m.devices[serial]
 	if !ok {
 		m.log.LogAttrs(context.Background(), slog.LevelWarn, "no device", slog.Any("uid", svc), slog.String("serial", serial))
-		return device, fmt.Errorf("no device for %s serial:%s", svc, serial)
+		return device, rpc.NewError(rpc.ErrCodeInvalidData,
+			fmt.Sprintf("no device for %s serial %s", svc, serial),
+			map[string]any{
+				"type":   rpc.ErrCodeNoDevice,
+				"uid":    svc,
+				"serial": serial,
+			},
+		)
 	}
 	return device, nil
 }

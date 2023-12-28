@@ -291,19 +291,38 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				dir = filepath.Join(dir, m.Body.Options.DatabaseDir)
 				err = os.Mkdir(dir, 0o750)
 				if err != nil {
+					err := err.(*os.PathError) // See godoc for os.Mkdir for why this is safe.
 					d.log.LogAttrs(ctx, slog.LevelError, "create database dir", slog.Any("error", err))
-					return nil, err
+					return nil, rpc.NewError(rpc.ErrCodeInternal,
+						err.Error(),
+						map[string]any{
+							"type": rpc.ErrCodePath,
+							"op":   err.Op,
+							"path": err.Path,
+							"err":  fmt.Sprint(err.Err),
+						},
+					)
 				}
 			default:
 				d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.Any("error", err))
-				return nil, err
+				return nil, jsonrpc2.NewError(
+					rpc.ErrCodeInternal,
+					err.Error(),
+				)
 			}
 
 			path := filepath.Join(dir, "db.sqlite")
 			if db, ok := d.db.Load().(*store.DB); !ok || path != db.Name() {
 				err = d.openDB(ctx, db, path, m.Body.Options.Hostname)
 				if err != nil {
-					return nil, err
+					return nil, rpc.NewError(rpc.ErrCodeInternal,
+						err.Error(),
+						map[string]any{
+							"type": rpc.ErrCodeStoreErr,
+							"op":   "open",
+							"path": path,
+						},
+					)
 				}
 			}
 

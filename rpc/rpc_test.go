@@ -6,12 +6,15 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log/slog"
 	"net"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
 
 	"github.com/kortschak/dex/internal/locked"
@@ -168,6 +171,98 @@ func TestPingPongForward(t *testing.T) {
 					}
 				}
 			})
+		})
+	}
+}
+
+var unmarshalMessageTests = []struct {
+	name    string
+	data    string
+	want    Message[Button] // Any type will do.
+	wantErr error
+}{
+	{
+		name: "empty",
+		data: "",
+		wantErr: &jsonrpc2.WireError{
+			Code:    1,
+			Message: "EOF",
+			Data:    json.RawMessage(`{"type":13,"msg":""}`),
+		},
+	},
+	{
+		name: "missing_close",
+		data: `{"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{}`,
+		wantErr: &jsonrpc2.WireError{
+			Code:    1,
+			Message: "unexpected EOF",
+			Data:    json.RawMessage(`{"type":13,"msg":"eyJ0aW1lIjoiMjAwNi0wMS0wMlQxNTowNDowNVoiLCJ1aWQiOnsibW9kdWxlIjoibSIsInNlcnZpY2UiOiJzIn0sImJvZHkiOnt9"}`),
+		},
+	},
+	{
+		name: "extra_field",
+		data: `{"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{"book":9}}`,
+		wantErr: &jsonrpc2.WireError{
+			Code:    1,
+			Message: `json: unknown field "book"`,
+			Data:    json.RawMessage(`{"type":12,"msg":"eyJ0aW1lIjoiMjAwNi0wMS0wMlQxNTowNDowNVoiLCJ1aWQiOnsibW9kdWxlIjoibSIsInNlcnZpY2UiOiJzIn0sImJvZHkiOnsiYm9vayI6OX19"}`),
+		},
+	},
+	{
+		name: "missing_open",
+		data: `"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{"book":9}}`,
+		wantErr: &jsonrpc2.WireError{
+			Code:    1,
+			Message: "json: cannot unmarshal string into Go value of type rpc.Message[github.com/kortschak/dex/rpc.Button]",
+			Data:    json.RawMessage(`{"type":14,"offset":6,"msg":"InRpbWUiOiIyMDA2LTAxLTAyVDE1OjA0OjA1WiIsInVpZCI6eyJtb2R1bGUiOiJtIiwic2VydmljZSI6InMifSwiYm9keSI6eyJib29rIjo5fX0="}`),
+		},
+	},
+	{
+		name: "syntax_error",
+		data: "not json",
+		wantErr: &jsonrpc2.WireError{
+			Code:    1,
+			Message: "invalid character 'o' in literal null (expecting 'u')",
+			Data:    json.RawMessage(`{"type":11,"offset":2,"msg":"bm90IGpzb24="}`),
+		},
+	},
+	{
+		name: "valid",
+		data: `{"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{"row":1,"col":2,"page":"three"}}`,
+		want: Message[Button]{
+			Time: time.Date(2006, time.January, 02, 15, 4, 5, 0, time.UTC),
+			UID:  UID{Module: "m", Service: "s"},
+			Body: Button{Row: 1, Col: 2, Page: "three"},
+		},
+	},
+}
+
+func TestUnmarshalMessage(t *testing.T) {
+	for _, test := range unmarshalMessageTests {
+		t.Run(test.name, func(t *testing.T) {
+			var got Message[Button]
+			err := UnmarshalMessage[Button]([]byte(test.data), &got)
+			if !cmp.Equal(test.wantErr, err) {
+				t.Errorf("unexpected error:\n--- want:\n+++ got:\n%s",
+					cmp.Diff(test.wantErr, err))
+			}
+			if err != nil {
+				var data struct {
+					Massage []byte `json:"msg"`
+				}
+				err := json.Unmarshal(err.(*jsonrpc2.WireError).Data, &data)
+				if err != nil {
+					t.Fatalf("unexpected error recovering error data: %v", err)
+				}
+				if string(data.Massage) != test.data {
+					t.Errorf("unexpected error data message:\ngot: %s\nwant:%s", data.Massage, test.data)
+				}
+				return
+			}
+			if !cmp.Equal(test.want, got) {
+				t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s",
+					cmp.Diff(test.want, got))
+			}
 		})
 	}
 }

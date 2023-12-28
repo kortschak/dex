@@ -9,8 +9,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/kortschak/jsonrpc2"
 )
 
 // Daemon methods.
@@ -28,6 +32,37 @@ const (
 	Notify     = "notify"     // notify Message[Forward[any]] → nil
 	Unregister = "unregister" // notify Message[None] → nil
 	Heartbeat  = "heartbeat"  // notify Message[Deadline] → nil
+)
+
+// JSON RPC error codes.
+const (
+	ErrCodeInvalidMessage = 1 // an RPC message is invalid
+	// Invalid message sub-codes:
+	ErrCodeMessageSyntax       = 11 // syntax
+	ErrCodeMessageUnknownField = 12 // unknown field
+	ErrCodeShortMessage        = 13 // truncation
+	ErrCodeMessageType         = 14 // type mismatch
+	ErrCodeMethod              = 15 // method mismatch
+	ErrCodeParameters          = 16 // invalid parameters
+
+	ErrCodeDevice = 2 // an error was returned by a device
+
+	ErrCodeInvalidData = 3 // data sent in a call was invalid
+	// Invalid data sub-codes:
+	ErrCodeNoDaemon  = 31 // missing daemon
+	ErrCodeNoPage    = 32 // missing page
+	ErrCodeNoDevice  = 33 // missing device
+	ErrCodeNoDisplay = 34 // non-graphical device
+	ErrCodeBounds    = 35 // out of bounds
+	ErrCodeImage     = 36 // image data
+
+	ErrCodeInternal = 4  // an internal error happened
+	ErrCodeNoStore  = 41 // no data store
+	ErrCodeStoreErr = 42 // store operation error
+	ErrCodeProcess  = 43 // child process error
+	ErrCodePath     = 44 // path error
+
+	ErrCodeNotFound = 5 // a state key was not present
 )
 
 // Message is the message passing container.
@@ -120,13 +155,99 @@ func UnmarshalMessage[T any](data []byte, v *Message[T]) error {
 	dec.DisallowUnknownFields()
 	err := dec.Decode(v)
 	if err != nil {
-		return err
+		return &jsonrpc2.WireError{
+			Code:    ErrCodeInvalidMessage,
+			Message: err.Error(),
+			Data:    encodeErrData(err, data),
+		}
 	}
 	if dec.More() {
 		off := dec.InputOffset()
-		return fmt.Errorf("invalid character "+quoteChar(data[off])+" after top-level value at offset %d", off)
+		return &jsonrpc2.WireError{
+			Code:    ErrCodeInvalidMessage,
+			Message: fmt.Sprintf("invalid character "+quoteChar(data[off])+" after top-level value at offset %d", off),
+			Data:    encodeErrData(&json.SyntaxError{Offset: off}, data),
+		}
 	}
 	return nil
+}
+
+// encodeErrData return the JSON encoding for an error's extra data.
+func encodeErrData(err error, data []byte) json.RawMessage {
+	type extra struct {
+		Type    int    `json:"type,omitempty"`
+		Offset  int64  `json:"offset,omitempty"`
+		Message []byte `json:"msg"`
+	}
+	e := extra{
+		Message: data,
+	}
+	switch err := err.(type) {
+	case nil:
+		return nil
+	case *json.SyntaxError:
+		e.Type = ErrCodeMessageSyntax
+		e.Offset = err.Offset
+	case *json.UnmarshalTypeError:
+		e.Type = ErrCodeMessageType
+		e.Offset = err.Offset
+	default:
+		switch {
+		case err == io.EOF, err == io.ErrUnexpectedEOF:
+			e.Type = ErrCodeShortMessage
+		case strings.HasPrefix(err.Error(), "json: unknown field"):
+			e.Type = ErrCodeMessageUnknownField
+		}
+	}
+	var buf bytes.Buffer
+	dec := json.NewEncoder(&buf)
+	dec.SetEscapeHTML(false)
+	dec.Encode(e)
+	return bytes.TrimSpace(buf.Bytes())
+}
+
+// NewError returns an error that will be encoded correctly in the RPC protocol.
+func NewError(code int64, message string, data any) error {
+	e := &jsonrpc2.WireError{
+		Code:    code,
+		Message: message,
+	}
+	e.Data = wireErrorData(data)
+	return e
+}
+
+// AddWireErrorDetail updates the Data field of a [jsonrpc2.WireError] with the
+// fields in details, overwriting fields if they already exist. If err is not a
+// [jsonrpc2.WireError] or the Data field does not encode a map, the error  is
+// returned unmodified.
+func AddWireErrorDetail(err error, details map[string]any) error {
+	if err, ok := err.(*jsonrpc2.WireError); ok {
+		var data map[string]any
+		if json.Unmarshal(err.Data, &data) != nil {
+			return err
+		}
+		for k, v := range details {
+			data[k] = v
+		}
+		err.Data = wireErrorData(data)
+		return err
+	}
+	return err
+}
+
+func wireErrorData(data any) json.RawMessage {
+	if data == nil {
+		return nil
+	}
+	var buf bytes.Buffer
+	dec := json.NewEncoder(&buf)
+	dec.SetEscapeHTML(false)
+	err := dec.Encode(data)
+	if err != nil {
+		b, _ := json.Marshal("!" + err.Error())
+		return b
+	}
+	return bytes.TrimSpace(buf.Bytes())
 }
 
 // quoteChar formats c as a quoted character literal.
