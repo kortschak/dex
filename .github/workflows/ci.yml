@@ -10,9 +10,6 @@ jobs:
       fail-fast: false
       matrix:
         go-version: [1.21.x]
-        test-type:
-        - general
-        - with-display
         platform:
         - ubuntu-latest
         - macos-latest
@@ -38,11 +35,7 @@ jobs:
       if: matrix.platform == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -qq libudev-dev
-    - name: non-Go linux display test dependencies
-      if: matrix.platform == 'ubuntu-latest' && matrix.test-type == 'with-display'
-      run: |
-        sudo apt-get install -qq libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev xdotool x11-utils xdotool i3-wm
+        sudo apt-get install -qq libudev-dev libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev xdotool x11-utils xdotool i3-wm
         echo "DISPLAY=${DISPLAY}"
         # Start a virtual frame buffer and wait a bit for it to be ready...
         Xvfb :99 -screen 0 1920x1024x24 &
@@ -52,16 +45,9 @@ jobs:
         sleep 1
 
     - name: unit tests
-      if: matrix.test-type == 'general'
       run: |
         go test ./rpc ./internal/... ./cmd/*/api ./cmd/worklog/store
 
     - name: integration tests
-      if: matrix.test-type == 'general'
       run: |
-        go test -p=1 -run TestDaemon ./cmd/{rest,runner,worklog} -verbose_log
-
-    - name: display integration tests
-      if: matrix.test-type == 'with-display'
-      run: |
-        go test -p=1 -run TestDaemon ./cmd/watcher -verbose_log
+        go test -p=1 -run TestDaemon ./cmd/* -verbose_log
