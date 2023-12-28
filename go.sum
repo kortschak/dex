@@ -51,6 +51,8 @@ github.com/kortschak/goroutine v1.1.1 h1:UTSVtVhK6oBc0Fsk0gYsmEY9ruMmsP9xhNtTXKb
 github.com/kortschak/goroutine v1.1.1/go.mod h1:zKpXs1FWN/6mXasDQzfl7g0LrGFIOiA6cLs9eXKyaMY=
 github.com/kortschak/jsonrpc2 v0.0.0-20230217210653-5da98c0836c5 h1:uJj4xyPrBjFbpJFDR5wUzakh8ieor9hPzj+FAczj6Xo=
 github.com/kortschak/jsonrpc2 v0.0.0-20230217210653-5da98c0836c5/go.mod h1:x66XBKFU3J5CMf0uF/CZ5OLtA2kxOL1q1ZrFUQ9q7jQ=
+github.com/kortschak/jsonrpc2 v0.0.0-20231228060217-8d9a431c7ab8 h1:oMYjRrvJaLoSYflRKhpaF2V6VDhLBMm4X4hAzuSdhfo=
+github.com/kortschak/jsonrpc2 v0.0.0-20231228060217-8d9a431c7ab8/go.mod h1:Bjf+FP//YopUdNWIOtrxpiDZOHlpvpWZOvdVDpWLopg=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=

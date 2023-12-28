@@ -13,7 +13,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/kortschak/ardilla v0.0.0-20230414051513-067142ccb9ca
 	github.com/kortschak/goroutine v1.1.1
-	github.com/kortschak/jsonrpc2 v0.0.0-20230217210653-5da98c0836c5
+	github.com/kortschak/jsonrpc2 v0.0.0-20231228060217-8d9a431c7ab8
 	github.com/rogpeppe/go-internal v1.10.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/image v0.14.0
