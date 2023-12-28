@@ -32,7 +32,16 @@ import (
 	"github.com/kortschak/dex/rpc"
 )
 
-func main() {
+// Exit status codes.
+const (
+	success       = 0
+	internalError = 1 << (iota - 1)
+	invocationError
+)
+
+func main() { os.Exit(Main()) }
+
+func Main() int {
 	logging := flag.String("log", "info", "logging level (debug, info, warn or error)")
 	lines := flag.Bool("lines", false, "display source line details in logs")
 	v := flag.Bool("version", false, "print version and exit")
@@ -41,16 +50,16 @@ func main() {
 		err := version.Print()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
-		os.Exit(0)
+		return success
 	}
 
 	var level slog.LevelVar
 	err := level.UnmarshalText([]byte(*logging))
 	if err != nil {
 		flag.Usage()
-		os.Exit(2)
+		return invocationError
 	}
 	addSource := slogext.NewAtomicBool(*lines)
 
@@ -66,19 +75,19 @@ func main() {
 	if err != nil {
 		if err != syscall.ENOENT {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
 		var ok bool
 		runtimeDir, ok = xdg.RuntimeDir()
 		if !ok {
 			fmt.Fprintln(os.Stderr, "no xdg runtime directory")
-			os.Exit(1)
+			return internalError
 		}
 		runtimeDir = filepath.Join(runtimeDir, rpc.RuntimeDir)
 		err = os.MkdirAll(runtimeDir, 0o700)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
 	}
 	pidFile := filepath.Join(runtimeDir, "pid")
@@ -86,11 +95,11 @@ func main() {
 	ok, err := fl.TryLock()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return internalError
 	}
 	if !ok {
 		fmt.Fprintln(os.Stderr, "dex is already running")
-		os.Exit(1)
+		return internalError
 	}
 	defer func() {
 		fl.Unlock()
@@ -100,7 +109,7 @@ func main() {
 	err = os.WriteFile(pidFile, []byte(pid), 0o600)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return internalError
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -117,12 +126,12 @@ func main() {
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
 		cfgdir, err = xdgMkdir(xdg.ConfigHome, "dex", 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
 		mlog.LogAttrs(ctx, slog.LevelInfo, "created config dir", slog.String("path", cfgdir))
 	}
@@ -132,12 +141,12 @@ func main() {
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
 		datadir, err = xdgMkdir(xdg.StateHome, "dex", 0o755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return internalError
 		}
 		mlog.LogAttrs(ctx, slog.LevelInfo, "created data dir", slog.String("path", datadir))
 	}
@@ -147,7 +156,7 @@ func main() {
 	store, err := state.Open(datapath, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open data store: %v\n", err)
-		os.Exit(1)
+		return internalError
 	}
 	defer store.Close()
 
@@ -156,14 +165,14 @@ func main() {
 		store, datadir, log, &level, addSource)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start manager: %v\n", err)
-		os.Exit(1)
+		return internalError
 	}
 	defer sysman.Close()
 
 	funcs, err := mergeFuncs(sysman, log, sys.Funcs, device.Funcs, state.Funcs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to configure kernel plugins: %v\n", err)
-		os.Exit(1)
+		return internalError
 	}
 	sysman.SetFuncs(funcs)
 
@@ -173,7 +182,7 @@ func main() {
 	w, err := config.NewWatcher(ctx, cfgdir, changes, -1, log)
 	if err != nil {
 		mlog.LogAttrs(ctx, slog.LevelError, err.Error())
-		os.Exit(1)
+		os.Exit(internalError)
 	}
 	go w.Watch(ctx)
 
@@ -199,6 +208,7 @@ func main() {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "manager configure error", slog.Any("error", err))
 		}
 	}
+	return success
 }
 
 func xdgMkdir(parent func() (dir string, ok bool), path string, perm fs.FileMode) (dir string, err error) {
