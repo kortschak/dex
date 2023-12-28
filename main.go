@@ -170,14 +170,12 @@ func main() {
 	cfgman := config.NewManager(log)
 
 	changes := make(chan config.Change)
-	go func() {
-		w, err := config.NewWatcher(ctx, cfgdir, changes, -1, log)
-		if err != nil {
-			mlog.LogAttrs(ctx, slog.LevelError, err.Error())
-			os.Exit(1)
-		}
-		w.Watch(ctx)
-	}()
+	w, err := config.NewWatcher(ctx, cfgdir, changes, -1, log)
+	if err != nil {
+		mlog.LogAttrs(ctx, slog.LevelError, err.Error())
+		os.Exit(1)
+	}
+	go w.Watch(ctx)
 
 	for cfg := range changes {
 		if cfg.Err != nil {

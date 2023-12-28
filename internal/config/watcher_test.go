@@ -430,19 +430,23 @@ func TestWatcher(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stream := make(chan Change)
-	go func() {
-		w, err := NewWatcher(ctx, dir, stream, -1, log)
-		if err != nil {
-			t.Errorf("unexpected error returned by Watch: %v", err)
-		}
-		w.Watch(ctx)
-	}()
-
-	for _, op := range operations {
+	for i, op := range operations {
 		err := op.fn(dir)
 		if err != nil {
 			t.Errorf("unexpected error running operation %q: %v", op.name, err)
 		}
+
+		// Defer creation of the watcher until after the first
+		// operation to test Watcher.init by creating already-
+		// present files.
+		if i == 0 {
+			w, err := NewWatcher(ctx, dir, stream, -1, log)
+			if err != nil {
+				t.Errorf("unexpected error returned by Watch: %v", err)
+			}
+			go w.Watch(ctx)
+		}
+
 		timer := time.NewTimer(100 * time.Millisecond)
 		var got Change
 		select {
