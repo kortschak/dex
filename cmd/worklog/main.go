@@ -649,6 +649,7 @@ func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, er
 		ui = os.DirFS(path)
 	}
 	mux.Handle("/", http.FileServer(http.FS(ui)))
+	mux.HandleFunc("/amend/", d.amend(ctx))
 	mux.HandleFunc("/dump/", d.dump(ctx))
 	mux.HandleFunc("/data/", d.dashboardData(ctx))
 	mux.HandleFunc("/summary/", d.summaryData(ctx))
@@ -684,6 +685,50 @@ func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, er
 	cancel := func() { srv.Shutdown(ctx) }
 
 	return addr, cancel, nil
+}
+
+func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		now := time.Now()
+		var buf bytes.Buffer
+		_, err := io.Copy(&buf, req.Body)
+		req.Body.Close()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		switch typ := req.Header.Get("content-type"); typ {
+		case "", "application/json":
+		default:
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("content-type", typ), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		db, ok := d.db.Load().(*store.DB)
+		if !ok {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		var note worklog.Amendment
+		err = json.Unmarshal(buf.Bytes(), &note)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, err = db.AmendEvents(now, &note)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
 }
 
 func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
