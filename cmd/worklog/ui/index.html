@@ -77,7 +77,7 @@ function formatDate(d) {
 
 function formatTime(date){
 	function pad(n){ return n<10 ? '0'+n : n }
-	var y = date.getUTCFullYear();
+	var y = date.getFullYear();
 	var mo = pad(date.getMonth()+1);
 	var d = pad(date.getDate());
 	var h = pad(date.getHours());
@@ -795,7 +795,7 @@ function flowData(data) {
 	}
 	function formatTime(date){
 		function pad(n){ return n<10 ? '0'+n : n }
-		var y = date.getUTCFullYear();
+		var y = date.getFullYear();
 		var mo = pad(date.getMonth()+1);
 		var d = pad(date.getDate());
 		var h = pad(date.getHours());
