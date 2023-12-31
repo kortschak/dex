@@ -8,12 +8,14 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -601,6 +603,59 @@ func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn fu
 		}
 	}
 	return nil
+}
+
+const AmendEvents = `begin transaction;
+	-- ensure we have an amend array.
+	update events set datastr = json_insert(datastr, '$.amend', json('[]'))
+	where
+		starttime < ?5 and endtime > ?4 and bucketrow = (
+			select rowid from buckets where id = ?1
+		);
+	update events set datastr = json_insert(datastr, '$.amend[#]', json_object('time', ?2, 'msg', ?3, 'replace', (
+		-- trim amendments down to original event bounds.
+		select json_group_array(json_replace(value,
+			'$.start', max(starttime, json_extract(value, '$.start')),
+			'$.end', min(endtime, json_extract(value, '$.end'))
+		))
+		from
+			json_each(?6)
+		where
+			json_extract(value, '$.start') < endtime and json_extract(value, '$.end') > starttime
+	)))
+	where
+		starttime < ?5 and endtime > ?4 and bucketrow = (
+			select rowid from buckets where id = ?1
+		);
+commit;`
+
+// AmendEvents adds amendment notes to the data for events in the store
+// overlapping the note. On return the note.Replace slice will be sorted.
+//
+// The SQL command run is [AmendEvents].
+func (db *DB) AmendEvents(ts time.Time, note *worklog.Amendment) (sql.Result, error) {
+	if len(note.Replace) == 0 {
+		return driver.RowsAffected(0), nil
+	}
+	sort.Slice(note.Replace, func(i, j int) bool {
+		return note.Replace[i].Start.Before(note.Replace[j].Start)
+	})
+	start := note.Replace[0].Start
+	end := note.Replace[0].End
+	for i, r := range note.Replace[1:] {
+		if note.Replace[i].End.After(r.Start) {
+			return nil, fmt.Errorf("overlapping replacements: [%d].end (%s) is after [%d].start (%s)",
+				i, note.Replace[i].End.Format(time.RFC3339), i+1, r.Start.Format(time.RFC3339))
+		}
+		if r.End.After(end) {
+			end = r.End
+		}
+	}
+	replace, err := json.Marshal(note.Replace)
+	if err != nil {
+		return nil, err
+	}
+	return db.exec(AmendEvents, db.BucketID(note.Bucket), ts.Format(time.RFC3339Nano), note.Message, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), replace)
 }
 
 const DeleteEvent = `delete from events where bucketrow = (

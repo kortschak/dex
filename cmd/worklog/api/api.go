@@ -75,6 +75,19 @@ type Event struct {
 	Continue *bool          `json:"continue,omitempty"`
 }
 
+type Amendment struct {
+	Bucket  string        `json:"bucket"`
+	Time    time.Time     `json:"time"`
+	Message string        `json:"msg"`
+	Replace []Replacement `json:"replace,omitempty"`
+}
+
+type Replacement struct {
+	Start time.Time      `json:"start"`
+	End   time.Time      `json:"end"`
+	Data  map[string]any `json:"data"`
+}
+
 type Activity struct {
 	Bucket string         `json:"bucket"`
 	Data   map[string]any `json:"data"`

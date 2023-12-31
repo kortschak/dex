@@ -469,7 +469,139 @@ func TestDB(t *testing.T) {
 
 			db.Close()
 		})
+
+		t.Run("amend", func(t *testing.T) {
+			db, err := Open(context.Background(), filepath.Join(workDir, "amend.db"), "")
+			if err != nil {
+				t.Fatalf("failed to create db: %v", err)
+			}
+			db.host = "test_host"
+
+			buckets := []string{
+				`{"id":"window","name":"window-watcher","type":"currentwindow","client":"worklog","hostname":"test_host","created":"2023-06-12T19:54:38Z"}`,
+				`{"id":"afk","name":"afk-watcher","type":"afkstatus","client":"worklog","hostname":"test_host","created":"2023-06-12T19:54:38Z"}`,
+			}
+			for _, msg := range buckets {
+				var b worklog.BucketMetadata
+				err := json.Unmarshal([]byte(msg), &b)
+				if err != nil {
+					t.Fatalf("failed to unmarshal bucket message: %v", err)
+				}
+				_, err = db.CreateBucket(b.ID, b.Name, b.Type, b.Client, b.Created, b.Data)
+				if err != nil {
+					t.Fatalf("failed to create bucket: %v", err)
+				}
+			}
+
+			events := []string{
+				`{"bucket":"window","start":"2023-06-12T19:54:40Z","end":"2023-06-12T19:54:45Z","data":{"app":"Gnome-terminal","title":"Terminal"}}`,
+				`{"bucket":"afk","start":"2023-06-12T19:54:40Z","end":"2023-06-12T19:54:45Z","data":{"afk":false,"locked":false}}`,
+				`{"bucket":"window","start":"2023-06-12T19:54:45Z","end":"2023-06-12T19:54:50Z","data":{"app":"Gnome-terminal","title":"Terminal"}}`,
+				`{"bucket":"afk","start":"2023-06-12T19:54:45Z","end":"2023-06-12T19:54:50Z","data":{"afk":true,"locked":true}}`,
+				`{"bucket":"window","start":"2023-06-12T19:54:50Z","end":"2023-06-12T19:54:55Z","data":{"app":"Gnome-terminal","title":"Terminal"}}`,
+				`{"bucket":"afk","start":"2023-06-12T19:54:50Z","end":"2023-06-12T19:54:55Z","data":{"afk":false,"locked":false}}`,
+				`{"bucket":"window","start":"2023-06-12T19:54:55Z","end":"2023-06-12T19:54:59Z","data":{"app":"Gnome-terminal","title":"Terminal"}}`,
+				`{"bucket":"afk","start":"2023-06-12T19:54:55Z","end":"2023-06-12T19:54:59Z","data":{"afk":true,"locked":true}}`,
+			}
+			for _, msg := range events {
+				var note *worklog.Event
+				err := json.Unmarshal([]byte(msg), &note)
+				if err != nil {
+					t.Fatalf("failed to unmarshal event message: %v", err)
+				}
+				_, err = db.InsertEvent(note)
+				if err != nil {
+					t.Fatalf("failed to insert event: %v", err)
+				}
+			}
+			msg := `{"bucket":"afk","msg":"testing","replace":[{"start":"2023-06-12T19:54:39Z","end":"2023-06-12T19:54:51Z","data":{"afk":true,"locked":true}}]}`
+			var amendment *worklog.Amendment
+			err = json.Unmarshal([]byte(msg), &amendment)
+			if err != nil {
+				t.Fatalf("failed to unmarshal event message: %v", err)
+			}
+			_, err = db.AmendEvents(time.Time{}, amendment)
+			if err != nil {
+				t.Errorf("unexpected error amending events: %v", err)
+			}
+			dump, err := db.Dump()
+			if err != nil {
+				t.Fatalf("failed to dump db: %v", err)
+			}
+			for _, bucket := range dump {
+				for i, event := range bucket.Events {
+					switch event.Bucket {
+					case "window":
+						_, ok := event.Data["amend"]
+						if ok {
+							t.Errorf("unexpected amendment in window event %d: %v", i, event.Data)
+						}
+					case "afk":
+						a, ok := event.Data["amend"]
+						if !ok {
+							for _, r := range amendment.Replace {
+								if overlaps(event.Start, event.End, r.Start, r.End) {
+									t.Errorf("expected amendment for event %d of afk", i)
+									break
+								}
+							}
+							break
+						}
+						var n []worklog.Amendment
+						err = remarshalJSON(&n, a)
+						if err != nil {
+							t.Errorf("unexpected error remarshalling []AmendEvents: %v", err)
+						}
+						if len(n) == 0 {
+							t.Error("unexpected zero-length []AmendEvents")
+						}
+						for _, r := range n[len(n)-1].Replace {
+							if r.Start.Before(event.Start) {
+								t.Errorf("replacement start extends before start of event: %s < %s",
+									r.Start.Format(time.RFC3339), event.Start.Format(time.RFC3339))
+							}
+							if noted, ok := findOverlap(r, amendment.Replace); ok && !r.Start.Equal(event.Start) && !r.Start.Equal(noted.Start) {
+								t.Errorf("non-truncated replacement start was altered: %s != %s",
+									r.Start.Format(time.RFC3339), noted.Start.Format(time.RFC3339))
+							}
+							if r.End.After(event.End) {
+								t.Errorf("replacement end extends beyond end of event: %s > %s",
+									r.End.Format(time.RFC3339), event.End.Format(time.RFC3339))
+							}
+							if noted, ok := findOverlap(r, amendment.Replace); ok && !r.End.Equal(event.End) && !r.End.Equal(noted.End) {
+								t.Errorf("non-truncated replacement end was altered: %s != %s",
+									r.End.Format(time.RFC3339), noted.End.Format(time.RFC3339))
+							}
+						}
+					default:
+						t.Errorf("unexpected event bucket name in event %d of %s: %s", i, bucket.ID, event.Bucket)
+					}
+				}
+			}
+
+			db.Close()
+		})
 	})
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func findOverlap(n worklog.Replacement, h []worklog.Replacement) (worklog.Replacement, bool) {
+	for _, c := range h {
+		if overlaps(n.Start, n.End, c.Start, c.End) {
+			return c, true
+		}
+	}
+	return worklog.Replacement{}, false
+}
+
+func overlaps(as, ae, bs, be time.Time) bool {
+	return ae.After(bs) && as.Before(be)
+}
+func remarshalJSON(dst, src any) error {
+	b, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, dst)
+}
