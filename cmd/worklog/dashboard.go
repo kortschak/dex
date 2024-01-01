@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -242,45 +243,47 @@ func (d *daemon) dayData(ctx context.Context, db *store.DB, rules map[string]map
 					return nil
 				}
 
-				act := map[string]any{
-					"bucket": dstBucket,
-					"data":   m.Data,
-				}
-				note, err := eval[worklog.Activity](rule.prg, act)
-				if err != nil {
-					d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("bucket", srcBucket), slog.Any("error", err), slog.Any("act", act))
-					return nil
-				}
-				if note.Bucket == "" || note.Data == nil {
-					return nil
-				}
-				m.Bucket = srcBucket // Label the source of the activity event.
-				m.Data = note.Data
-
-				wasExtended := false
-				if bucketEvents := dayEvents[note.Bucket]; len(bucketEvents) != 0 {
-					next := bucketEvents[len(bucketEvents)-1]
-					// Compare start with end of previous events. Note that
-					// db.EventsRangeFunc returns events in descending time
-					// order.
-					if next.Start.Equal(m.End) && reflect.DeepEqual(next.Data, m.Data) {
-						bucketEvents[len(bucketEvents)-1].Start = m.Start
-						wasExtended = true
+				for _, m := range d.applyAmendments(ctx, m) {
+					act := map[string]any{
+						"bucket": dstBucket,
+						"data":   m.Data,
 					}
-				}
-				if !wasExtended {
-					dayEvents[note.Bucket] = append(dayEvents[note.Bucket], m)
-				}
-
-				if afk, ok := m.Data["afk"]; ok && afk == false {
-					atKeyboard = append(atKeyboard, m)
-				}
-				if app, ok := m.Data["app"].(string); ok {
-					if !nextApp.Start.IsZero() {
-						transitions.connect(m, nextApp)
+					note, err := eval[worklog.Activity](rule.prg, act)
+					if err != nil {
+						d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("bucket", srcBucket), slog.Any("error", err), slog.Any("act", act))
+						return nil
 					}
-					nextApp = m
-					windowEvents[app] = append(windowEvents[app], m)
+					if note.Bucket == "" || note.Data == nil {
+						return nil
+					}
+					m.Bucket = srcBucket // Label the source of the activity event.
+					m.Data = note.Data
+
+					wasExtended := false
+					if bucketEvents := dayEvents[note.Bucket]; len(bucketEvents) != 0 {
+						next := bucketEvents[len(bucketEvents)-1]
+						// Compare start with end of previous events. Note that
+						// db.EventsRangeFunc returns events in descending time
+						// order.
+						if next.Start.Equal(m.End) && reflect.DeepEqual(next.Data, m.Data) {
+							bucketEvents[len(bucketEvents)-1].Start = m.Start
+							wasExtended = true
+						}
+					}
+					if !wasExtended {
+						dayEvents[note.Bucket] = append(dayEvents[note.Bucket], m)
+					}
+
+					if afk, ok := m.Data["afk"]; ok && afk == false {
+						atKeyboard = append(atKeyboard, m)
+					}
+					if app, ok := m.Data["app"].(string); ok {
+						if !nextApp.Start.IsZero() {
+							transitions.connect(m, nextApp)
+						}
+						nextApp = m
+						windowEvents[app] = append(windowEvents[app], m)
+					}
 				}
 				return nil
 			})
@@ -428,22 +431,24 @@ func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]
 					return nil
 				}
 
-				act := map[string]any{
-					"bucket": dstBucket,
-					"data":   m.Data,
-				}
-				note, err := eval[worklog.Activity](rule.prg, act)
-				if err != nil {
-					d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("src_bucket", srcBucket), slog.Any("dst_bucket", dstBucket), slog.Any("error", err), slog.Any("act", act))
-					return nil
-				}
-				if note.Bucket == "" || note.Data == nil {
-					return nil
-				}
-				m.Data = note.Data
+				for _, m := range d.applyAmendments(ctx, m) {
+					act := map[string]any{
+						"bucket": dstBucket,
+						"data":   m.Data,
+					}
+					note, err := eval[worklog.Activity](rule.prg, act)
+					if err != nil {
+						d.log.LogAttrs(ctx, slog.LevelError, "activity evaluation", slog.Any("src_bucket", srcBucket), slog.Any("dst_bucket", dstBucket), slog.Any("error", err), slog.Any("act", act))
+						return nil
+					}
+					if note.Bucket == "" || note.Data == nil {
+						return nil
+					}
+					m.Data = note.Data
 
-				if afk, ok := m.Data["afk"]; ok && afk == false {
-					atKeyboard = append(atKeyboard, m)
+					if afk, ok := m.Data["afk"]; ok && afk == false {
+						atKeyboard = append(atKeyboard, m)
+					}
 				}
 				return nil
 			})
@@ -461,6 +466,238 @@ func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]
 func zoneTranslatedTime(t time.Time, loc *time.Location) time.Time {
 	year, month, day := t.Date()
 	return time.Date(year, month, day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
+}
+
+// applyAmendments applies any amend replacements in e.Data to e, expanding
+// the set of events as necessary. The returned events are sorted in descending
+// order by end to match the behaviour of db.EventsRangeFunc.
+func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog.Event {
+	amend := d.getAmendments(ctx, e)
+	if amend == nil {
+		return []worklog.Event{e}
+	}
+	delete(e.Data, "amend")
+	d.log.LogAttrs(ctx, slog.LevelDebug, "apply amendments", slog.Any("event", e), slog.Any("amend", amend))
+	replace := d.mergeAmendments(ctx, amend)
+	d.log.LogAttrs(ctx, slog.LevelDebug, "apply replacements", slog.Any("event", e), slog.Any("replace", replace))
+	var events []worklog.Event
+	for _, r := range replace {
+		if !e.End.After(e.Start) {
+			break
+		}
+		if !r.End.After(r.Start) {
+			continue
+		}
+		r := replacement(r)
+		w := worklogEvent(e)
+		switch {
+		case r.before(w):
+			// Look in next replacement.
+		case r.after(w):
+			// Done; no more replacements will match.
+		case r.overlapAll(w):
+			// Complete overlap; replace data and done.
+			// r:   ~~~~~~~~~~~~~~~
+			// w:     ~~~~~~~~~~~
+			//
+			// a:     ~~~~~~~~~~~
+
+			e.Data = r.Data
+			return append(events, e)
+		case r.overlapLeftOf(w):
+			// Replace left data and truncate rightward.
+			// r:   ~~~~~~~~~~~~~~~
+			// w:           ~~~~~~~~~~~~~~~
+			//
+			// a:           ~~~~~~~
+			// e:                  ~~~~~~~~
+
+			// I don't think this can be hit, but I haven't proven it.
+			// So leaving in.
+
+			left := e
+			left.End = r.Start
+			left.Data = r.Data
+			events = append(events, left)
+			e.Start = r.End
+		case r.overlapRightOf(w):
+			// Replace right data and truncate leftward.
+			// r:           ~~~~~~~~~~~~~~~
+			// w:   ~~~~~~~~~~~~~~~
+			//
+			// e:   ~~~~~~~~
+			// a:           ~~~~~~~
+
+			// I don't think this can be hit, but I haven't proven it.
+			// So leaving in.
+
+			right := e
+			right.Start = r.End
+			right.Data = r.Data
+			e.End = r.Start
+			if e.End.Before(e.Start) {
+				events = append(events, e)
+			}
+			events = append(events, right)
+			return events
+		case r.overlapIn(w):
+			// Overlap in the centre, complete overlap already covered;
+			// replace central data and truncate left and right.
+			// r:     ~~~~~~~~~~~
+			// w:   ~~~~~~~~~~~~~~~
+			//
+			// l:   ~~
+			// m:     ~~~~~~~~~~~
+			// e:                ~~
+
+			left := e
+			left.End = r.Start
+			if left.End.After(left.Start) {
+				events = append(events, left)
+			}
+
+			middle := e
+			middle.Start = r.Start
+			middle.End = r.End
+			middle.Data = r.Data
+			events = append(events, middle)
+
+			e.Start = r.End
+		default:
+			d.log.LogAttrs(ctx, slog.LevelError, "apply amendments", slog.Any("event", e), slog.Any("replace", r))
+			panic("unreachable")
+		}
+	}
+	if e.End.After(e.Start) {
+		events = append(events, e)
+	}
+	sort.Slice(events, func(i int, j int) bool {
+		return events[i].End.After(events[j].End)
+	})
+	return events
+}
+
+type worklogEvent worklog.Event
+
+func (e worklogEvent) start() time.Time { return e.Start }
+func (e worklogEvent) end() time.Time   { return e.End }
+
+// getAmendments returns the amendments in e.Data.
+func (d *daemon) getAmendments(ctx context.Context, e worklog.Event) []worklog.Amendment {
+	a, ok := e.Data["amend"]
+	if !ok {
+		return nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		d.log.LogAttrs(ctx, slog.LevelWarn, "get amendments", slog.Any("error", err))
+		return nil
+	}
+	var amendments []worklog.Amendment
+	err = json.Unmarshal(b, &amendments)
+	if err != nil {
+		d.log.LogAttrs(ctx, slog.LevelWarn, "get amendments", slog.Any("error", err))
+		return nil
+	}
+	return amendments
+}
+
+func (d *daemon) mergeAmendments(ctx context.Context, a []worklog.Amendment) []worklog.Replacement {
+	var m []worklog.Replacement
+	for i := len(a) - 1; i >= 0; i-- {
+		replacements := a[i].Replace
+		sort.Slice(replacements, func(i int, j int) bool {
+			return replacements[i].Start.Before(replacements[j].Start)
+		})
+		for _, r := range replacements {
+			m = d.mergeReplacements(ctx, m, r)
+		}
+	}
+	return m
+}
+
+func (d *daemon) mergeReplacements(ctx context.Context, merged []worklog.Replacement, r worklog.Replacement) []worklog.Replacement {
+	if len(merged) == 0 {
+		return []worklog.Replacement{r}
+	}
+	w := replacement(r)
+	for i := 0; i < len(merged); i++ {
+		if !w.End.After(w.Start) {
+			return merged
+		}
+		e := replacement(merged[i])
+		switch {
+		case w.before(e):
+			// This depends on the invariant that w is has no overlap
+			// with the previous element of merged. Either i is 0 or
+			// we have already trimmed w.
+			return slices.Insert(merged, i, worklog.Replacement(w))
+		case w.after(e):
+			if i == len(merged)-1 {
+				return append(merged, worklog.Replacement(w))
+			}
+			i++
+			left := worklog.Replacement(w)
+			if left.End.After(merged[i].Start) {
+				left.End = merged[i].Start
+				// Jump past the overlap. This may make the duration of w
+				// negative; it is caught next iteration.
+				w.Start = merged[i].End
+			}
+			merged = slices.Insert(merged, i, left)
+		case w.overlapIn(e):
+			// w is completely masked by existing element in merged.
+			return merged
+		case w.overlapLeftOf(e):
+			// I don't think this can be hit, but I haven't proven it.
+			// So leaving in.
+
+			left := worklog.Replacement(w)
+			left.End = e.Start
+			// Jump past the overlap. This may make the duration of w
+			// negative; it is caught next iteration.
+			w.Start = e.End
+			merged = slices.Insert(merged, i, left)
+			i++
+		case w.overlapRightOf(e):
+			// Trim and re-check against current e.
+			w.Start = e.End
+			i--
+		default:
+			d.log.LogAttrs(ctx, slog.LevelError, "merge replacements", slog.Any("next", w), slog.Any("current", e), slog.Any("merged", merged))
+			panic("unreachable")
+		}
+	}
+	return merged
+}
+
+type replacement worklog.Replacement
+
+type interval interface {
+	start() time.Time
+	end() time.Time
+}
+
+func (r replacement) start() time.Time { return r.Start }
+func (r replacement) end() time.Time   { return r.End }
+
+func (r replacement) before(o interval) bool {
+	return r.Start.Before(o.start()) && !r.End.After(o.start())
+}
+func (r replacement) after(o interval) bool {
+	return !r.Start.Before(o.end()) && r.End.After(o.end())
+}
+func (r replacement) overlapIn(o interval) bool {
+	return !r.Start.Before(o.start()) && !r.End.After(o.end())
+}
+func (r replacement) overlapLeftOf(o interval) bool {
+	return r.Start.Before(o.start()) && r.End.After(o.start())
+}
+func (r replacement) overlapRightOf(o interval) bool {
+	return r.Start.Before(o.end()) && r.End.After(o.end())
+}
+func (r replacement) overlapAll(o interval) bool {
+	return !r.Start.After(o.start()) && !r.End.Before(o.end())
 }
 
 // mergeIntervals returns the intervals in events sorted and merged so that

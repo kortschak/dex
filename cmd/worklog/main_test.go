@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
 	"github.com/rogpeppe/go-internal/testscript"
 	"golang.org/x/sys/execabs"
@@ -511,4 +512,827 @@ func generateData(ts *testscript.TestScript, neg bool, args []string) {
 	err = enc.Encode(buckets)
 	ts.Check(err)
 	ts.Check(os.WriteFile(ts.MkAbs(path), buf.Bytes(), 0o640))
+}
+
+var amendmentTests = []struct {
+	name  string
+	event worklog.Event
+	want  []worklog.Event
+}{
+	{
+		name: "none",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+			},
+		},
+		want: []worklog.Event{{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+			},
+		}},
+	},
+	{
+		name: "before",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{{
+						Start: time.Date(2024, time.January, 1, 7, 15, 0, 0, time.UTC),
+						End:   time.Date(2024, time.January, 1, 8, 15, 0, 0, time.UTC),
+						Data: map[string]any{
+							"key": "new_value",
+						},
+					}},
+				}},
+			},
+		},
+		want: []worklog.Event{{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+			},
+		}},
+	},
+	{
+		name: "after",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{{
+						Start: time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+						End:   time.Date(2024, time.January, 1, 12, 15, 0, 0, time.UTC),
+						Data: map[string]any{
+							"key": "new_value",
+						},
+					}},
+				}},
+			},
+		},
+		want: []worklog.Event{{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+			},
+		}},
+	},
+	{
+		name: "cover",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{{
+						Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+						End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+						Data: map[string]any{
+							"key": "new_value",
+						},
+					}},
+				}},
+			},
+		},
+		want: []worklog.Event{{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "new_value",
+			},
+		}},
+	},
+	{
+		name: "left",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{{
+						Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+						End:   time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+						Data: map[string]any{
+							"key": "new_value",
+						},
+					}},
+				}},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value",
+				},
+			},
+		},
+	},
+	{
+		name: "right",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{{
+						Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+						End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+						Data: map[string]any{
+							"key": "new_value",
+						},
+					}},
+				}},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "middle",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{{
+						Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+						End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+						Data: map[string]any{
+							"key": "new_value",
+						},
+					}},
+				}},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "outer",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{{
+					Bucket:  "test",
+					Message: "test",
+					Replace: []worklog.Replacement{
+						{
+							Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value",
+							},
+						},
+						{
+							Start: time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value",
+							},
+						},
+					},
+				}},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_middle_then_left",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_middle",
+							},
+						}},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_left",
+							},
+						}},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_middle",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_left",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_right_then_before",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_right",
+							},
+						}},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_left",
+							},
+						}},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_right",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_left",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_right_then_before_overlapping",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_right",
+							},
+						}},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_left",
+							},
+						}},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_right",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_left",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_left_then_after",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_left",
+							},
+						}},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_right",
+							},
+						}},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_right",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_left",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_left_then_before_and_after",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{
+							{
+								Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+								End:   time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+								Data: map[string]any{
+									"key": "new_value_middle",
+								},
+							},
+						},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{
+							{
+								Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+								End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+								Data: map[string]any{
+									"key": "new_value_left",
+								},
+							},
+							{
+								Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+								End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+								Data: map[string]any{
+									"key": "new_value_right",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_right",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_middle",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_left",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_left_and_right_then_long_between",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{
+							{
+								Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+								End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+								Data: map[string]any{
+									"key": "new_value_left",
+								},
+							},
+							{
+								Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
+								End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+								Data: map[string]any{
+									"key": "new_value_right",
+								},
+							},
+						},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{
+							{
+								Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+								End:   time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
+								Data: map[string]any{
+									"key": "new_value_middle",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_right",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_middle",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_left",
+				},
+			},
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "value",
+				},
+			},
+		},
+	},
+	{
+		name: "two_layer_middle_then_cover",
+		event: worklog.Event{
+			Bucket: "test",
+			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			Data: map[string]any{
+				"key": "value",
+				"amend": []worklog.Amendment{
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_middle",
+							},
+						}},
+					},
+					{
+						Bucket:  "test",
+						Message: "test",
+						Replace: []worklog.Replacement{{
+							Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+							End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+							Data: map[string]any{
+								"key": "new_value_cover",
+							},
+						}},
+					},
+				},
+			},
+		},
+		want: []worklog.Event{
+			{
+				Bucket: "test",
+				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+				Data: map[string]any{
+					"key": "new_value_cover",
+				},
+			},
+		},
+	},
+}
+
+func TestAmendments(t *testing.T) {
+	for _, test := range amendmentTests {
+		t.Run(test.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			log := slog.New(slogext.NewJSONHandler(&buf, &slogext.HandlerOptions{
+				Level: slog.LevelDebug,
+			}))
+			d := daemon{log: log}
+			got := d.applyAmendments(context.Background(), test.event)
+			if !cmp.Equal(test.want, got) {
+				t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(test.want, got))
+			}
+			t.Logf("log:\n%s", &buf)
+		})
+	}
 }
