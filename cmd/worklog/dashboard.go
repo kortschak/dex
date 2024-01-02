@@ -476,6 +476,7 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 	if amend == nil {
 		return []worklog.Event{e}
 	}
+	orig := e
 	delete(e.Data, "amend")
 	d.log.LogAttrs(ctx, slog.LevelDebug, "apply amendments", slog.Any("event", e), slog.Any("amend", amend))
 	replace := d.mergeAmendments(ctx, amend)
@@ -565,7 +566,11 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 			e.Start = r.End
 		default:
 			d.log.LogAttrs(ctx, slog.LevelError, "apply amendments", slog.Any("event", e), slog.Any("replace", r))
-			panic("unreachable")
+			if d.log.Enabled(ctx, slog.LevelDebug-1) {
+				// Only panic when running at DEBUG-1 or lower.
+				panic("unreachable")
+			}
+			return []worklog.Event{orig}
 		}
 	}
 	if e.End.After(e.Start) {
@@ -602,6 +607,8 @@ func (d *daemon) getAmendments(ctx context.Context, e worklog.Event) []worklog.A
 	return amendments
 }
 
+// mergeAmendmets merges all replacements in a into a set of linear replacements
+// with later amendments' replacements taking priority.
 func (d *daemon) mergeAmendments(ctx context.Context, a []worklog.Amendment) []worklog.Replacement {
 	var m []worklog.Replacement
 	for i := len(a) - 1; i >= 0; i-- {
@@ -609,21 +616,28 @@ func (d *daemon) mergeAmendments(ctx context.Context, a []worklog.Amendment) []w
 		sort.Slice(replacements, func(i int, j int) bool {
 			return replacements[i].Start.Before(replacements[j].Start)
 		})
+		var ok bool
 		for _, r := range replacements {
-			m = d.mergeReplacements(ctx, m, r)
+			m, ok = d.mergeReplacements(ctx, m, r)
+			if !ok {
+				return nil
+			}
 		}
 	}
 	return m
 }
 
-func (d *daemon) mergeReplacements(ctx context.Context, merged []worklog.Replacement, r worklog.Replacement) []worklog.Replacement {
+// mergeReplacements merges r into merged, extending merged if necessary.
+// If an internal inconsistency is found, ok is returned false, unless the
+// daemon's log level is lower than DEBUG in which case it will panic.
+func (d *daemon) mergeReplacements(ctx context.Context, merged []worklog.Replacement, r worklog.Replacement) (_ []worklog.Replacement, ok bool) {
 	if len(merged) == 0 {
-		return []worklog.Replacement{r}
+		return []worklog.Replacement{r}, true
 	}
 	w := replacement(r)
 	for i := 0; i < len(merged); i++ {
 		if !w.End.After(w.Start) {
-			return merged
+			return merged, true
 		}
 		e := replacement(merged[i])
 		switch {
@@ -631,10 +645,10 @@ func (d *daemon) mergeReplacements(ctx context.Context, merged []worklog.Replace
 			// This depends on the invariant that w is has no overlap
 			// with the previous element of merged. Either i is 0 or
 			// we have already trimmed w.
-			return slices.Insert(merged, i, worklog.Replacement(w))
+			return slices.Insert(merged, i, worklog.Replacement(w)), true
 		case w.after(e):
 			if i == len(merged)-1 {
-				return append(merged, worklog.Replacement(w))
+				return append(merged, worklog.Replacement(w)), true
 			}
 			i++
 			left := worklog.Replacement(w)
@@ -647,7 +661,7 @@ func (d *daemon) mergeReplacements(ctx context.Context, merged []worklog.Replace
 			merged = slices.Insert(merged, i, left)
 		case w.overlapIn(e):
 			// w is completely masked by existing element in merged.
-			return merged
+			return merged, true
 		case w.overlapLeftOf(e):
 			// I don't think this can be hit, but I haven't proven it.
 			// So leaving in.
@@ -665,10 +679,14 @@ func (d *daemon) mergeReplacements(ctx context.Context, merged []worklog.Replace
 			i--
 		default:
 			d.log.LogAttrs(ctx, slog.LevelError, "merge replacements", slog.Any("next", w), slog.Any("current", e), slog.Any("merged", merged))
-			panic("unreachable")
+			if d.log.Enabled(ctx, slog.LevelDebug-1) {
+				// Only panic when running at DEBUG-1 or lower.
+				panic("unreachable")
+			}
+			return nil, false
 		}
 	}
-	return merged
+	return merged, true
 }
 
 type replacement worklog.Replacement

@@ -228,7 +228,7 @@ func mergeAfk() int {
 		logDst = os.Stderr
 	}
 	log := slog.New(slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
-		Level:     slog.LevelDebug,
+		Level:     slog.LevelDebug - 1,
 		AddSource: addSource,
 	}))
 
@@ -359,7 +359,7 @@ func dashboardData() int {
 		logDst = os.Stderr
 	}
 	log := slog.New(slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
-		Level:     slog.LevelDebug,
+		Level:     slog.LevelDebug - 1,
 		AddSource: addSource,
 	}))
 
@@ -1325,7 +1325,7 @@ func TestAmendments(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			log := slog.New(slogext.NewJSONHandler(&buf, &slogext.HandlerOptions{
-				Level: slog.LevelDebug,
+				Level: slog.LevelDebug - 1,
 			}))
 			d := daemon{log: log}
 			got := d.applyAmendments(context.Background(), test.event)
