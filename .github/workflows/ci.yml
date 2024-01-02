@@ -47,6 +47,7 @@ jobs:
     - name: unit tests
       run: |
         go test ./rpc ./internal/... ./cmd/*/api ./cmd/worklog/store
+        go test -run 'Test(Amendments|Continuation|DashboardData)$' ./cmd/worklog
 
     - name: integration tests
       run: |
