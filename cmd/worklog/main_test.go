@@ -309,7 +309,7 @@ func dashboardData() int {
 	}
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
 	raw := flag.Bool("raw", false, "collect raw event data")
-	datePath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
+	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	tz := flag.String("tz", "", "timezone for date")
 	verbose := flag.Bool("verbose", false, "print full logging")
 	flag.Parse()
@@ -317,7 +317,7 @@ func dashboardData() int {
 		flag.Usage()
 		return 2
 	}
-	if *datePath == "" {
+	if *dataPath == "" {
 		flag.Usage()
 		return 2
 	}
@@ -326,7 +326,7 @@ func dashboardData() int {
 		return 2
 	}
 
-	data, err := os.ReadFile(*datePath)
+	data, err := os.ReadFile(*dataPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
