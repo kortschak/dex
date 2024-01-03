@@ -394,27 +394,27 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 		"start": start,
 		"end":   end,
 	}
-	yearAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
+	atKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
 	if err != nil {
 		return events, err
 	}
 	if raw {
-		events["year"] = map[string]any{
-			"at_keyboard": mergeIntervals(yearAtKeyboard),
+		events["period"] = map[string]any{
+			"at_keyboard": mergeIntervals(atKeyboard),
 		}
 		return events, nil
 	}
-	yearHours := make(map[string]float64)
-	var yearTotalHours float64
-	for _, a := range mergeIntervals(yearAtKeyboard) {
-		yearTotalHours += a.End.Sub(a.Start).Hours()
+	periodHours := make(map[string]float64)
+	var periodTotalHours float64
+	for _, a := range mergeIntervals(atKeyboard) {
+		periodTotalHours += a.End.Sub(a.Start).Hours()
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
-			yearHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
+			periodHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
 		}
 	}
-	events["year"] = map[string]any{
-		"hours":       yearHours,
-		"total_hours": yearTotalHours,
+	events["period"] = map[string]any{
+		"hours":       periodHours,
+		"total_hours": periodTotalHours,
 	}
 
 	return events, nil
