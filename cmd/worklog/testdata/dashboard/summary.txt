@@ -1,0 +1,132 @@
+gen_testdata -cen 2023-12-31 -tz +10:30 -radius 7 -tmplt template.json data.json
+
+summary_data -rules rules.toml -data data.json dates:?tz=%2b10:30&start=2023-07-01&end=2024-06-30
+cmp stdout want.json
+
+-- rules.toml --
+[afk.afk]
+src = """
+{
+	"bucket": bucket,
+	"data":   data,
+}
+"""
+[afk.locked]
+src = """
+{
+	"bucket": bucket,
+	"data":   {
+		"activity": data.locked ? "locked" : "not-locked",
+		"afk":      data.locked,
+	},
+}
+"""
+-- template.json --
+{
+	"buckets": {
+		"afk": {
+			"id": "afk_localhost",
+			"name": "afk",
+			"type": "afk",
+			"client": "worklog",
+			"hostname": "localhost",
+			"created": "0001-01-01T00:00:00Z"
+		},
+		"window": {
+			"id": "window_localhost",
+			"name": "window",
+			"type": "window",
+			"client": "worklog",
+			"hostname": "localhost",
+			"created": "0001-01-01T00:00:00Z"
+		}
+	},
+	"offsets": [
+		0,
+		3600000000000,
+		82800000000000
+	],
+	"pattern": [
+		{
+			"duration": 360000000000,
+			"afk": {
+				"afk": true,
+				"locked": true
+			}
+		},
+		{
+			"duration": 360000000000,
+			"afk": {
+				"afk": false,
+				"locked": false
+			},
+			"window": {
+				"app": "terminal",
+				"title": "Terminal"
+			}
+		},
+		{
+			"afk": {
+				"afk": false,
+				"locked": false
+			},
+			"window": {
+				"app": "terminal",
+				"title": "Terminal"
+			}
+		},
+		{
+			"duration": 360000000000,
+			"afk": {
+				"afk": false,
+				"locked": false
+			},
+			"window": {
+				"app": "editor",
+				"title": "Text Editor"
+			}
+		},
+		{
+			"duration": 360000000000,
+			"afk": {
+				"afk": true,
+				"locked": false
+			},
+			"window": {
+				"app": "terminal",
+				"title": "Terminal"
+			}
+		},
+		{
+			"duration": 360000000000,
+			"afk": {
+				"afk": true,
+				"locked": true
+			}
+		}
+	]
+}
+-- want.json --
+{
+	"end": "2024-06-30T23:59:59.999999999+10:30",
+	"start": "2023-07-01T00:00:00+10:30",
+	"year": {
+		"hours": {
+			"2023-12-24": 0.8999999999999999,
+			"2023-12-25": 0.8999999999999999,
+			"2023-12-26": 0.8999999999999999,
+			"2023-12-27": 0.8999999999999999,
+			"2023-12-28": 0.8999999999999999,
+			"2023-12-29": 0.8999999999999999,
+			"2023-12-30": 0.8999999999999999,
+			"2023-12-31": 0.8999999999999999,
+			"2024-01-01": 0.8999999999999999,
+			"2024-01-02": 0.8999999999999999,
+			"2024-01-03": 0.8999999999999999,
+			"2024-01-04": 0.8999999999999999,
+			"2024-01-05": 0.8999999999999999,
+			"2024-01-06": 0.8999999999999999
+		},
+		"total_hours": 12.600000000000009
+	}
+}

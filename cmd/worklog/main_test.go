@@ -173,6 +173,7 @@ func TestMain(m *testing.M) {
 	os.Exit(testscript.RunMain(m, map[string]func() int{
 		"merge_afk":      mergeAfk,
 		"dashboard_data": dashboardData,
+		"summary_data":   summaryData,
 	}))
 }
 
@@ -359,6 +360,73 @@ func dashboardData() int {
 	}
 
 	events, err := d.eventData(ctx, db, rules, date, *raw)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
+		return 1
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "\t")
+	err = enc.Encode(events)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to encode events: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func summaryData() int {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
+
+  %[1]s [-verbose] -rules <rules.toml> -raw <bool> -data <dump.json> <date range URI>
+
+`, os.Args[0])
+		flag.PrintDefaults()
+	}
+	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
+	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
+	verbose := flag.Bool("verbose", false, "print full logging")
+	flag.Parse()
+	if *rulesPath == "" {
+		flag.Usage()
+		return 2
+	}
+	if *dataPath == "" {
+		flag.Usage()
+		return 2
+	}
+	if flag.NArg() != 1 || flag.Arg(0) == "" {
+		flag.Usage()
+		return 2
+	}
+
+	data, err := os.ReadFile(*dataPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	ruleBytes, err := os.ReadFile(*rulesPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+
+	start, end, err := dateRangeQuery(flag.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse date range: %v\n", err)
+		return 2
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, data, ruleBytes)
+	defer db.Close()
+	if status != 0 {
+		return status
+	}
+
+	events, err := d.rangeSummary(ctx, db, rules, start, end)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
 		return 1
