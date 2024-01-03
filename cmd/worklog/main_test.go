@@ -385,6 +385,7 @@ func summaryData() int {
 		flag.PrintDefaults()
 	}
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
+	raw := flag.Bool("raw", false, "collect raw summary data")
 	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	verbose := flag.Bool("verbose", false, "print full logging")
 	flag.Parse()
@@ -426,7 +427,7 @@ func summaryData() int {
 		return status
 	}
 
-	events, err := d.rangeSummary(ctx, db, rules, start, end)
+	events, err := d.rangeSummary(ctx, db, rules, start, end, *raw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
 		return 1

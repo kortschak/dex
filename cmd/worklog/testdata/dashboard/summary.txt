@@ -1,6 +1,6 @@
 gen_testdata -cen 2023-12-31 -tz +10:30 -radius 7 -tmplt template.json data.json
 
-summary_data -rules rules.toml -data data.json dates:?tz=%2b10:30&start=2023-07-01&end=2024-06-30
+summary_data -rules rules.toml -raw=false -data data.json dates:?tz=%2b10:30&start=2023-07-01&end=2024-06-30
 cmp stdout want.json
 
 -- rules.toml --

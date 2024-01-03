@@ -86,14 +86,6 @@ func dateQuery(u *url.URL) (time.Time, error) {
 	return time.ParseInLocation(time.DateOnly, d, loc)
 }
 
-func rawQuery(u *url.URL) (bool, error) {
-	r := u.Query().Get("raw")
-	if r == "" {
-		return false, nil
-	}
-	return strconv.ParseBool(r)
-}
-
 func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time, raw bool) (map[string]any, error) {
 	if raw {
 		return d.rawEventData(ctx, db, rules, date)
@@ -309,6 +301,12 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 			fmt.Fprintf(w, `{"error":%q}`, err)
 			return
 		}
+		raw, err := rawQuery(req.URL)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		db, ok := d.db.Load().(*store.DB)
 		if !ok {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
@@ -321,7 +319,7 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		events, err := d.rangeSummary(ctx, db, rules, start, end)
+		events, err := d.rangeSummary(ctx, db, rules, start, end, raw)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -383,7 +381,15 @@ func locationFor(tz string) (*time.Location, error) {
 	return nil, errors.Join(errs[:]...)
 }
 
-func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) (map[string]any, error) {
+func rawQuery(u *url.URL) (bool, error) {
+	r := u.Query().Get("raw")
+	if r == "" {
+		return false, nil
+	}
+	return strconv.ParseBool(r)
+}
+
+func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool) (map[string]any, error) {
 	events := map[string]any{
 		"start": start,
 		"end":   end,
@@ -391,6 +397,12 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 	yearAtKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
 	if err != nil {
 		return events, err
+	}
+	if raw {
+		events["year"] = map[string]any{
+			"at_keyboard": mergeIntervals(yearAtKeyboard),
+		}
+		return events, nil
 	}
 	yearHours := make(map[string]float64)
 	var yearTotalHours float64
