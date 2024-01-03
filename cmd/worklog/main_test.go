@@ -321,7 +321,7 @@ func dashboardData() int {
 		flag.Usage()
 		return 2
 	}
-	if len(flag.Args()) != 1 || flag.Args()[0] == "" {
+	if flag.NArg() != 1 || flag.Arg(0) == "" {
 		flag.Usage()
 		return 2
 	}
