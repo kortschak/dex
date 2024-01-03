@@ -350,60 +350,15 @@ func dashboardData() int {
 		return 2
 	}
 
-	var (
-		level     slog.LevelVar
-		addSource = slogext.NewAtomicBool(*lines)
-		logDst    = io.Discard
-	)
-	if *verbose {
-		logDst = os.Stderr
-	}
-	log := slog.New(slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
-		Level:     slog.LevelDebug - 1,
-		AddSource: addSource,
-	}))
-
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
-	err = d.openDB(ctx, nil, "db.sqlite3", "localhost")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
-		return 1
-	}
-	db := d.db.Load().(*store.DB)
+	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, data, ruleBytes)
 	defer db.Close()
-	d.configureDB(ctx, db)
-
-	var buckets []worklog.BucketMetadata
-	err = json.Unmarshal(data, &buckets)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to unmarshal db dump: %v\n", err)
-		return 1
-	}
-	err = db.Load(buckets)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load db dump: %v\n", err)
-		return 1
+	if status != 0 {
+		return status
 	}
 
-	var rules map[string]map[string]worklog.WebRule
-	err = toml.Unmarshal(ruleBytes, &rules)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to unmarshal rules: %v\n", err)
-		return 1
-	}
-	d.configureWebRule(ctx, rules)
-
-	var webRules map[string]map[string]ruleDetail
-	switch rules := d.dashboardRules.Load().(type) {
-	case map[string]map[string]ruleDetail:
-		webRules = rules
-	default:
-		fmt.Fprintf(os.Stderr, "invalid web rule type: %T\n", rules)
-		return 1
-	}
-	events, err := d.eventData(ctx, db, webRules, date, *raw)
+	events, err := d.eventData(ctx, db, rules, date, *raw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
 		return 1
@@ -417,6 +372,60 @@ func dashboardData() int {
 		return 1
 	}
 	return 0
+}
+
+func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, data []byte, ruleBytes []byte) (*daemon, *store.DB, map[string]map[string]ruleDetail, int) {
+	var (
+		level     slog.LevelVar
+		addSource = slogext.NewAtomicBool(*lines)
+		logDst    = io.Discard
+	)
+	if verbose {
+		logDst = os.Stderr
+	}
+	log := slog.New(slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
+		Level:     slog.LevelDebug - 1,
+		AddSource: addSource,
+	}))
+
+	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
+	err := d.openDB(ctx, nil, "db.sqlite3", "localhost")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
+		return nil, nil, nil, 1
+	}
+	db := d.db.Load().(*store.DB)
+	d.configureDB(ctx, db)
+
+	var buckets []worklog.BucketMetadata
+	err = json.Unmarshal(data, &buckets)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal db dump: %v\n", err)
+		return nil, nil, nil, 1
+	}
+	err = db.Load(buckets)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load db dump: %v\n", err)
+		return nil, nil, nil, 1
+	}
+
+	var rules map[string]map[string]worklog.WebRule
+	err = toml.Unmarshal(ruleBytes, &rules)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal rules: %v\n", err)
+		return nil, nil, nil, 1
+	}
+	d.configureWebRule(ctx, rules)
+
+	var webRules map[string]map[string]ruleDetail
+	switch rules := d.dashboardRules.Load().(type) {
+	case map[string]map[string]ruleDetail:
+		webRules = rules
+	default:
+		fmt.Fprintf(os.Stderr, "invalid web rule type: %T\n", rules)
+		return nil, nil, nil, 1
+	}
+	return d, db, webRules, 0
 }
 
 func generateData(ts *testscript.TestScript, neg bool, args []string) {
