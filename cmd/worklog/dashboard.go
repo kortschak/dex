@@ -390,13 +390,13 @@ func rawQuery(u *url.URL) (bool, error) {
 }
 
 type summary struct {
+	Start  time.Time `json:"start"`
 	End    time.Time `json:"end"`
 	Period struct {
 		AtKeyboard []worklog.Event    `json:"at_keyboard,omitempty"`
 		Hours      map[string]float64 `json:"hours,omitempty"`
 		TotalHours float64            `json:"total_hours,omitempty"`
 	} `json:"period"`
-	Start time.Time `json:"start"`
 }
 
 func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool) (summary, error) {
