@@ -171,9 +171,10 @@ func TestDaemon(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"merge_afk":      mergeAfk,
-		"dashboard_data": dashboardData,
-		"summary_data":   summaryData,
+		"merge_afk":          mergeAfk,
+		"dashboard_data":     dashboardData,
+		"summary_data":       summaryData,
+		"merge_summary_data": mergeSummaryData,
 	}))
 }
 
@@ -303,13 +304,14 @@ func dashboardData() int {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
 
-  %[1]s [-verbose] -rules <rules.toml> -raw <bool> -data <dump.json> <date>
+  %[1]s [-verbose] -rules <rules.toml> -raw <bool> [-db <db.sqlite3>] -data <dump.json> <date>
 
 `, os.Args[0])
 		flag.PrintDefaults()
 	}
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
 	raw := flag.Bool("raw", false, "collect raw event data")
+	dbName := flag.String("db", "db.sqlite3", "db filename")
 	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	tz := flag.String("tz", "", "timezone for date")
 	verbose := flag.Bool("verbose", false, "print full logging")
@@ -353,11 +355,11 @@ func dashboardData() int {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, data, ruleBytes)
-	defer db.Close()
+	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, *dbName, data, ruleBytes)
 	if status != 0 {
 		return status
 	}
+	defer db.Close()
 
 	events, err := d.eventData(ctx, db, rules, date, *raw)
 	if err != nil {
@@ -379,13 +381,14 @@ func summaryData() int {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
 
-  %[1]s [-verbose] -rules <rules.toml> -raw <bool> -data <dump.json> <date range URI>
+  %[1]s [-verbose] -rules <rules.toml> -raw <bool> [-db <db.sqlite3>] -data <dump.json> <date range URI>
 
 `, os.Args[0])
 		flag.PrintDefaults()
 	}
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
 	raw := flag.Bool("raw", false, "collect raw summary data")
+	dbName := flag.String("db", "db.sqlite3", "db filename")
 	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	verbose := flag.Bool("verbose", false, "print full logging")
 	flag.Parse()
@@ -421,11 +424,11 @@ func summaryData() int {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, data, ruleBytes)
-	defer db.Close()
+	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, *dbName, data, ruleBytes)
 	if status != 0 {
 		return status
 	}
+	defer db.Close()
 
 	events, err := d.rangeSummary(ctx, db, rules, start, end, *raw)
 	if err != nil {
@@ -443,7 +446,50 @@ func summaryData() int {
 	return 0
 }
 
-func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, data []byte, ruleBytes []byte) (*daemon, *store.DB, map[string]map[string]ruleDetail, int) {
+func mergeSummaryData() int {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
+
+  %[1]s [<data.json> ...]
+
+`, os.Args[0])
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	summaries := make([]summary, 0, flag.NArg())
+	for _, p := range flag.Args() {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		var s summary
+		err = json.Unmarshal(data, &s)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		summaries = append(summaries, s)
+	}
+
+	events, err := mergeSummaries(summaries)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
+		return 1
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "\t")
+	err = enc.Encode(events)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to encode events: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, dbName string, data []byte, ruleBytes []byte) (*daemon, *store.DB, map[string]map[string]ruleDetail, int) {
 	var (
 		level     slog.LevelVar
 		addSource = slogext.NewAtomicBool(*lines)
@@ -458,7 +504,7 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 	}))
 
 	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
-	err := d.openDB(ctx, nil, "db.sqlite3", "localhost")
+	err := d.openDB(ctx, nil, dbName, "localhost")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
 		return nil, nil, nil, 1

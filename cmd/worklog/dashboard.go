@@ -389,19 +389,27 @@ func rawQuery(u *url.URL) (bool, error) {
 	return strconv.ParseBool(r)
 }
 
-func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool) (map[string]any, error) {
-	events := map[string]any{
-		"start": start,
-		"end":   end,
+type summary struct {
+	End    time.Time `json:"end"`
+	Period struct {
+		AtKeyboard []worklog.Event    `json:"at_keyboard,omitempty"`
+		Hours      map[string]float64 `json:"hours,omitempty"`
+		TotalHours float64            `json:"total_hours,omitempty"`
+	} `json:"period"`
+	Start time.Time `json:"start"`
+}
+
+func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool) (summary, error) {
+	events := summary{
+		Start: start,
+		End:   end,
 	}
 	atKeyboard, err := d.atKeyboard(ctx, db, rules, start, end)
 	if err != nil {
 		return events, err
 	}
 	if raw {
-		events["period"] = map[string]any{
-			"at_keyboard": mergeIntervals(atKeyboard),
-		}
+		events.Period.AtKeyboard = mergeIntervals(atKeyboard)
 		return events, nil
 	}
 	periodHours := make(map[string]float64)
@@ -412,12 +420,49 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 			periodHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
 		}
 	}
-	events["period"] = map[string]any{
-		"hours":       periodHours,
-		"total_hours": periodTotalHours,
-	}
-
+	events.Period.Hours = periodHours
+	events.Period.TotalHours = periodTotalHours
 	return events, nil
+}
+
+func mergeSummaries(summaries []summary) (summary, error) {
+	// TODO: Use a merge strategy that doesn't rely on
+	// copying and sorting the entire set of summaries
+	// before merging the intervals.
+
+	if len(summaries) == 0 {
+		return summary{}, nil
+	}
+	sum := summary{
+		Start: summaries[0].Start,
+		End:   summaries[0].End,
+	}
+	n := len(summaries[0].Period.AtKeyboard)
+	for _, s := range summaries[1:] {
+		n += len(s.Period.AtKeyboard)
+		if s.Start.Before(sum.Start) {
+			sum.Start = s.Start
+		}
+		if s.End.After(sum.End) {
+			sum.End = s.End
+		}
+	}
+	sum.Period.AtKeyboard = make([]worklog.Event, 0, n)
+	for _, s := range summaries {
+		sum.Period.AtKeyboard = append(sum.Period.AtKeyboard, s.Period.AtKeyboard...)
+	}
+	periodHours := make(map[string]float64)
+	var periodTotalHours float64
+	for _, a := range mergeIntervals(sum.Period.AtKeyboard) {
+		periodTotalHours += a.End.Sub(a.Start).Hours()
+		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
+			periodHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
+		}
+	}
+	sum.Period.AtKeyboard = nil
+	sum.Period.Hours = periodHours
+	sum.Period.TotalHours = periodTotalHours
+	return sum, nil
 }
 
 func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) ([]worklog.Event, error) {
