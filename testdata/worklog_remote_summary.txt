@@ -1,0 +1,194 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/worklog
+cd ${WORK}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+POST dump1.json http://localhost:7171/load/?replace=true
+POST dump2.json http://localhost:7272/load/?replace=true
+
+GET -json http://localhost:7171/summary/?start=2024-01-01&end=2024-01-02&tz=%2b10:30&strict=true&other=http://localhost:7272/
+cmp stdout want.json
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[module.worklog1]
+path = "worklog"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.worklog1.options]
+database_dir = "worklog1"
+hostname = "localhost1"
+[module.worklog1.options.web]
+addr = "localhost:7171"
+can_modify = true
+
+[module.worklog1.options.web.rules.afk.afk]
+src = """
+{
+	"bucket": bucket,
+	"data":   data,
+}
+"""
+[module.worklog1.options.web.rules.afk.locked]
+src = """
+{
+	"bucket": bucket,
+	"data":   {
+		"activity": data.locked ? "locked" : "not-locked",
+		"afk":      data.locked,
+	},
+}
+"""
+
+[module.worklog2]
+path = "worklog"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.worklog2.options]
+database_dir = "worklog2"
+hostname = "localhost2"
+[module.worklog2.options.web]
+addr = "localhost:7272"
+can_modify = true
+
+[module.worklog2.options.web.rules.afk.afk]
+src = """
+{
+	"bucket": bucket,
+	"data":   data,
+}
+"""
+[module.worklog2.options.web.rules.afk.locked]
+src = """
+{
+	"bucket": bucket,
+	"data":   {
+		"activity": data.locked ? "locked" : "not-locked",
+		"afk":      data.locked,
+	},
+}
+"""
+
+-- dump1.json --
+{
+    "buckets": [
+        {
+            "id": "afk_localhost1",
+            "name": "afk-watcher",
+            "type": "afkstatus",
+            "client": "worklog",
+            "hostname": "localhost1",
+            "created": "2024-01-01T00:00:00.0+10:30",
+            "events": [
+                {
+                    "bucket": "afk",
+                    "id": 2,
+                    "start": "2024-01-01T01:00:00.0+10:30",
+                    "end": "2024-01-01T03:00:00.0+10:30",
+                    "data": {
+                        "afk": false,
+                        "locked": false
+                    }
+                }
+            ]
+        },
+        {
+            "id": "window_localhost1",
+            "name": "window-watcher",
+            "type": "currentwindow",
+            "client": "worklog",
+            "hostname": "localhost1",
+            "created": "2024-01-01T00:00:00.0+10:30",
+            "events": [
+                {
+                    "bucket": "window",
+                    "id": 1,
+                    "start": "2024-01-01T01:00:00.0+10:30",
+                    "end": "2024-01-01T03:00:00.0+10:30",
+                    "data": {
+                        "app": "Gnome-terminal",
+                        "title": "Terminal"
+                    }
+                }
+            ]
+        }
+    ]
+}
+-- dump2.json --
+{
+    "buckets": [
+        {
+            "id": "afk_localhost2",
+            "name": "afk-watcher",
+            "type": "afkstatus",
+            "client": "worklog",
+            "hostname": "localhost2",
+            "created": "2024-01-01T00:00:00.0+10:30",
+            "events": [
+                {
+                    "bucket": "afk",
+                    "id": 2,
+                    "start": "2024-01-01T02:00:00.0+10:30",
+                    "end": "2024-01-01T04:00:00.0+10:30",
+                    "data": {
+                        "afk": false,
+                        "locked": false
+                    }
+                }
+            ]
+        },
+        {
+            "id": "window_localhost2",
+            "name": "window-watcher",
+            "type": "currentwindow",
+            "client": "worklog",
+            "hostname": "localhost2",
+            "created": "2024-01-01T00:00:00.0+10:30",
+            "events": [
+                {
+                    "bucket": "window",
+                    "id": 1,
+                    "start": "2024-01-01T02:00:00.0+10:30",
+                    "end": "2024-01-01T04:00:00.0+10:30",
+                    "data": {
+                        "app": "iTerm2",
+                        "title": "-zsh"
+                    }
+                }
+            ]
+        }
+    ]
+}
+-- want.json --
+{
+	"start": "2024-01-01T00:00:00+10:30",
+	"end": "2024-01-02T23:59:59.999999999+10:30",
+	"period": {
+		"hours": {
+			"2024-01-01": 3
+		},
+		"total_hours": 3
+	}
+}

@@ -432,7 +432,7 @@ func summaryData() int {
 	}
 	defer db.Close()
 
-	events, err := d.rangeSummary(ctx, db, rules, start, end, *raw)
+	events, err := d.rangeSummary(ctx, db, rules, start, end, *raw, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
 		return 1

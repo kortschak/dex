@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -319,11 +320,13 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		events, err := d.rangeSummary(ctx, db, rules, start, end, raw)
+		events, err := d.rangeSummary(ctx, db, rules, start, end, raw, req.URL)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			if len(events.Warnings) == 0 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		}
 		b, err := json.Marshal(events)
 		if err != nil {
@@ -397,9 +400,10 @@ type summary struct {
 		Hours      map[string]float64 `json:"hours,omitempty"`
 		TotalHours float64            `json:"total_hours,omitempty"`
 	} `json:"period"`
+	Warnings []string `json:"warn,omitempty"`
 }
 
-func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool) (summary, error) {
+func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool, req *url.URL) (summary, error) {
 	events := summary{
 		Start: start,
 		End:   end,
@@ -411,6 +415,15 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 	if raw {
 		events.Period.AtKeyboard = mergeIntervals(atKeyboard)
 		return events, nil
+	}
+	if req != nil && req.Query().Has("other") {
+		otherAtKeyboard, err := d.remoteRanges(ctx, req, start, end)
+		if err != nil {
+			events.Warnings = append(events.Warnings, fmt.Sprintf("%s: %v", req, err))
+			return events, err
+		}
+		events.Period.AtKeyboard = atKeyboard // Let the full merge handle this.
+		return mergeSummaries(append(otherAtKeyboard, events))
 	}
 	periodHours := make(map[string]float64)
 	var periodTotalHours float64
@@ -425,6 +438,93 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 	return events, nil
 }
 
+func (d *daemon) remoteRanges(ctx context.Context, req *url.URL, start, end time.Time) ([]summary, error) {
+	query := url.Values{
+		"start": []string{start.Format(time.DateOnly)},
+		"end":   []string{end.Format(time.DateOnly)},
+		"raw":   []string{"true"},
+	}
+	reqQuery := req.Query()
+	if reqQuery.Has("tz") {
+		query.Set("tz", reqQuery.Get("tz"))
+	}
+	var strict bool
+	if reqQuery.Has("strict") {
+		var err error
+		strict, err = strconv.ParseBool(reqQuery.Get("strict"))
+		if err != nil {
+			err = fmt.Errorf("parse strict: %w", err)
+			return []summary{{Warnings: []string{err.Error()}}}, err
+		}
+	}
+	rawQuery := query.Encode()
+	other := reqQuery["other"]
+	summaries := make([]summary, 0, len(other))
+	var buf bytes.Buffer
+	seen := make(map[string]bool)
+	for _, h := range other {
+		u, err := url.Parse(h)
+		if err != nil {
+			err = fmt.Errorf("parse host: %s %w", h, err)
+			if strict {
+				return nil, err
+			}
+			summaries = append(summaries, summary{Warnings: []string{fmt.Sprintf("%s: %v", u, err)}})
+			continue
+		}
+		if u.Host == req.Host {
+			d.log.LogAttrs(ctx, slog.LevelInfo, "skipping self remote ranges", slog.String("host", req.Host))
+			continue
+		}
+		if seen[u.Host] {
+			d.log.LogAttrs(ctx, slog.LevelInfo, "skipping repeated remote ranges host", slog.String("host", u.Host))
+			continue
+		}
+		seen[u.Host] = true
+		*u = url.URL{
+			Scheme:   u.Scheme,
+			Host:     u.Host,
+			Path:     req.Path,
+			RawQuery: rawQuery,
+		}
+		d.log.LogAttrs(ctx, slog.LevelDebug, "get remote summary", slog.Any("url", u))
+		resp, err := http.Get(u.String())
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "remote summary failure", slog.Any("error", err))
+			if strict {
+				return nil, err
+			}
+			summaries = append(summaries, summary{Warnings: []string{fmt.Sprintf("%s: %v", u, err)}})
+			continue
+		}
+		buf.Reset()
+		d.log.LogAttrs(ctx, slog.LevelDebug, "get remote summary response", slog.Any("status_code", resp.StatusCode), slog.Any("status", resp.Status))
+		_, err = io.Copy(&buf, resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "remote summary failure", slog.Any("error", err))
+			if strict {
+				return nil, err
+			}
+			summaries = append(summaries, summary{Warnings: []string{fmt.Sprintf("%s: %v", u, err)}})
+			continue
+		}
+		var s summary
+		err = json.Unmarshal(buf.Bytes(), &s)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "remote summary failure", slog.Any("error", err))
+			if strict {
+				return nil, err
+			}
+			summaries = append(summaries, summary{Warnings: []string{fmt.Sprintf("%s: %v", u, err)}})
+			continue
+		}
+		d.log.LogAttrs(ctx, slog.LevelDebug, "add remote summary", slog.Any("url", u))
+		summaries = append(summaries, s)
+	}
+	return summaries, nil
+}
+
 func mergeSummaries(summaries []summary) (summary, error) {
 	// TODO: Use a merge strategy that doesn't rely on
 	// copying and sorting the entire set of summaries
@@ -433,9 +533,11 @@ func mergeSummaries(summaries []summary) (summary, error) {
 	if len(summaries) == 0 {
 		return summary{}, nil
 	}
+	warnings := summaries[0].Warnings
 	sum := summary{
-		Start: summaries[0].Start,
-		End:   summaries[0].End,
+		Start:    summaries[0].Start,
+		End:      summaries[0].End,
+		Warnings: warnings[:len(warnings):len(warnings)],
 	}
 	n := len(summaries[0].Period.AtKeyboard)
 	for _, s := range summaries[1:] {
@@ -446,6 +548,7 @@ func mergeSummaries(summaries []summary) (summary, error) {
 		if s.End.After(sum.End) {
 			sum.End = s.End
 		}
+		sum.Warnings = append(sum.Warnings, s.Warnings...)
 	}
 	sum.Period.AtKeyboard = make([]worklog.Event, 0, n)
 	for _, s := range summaries {
