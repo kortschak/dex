@@ -140,6 +140,10 @@ func TestDaemon(t *testing.T) {
 					t.Errorf("failed to close kernel: %v", err)
 				}
 				close(closed)
+				if bytes.Contains(buf.Bytes(), []byte("-----BEGIN RSA PRIVATE KEY-----")) {
+					t.Error("leaked private key in log")
+					verbose.Store(true)
+				}
 				wg.Wait()
 				if verbose.Load() {
 					t.Logf("log:\n%s\n", &buf)
@@ -227,6 +231,7 @@ func TestDaemon(t *testing.T) {
 							CertPEMBlock: ptr(string(srvCert)),
 							KeyPEMBlock:  ptr(string(srvKey)),
 							RootCA:       ptr(string(caCert)), // Require mTLS.
+							Private:      []string{"key_pem"}, // Redact KeyPEMBlock.
 						},
 						"change": {
 							Addr:     ":7575",

@@ -44,7 +44,7 @@ type Server struct {
 	// certificate and private key for the server. If
 	// present the server will use TLS.
 	CertPEMBlock *string `json:"cert_pem,omitempty"`
-	KeyPEMBlock  *string `json:"key_pem,omitempty"`
+	KeyPEMBlock  *string `json:"key_pem,omitempty" private:""`
 	// RootCA is the root certificate to use for mTLS
 	// connections. If present the service will enforce
 	// mTLS using this certificate authority to verify
@@ -54,6 +54,10 @@ type Server struct {
 	// Insecure allows configuration of non-loopback
 	// servers without mTLS.
 	Insecure bool `json:"insecure"`
+	// Private is the list of server configuration
+	// fields to omit from system configuration state
+	// requests. This should include "key_pem".
+	Private []string `json:"private,omitempty"`
 }
 
 // Notification is the RPC parameter for a change call.

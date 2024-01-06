@@ -190,7 +190,7 @@ func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.C
 }
 
 func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error) {
-	d.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.Request{Request: req}))
+	d.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.RequestRedactPrivate{Request: req}))
 
 	uid := rpc.UID{Module: d.uid}
 
@@ -255,7 +255,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			if m.Body.AddSource != nil {
 				d.addSource.Store(*m.Body.AddSource)
 			}
-			d.log.LogAttrs(ctx, slog.LevelDebug, "configure", slog.Any("details", m))
+			d.log.LogAttrs(ctx, slog.LevelDebug, "configure", slog.Any("details", slogext.PrivateRedact{Val: m, Tag: "json"}))
 
 			if m.Body.Options.Heartbeat != nil {
 				d.beat(ctx, m.Body.Options.Heartbeat.Duration)

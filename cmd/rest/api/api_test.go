@@ -20,6 +20,12 @@ func TestConfig(t *testing.T) {
 		if len(c.Options.Servers) == 0 {
 			c.Options.Servers = nil
 		}
+		for name, srv := range c.Options.Servers {
+			if len(srv.Private) == 0 {
+				srv.Private = nil
+				c.Options.Servers[name] = srv
+			}
+		}
 		_, err := config.RoundTrip[config.Module](c)
 		if err != nil {
 			t.Log(err)
