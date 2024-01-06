@@ -16,6 +16,8 @@ import (
 
 	"github.com/kortschak/goroutine"
 	"github.com/kortschak/jsonrpc2"
+
+	"github.com/kortschak/dex/internal/private"
 )
 
 // GoID is a slog.Handler that adds the calling goroutine's goid.
@@ -45,10 +47,47 @@ func (v Request) LogValue() slog.Value {
 	return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: v.Params})
 }
 
+// RequestRedactPrivate implements slog.LogValuer for [jsonrpc2.Request],
+// redacting fields using [private.Redact].
+type RequestRedactPrivate struct {
+	*jsonrpc2.Request
+}
+
+func (v RequestRedactPrivate) LogValue() slog.Value {
+	var p any
+	err := json.Unmarshal(v.Request.Params, &p)
+	if err != nil {
+		return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+	}
+	p, err = private.Redact(p, "")
+	if err != nil {
+		return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+	}
+	return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: b})
+}
+
 type request struct {
 	ID     any             `json:"id"`
 	Method string          `json:"method"`
 	Params json.RawMessage `json:"params"`
+	Err    string          `json:"error,omitempty"`
+}
+
+type PrivateRedact struct {
+	Val any
+	Tag string
+}
+
+func (v PrivateRedact) LogValue() slog.Value {
+	val, err := private.Redact(v.Val, v.Tag)
+	if err != nil {
+		return slog.AnyValue(err)
+	}
+	return slog.AnyValue(val)
 }
 
 // JSONHandler is a slog.Handler that writes Records to an io.Writer as
