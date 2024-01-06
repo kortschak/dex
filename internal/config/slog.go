@@ -8,6 +8,8 @@ import (
 	"log/slog"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/kortschak/dex/internal/private"
 )
 
 type changeValue struct {
@@ -23,13 +25,25 @@ func (v changeValue) LogValue() slog.Value {
 			Code: int(e.Op),
 		}
 	}
+	cfg, err := private.Redact(v.Config, "json")
+	if err != nil {
+		return slog.AnyValue(struct {
+			Event  []eventValue `json:"event"`
+			Config string       `json:"config"`
+			Err    error        `json:"err"`
+		}{
+			Event:  events,
+			Config: err.Error(),
+			Err:    v.Err,
+		})
+	}
 	return slog.AnyValue(struct {
 		Event  []eventValue `json:"event"`
 		Config *System      `json:"config"`
 		Err    error        `json:"err"`
 	}{
 		Event:  events,
-		Config: v.Config,
+		Config: cfg,
 		Err:    v.Err,
 	})
 }

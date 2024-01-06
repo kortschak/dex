@@ -12,6 +12,8 @@ import (
 
 	"github.com/kortschak/jsonrpc2"
 
+	"github.com/kortschak/dex/internal/private"
+	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
 
@@ -20,27 +22,38 @@ import (
 // The RPC methods in the table are:
 //
 //   - "system": returns the current [config.System]
-func Funcs[K Kernel, D Device[B], B Button](manager *Manager[K, D, B], log *slog.Logger) rpc.Funcs {
-	return rpc.Funcs{
-		"system": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
-			var m rpc.Message[rpc.None]
-			err := rpc.UnmarshalMessage(params, &m)
-			if err != nil {
-				log.LogAttrs(ctx, slog.LevelError, "system", slog.Any("error", err))
-				return nil, err
-			}
-			current := *manager.current
-			kernel := *current.Kernel
-			for m := range manager.missingSerial {
-				kernel.Missing = append(kernel.Missing, m)
-			}
-			sort.Strings(kernel.Missing)
-			current.Kernel = &kernel
-			if id.IsValid() {
-				return rpc.NewMessage[any](kernelUID, current), nil
-			}
-			log.LogAttrs(ctx, slog.LevelInfo, "system config request", slog.Any("config", manager.current))
-			return nil, nil
-		},
+//
+// If redact is true, fields marked with private will be redacted using
+// [private.Redact].
+func Funcs[K Kernel, D Device[B], B Button](redact bool) func(manager *Manager[K, D, B], log *slog.Logger) rpc.Funcs {
+	return func(manager *Manager[K, D, B], log *slog.Logger) rpc.Funcs {
+		return rpc.Funcs{
+			"system": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+				var m rpc.Message[rpc.None]
+				err := rpc.UnmarshalMessage(params, &m)
+				if err != nil {
+					log.LogAttrs(ctx, slog.LevelError, "system", slog.Any("error", err))
+					return nil, err
+				}
+				current := *manager.current
+				kernel := *current.Kernel
+				for m := range manager.missingSerial {
+					kernel.Missing = append(kernel.Missing, m)
+				}
+				sort.Strings(kernel.Missing)
+				current.Kernel = &kernel
+				if id.IsValid() {
+					if redact {
+						current, err = private.Redact(current, "json")
+						if err != nil {
+							return nil, err
+						}
+					}
+					return rpc.NewMessage[any](kernelUID, current), nil
+				}
+				log.LogAttrs(ctx, slog.LevelInfo, "system config request", slog.Any("config", slogext.PrivateRedact{Val: current, Tag: "json"}))
+				return nil, nil
+			},
+		}
 	}
 }

@@ -44,6 +44,7 @@ func main() { os.Exit(Main()) }
 func Main() int {
 	logging := flag.String("log", "info", "logging level (debug, info, warn or error)")
 	lines := flag.Bool("lines", false, "display source line details in logs")
+	redact := flag.Bool("redact_private", true, "redact private fields in system state requests")
 	v := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *v {
@@ -169,7 +170,7 @@ func Main() int {
 	}
 	defer sysman.Close()
 
-	funcs, err := mergeFuncs(sysman, log, sys.Funcs, device.Funcs, state.Funcs)
+	funcs, err := mergeFuncs(sysman, log, sys.Funcs[*rpc.Kernel, *device.Manager, *device.Button](*redact), device.Funcs, state.Funcs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to configure kernel plugins: %v\n", err)
 		return internalError
@@ -191,7 +192,7 @@ func Main() int {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "config stream error", slog.Any("error", cfg.Err))
 			continue
 		}
-		mlog.LogAttrs(ctx, slog.LevelDebug, "config stream element", slog.Any("config", cfg.Config), slog.Any("events", cfg.Event))
+		mlog.LogAttrs(ctx, slog.LevelDebug, "config stream element", slog.Any("config", slogext.PrivateRedact{Val: cfg.Config, Tag: "json"}), slog.Any("events", cfg.Event))
 		err = cfgman.Apply(cfg)
 		if err != nil {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "config manager apply error", slog.Any("error", err))

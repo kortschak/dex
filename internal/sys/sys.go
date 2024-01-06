@@ -26,6 +26,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/kortschak/dex/internal/config"
+	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
 
@@ -198,7 +199,7 @@ type Store interface {
 // Configure changes a managed system's state to match the provided
 // configuration. If the system is not yet running, it will be started.
 func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) error {
-	m.log.LogAttrs(ctx, slog.LevelDebug, "set config", slog.Any("config", cfg))
+	m.log.LogAttrs(ctx, slog.LevelDebug, "set config", slog.Any("config", slogext.PrivateRedact{Val: cfg, Tag: "json"}))
 
 	paths, err := config.Vet(cfg)
 	if err != nil {
