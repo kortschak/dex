@@ -304,7 +304,7 @@ func dashboardData() int {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
 
-  %[1]s [-verbose] -rules <rules.toml> -raw <bool> [-db <db.sqlite3>] -data <dump.json> <date>
+  %[1]s [-verbose] -rules <rules.toml> -raw <bool> [-db <db.sqlite3>] -replace <bool> -data <dump.json> <date>
 
 `, os.Args[0])
 		flag.PrintDefaults()
@@ -312,6 +312,7 @@ func dashboardData() int {
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
 	raw := flag.Bool("raw", false, "collect raw event data")
 	dbName := flag.String("db", "db.sqlite3", "db filename")
+	replace := flag.Bool("replace", true, "replace bucket events")
 	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	tz := flag.String("tz", "", "timezone for date")
 	verbose := flag.Bool("verbose", false, "print full logging")
@@ -355,7 +356,7 @@ func dashboardData() int {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, *dbName, data, ruleBytes)
+	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, *dbName, *replace, data, ruleBytes)
 	if status != 0 {
 		return status
 	}
@@ -381,7 +382,7 @@ func summaryData() int {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
 
-  %[1]s [-verbose] -rules <rules.toml> -raw <bool> [-db <db.sqlite3>] -data <dump.json> <date range URI>
+  %[1]s [-verbose] -rules <rules.toml> -raw <bool> [-db <db.sqlite3>] -replace <bool> -data <dump.json> <date range URI>
 
 `, os.Args[0])
 		flag.PrintDefaults()
@@ -389,6 +390,7 @@ func summaryData() int {
 	rulesPath := flag.String("rules", "", "path to a TOML file holding dashboard rules")
 	raw := flag.Bool("raw", false, "collect raw summary data")
 	dbName := flag.String("db", "db.sqlite3", "db filename")
+	replace := flag.Bool("replace", true, "replace bucket events")
 	dataPath := flag.String("data", "", "path to JSON data holding a worklog store db dump")
 	verbose := flag.Bool("verbose", false, "print full logging")
 	flag.Parse()
@@ -424,7 +426,7 @@ func summaryData() int {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, *dbName, data, ruleBytes)
+	d, db, rules, status := newTestDaemon(ctx, cancel, *verbose, *dbName, *replace, data, ruleBytes)
 	if status != 0 {
 		return status
 	}
@@ -489,7 +491,7 @@ func mergeSummaryData() int {
 	return 0
 }
 
-func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, dbName string, data []byte, ruleBytes []byte) (*daemon, *store.DB, map[string]map[string]ruleDetail, int) {
+func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, dbName string, replace bool, data []byte, ruleBytes []byte) (*daemon, *store.DB, map[string]map[string]ruleDetail, int) {
 	var (
 		level     slog.LevelVar
 		addSource = slogext.NewAtomicBool(*lines)
@@ -518,7 +520,7 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 		fmt.Fprintf(os.Stderr, "failed to unmarshal db dump: %v\n", err)
 		return nil, nil, nil, 1
 	}
-	err = db.Load(buckets)
+	err = db.Load(buckets, replace)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load db dump: %v\n", err)
 		return nil, nil, nil, 1

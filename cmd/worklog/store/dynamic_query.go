@@ -93,7 +93,9 @@ func (db *DB) Dynamic(q Query) ([]map[string]any, error) {
 		return nil, err
 	}
 
-	rows, err := db.query(sql, args...)
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	rows, err := db.store.Query(sql, args...)
 	if err != nil {
 		return nil, err
 	}

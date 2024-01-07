@@ -106,7 +106,11 @@ func TestDB(t *testing.T) {
 				t.Fatalf("failed to create db: %v", err)
 			}
 
-			err = db.Load(data)
+			err = db.Load(data, false)
+			if err != nil {
+				t.Errorf("failed to load data: %v", err)
+			}
+			err = db.Load(data, true)
 			if err != nil {
 				t.Errorf("failed to load data: %v", err)
 			}
@@ -424,7 +428,9 @@ func TestDB(t *testing.T) {
 
 				for _, test := range dynamicTests {
 					t.Run(test.name, func(t *testing.T) {
-						rows, err := db.query(test.sql)
+						db.mu.Lock()
+						rows, err := db.store.Query(test.sql)
+						db.mu.Unlock()
 						if err != nil {
 							t.Fatalf("unexpected error for query: %v", err)
 						}
