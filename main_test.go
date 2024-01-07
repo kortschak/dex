@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -43,6 +44,14 @@ func TestScripts(t *testing.T) {
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"sleep":          sleep,
 			"grep_from_file": grep,
+		},
+		Setup: func(e *testscript.Env) error {
+			pwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			e.Setenv("PKG_ROOT", pwd)
+			return nil
 		},
 	}
 	if err := gotooltest.Setup(&p); err != nil {
@@ -94,7 +103,14 @@ func get() int {
 		fmt.Fprintln(os.Stderr, "usage: GET [-json] <url>")
 		return 2
 	}
-	resp, err := http.Get(flag.Arg(0))
+	cli := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	resp, err := cli.Get(flag.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed get: %v\n", err)
 		return 1

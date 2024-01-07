@@ -1,0 +1,105 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/rest
+cd ${WORK}
+
+dex -log debug -lines -redact_private=false &dex&
+sleep 1s
+
+GET -json https://localhost:7676
+cmp stdout want_system.json
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[module.rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.rest.options.server.system]
+addr = "localhost:7676"
+cert_pem = """
+-----BEGIN CERTIFICATE-----
+MIIB6DCCAVGgAwIBAgIBAjANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDEwlhdXRo
+b3JpdHkwHhcNMjQwMTA2MDcxMjI1WhcNMjQwMTA2MDgxMjI1WjAXMRUwEwYDVQQD
+DAxzdGF0ZV9jbGllbnQwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAMmWMFMM
+b97gkULSo/HvDMzZ6WWDRtgLOU3Dfj7o0POU82e/JzNeoQFkDI9TDy6drB+JvL9h
+diNPn6ahrR04DG5GIOLGmUy4kerTZ1kN840uvRVYFcXGTOh8ZV/7Ptq2CFMS31hS
+v4FM4jsdh7RLkkCkcDlF6IXrpOlH6djJDDLfAgMBAAGjRzBFMA4GA1UdDwEB/wQE
+AwIHgDAdBgNVHSUEFjAUBggrBgEFBQcDAgYIKwYBBQUHAwEwFAYDVR0RBA0wC4IJ
+bG9jYWxob3N0MA0GCSqGSIb3DQEBCwUAA4GBAKl+7Bnc8X6CAUVPSl6GvLMlLXdP
+UyfWoPKKeovgTeTmbYKh6Hxtdx00wLzri/ZoYtOcJtT/VDzy2wiNt5mdVCf/c+NZ
+4xQpEalZKDrf0mGFm1piG0CmUnqL09GjNSSwejtrQPNPRnE0y+7tmeCtgPggw8AL
+ka42Pwc7VFhsbcQl
+-----END CERTIFICATE-----
+"""
+private = ["key_pem"]
+key_pem = """
+-----BEGIN RSA PRIVATE KEY-----
+MIICXAIBAAKBgQDJljBTDG/e4JFC0qPx7wzM2ellg0bYCzlNw34+6NDzlPNnvycz
+XqEBZAyPUw8unawfiby/YXYjT5+moa0dOAxuRiDixplMuJHq02dZDfONLr0VWBXF
+xkzofGVf+z7atghTEt9YUr+BTOI7HYe0S5JApHA5ReiF66TpR+nYyQwy3wIDAQAB
+AoGBAJ7iNzhdxxa9nQA0EW+wYEBdSG3wKDhDsGiwOqLO0VILBkWxDe6ZGQGFn7if
+WIn/UBiTcSbOZFS0fzrQlyc+c9xXT2ebozUG3grTCrIsbHl4NA1rqNzx0oMqSnkn
+poekVykfdwydjxxSZlb09cV7T4F/Fn05j4oCialR0yRaZBbRAkEA9YPnfsM/4I1j
+wQ34EAIXODwFN/mlVky0c/rq+JYqrNFk3at4HGgOEUs9wJ61D1q58v5WGLh6YdT1
+lPxai3KLbQJBANIyCQiQKBeCZKGzTi7iz6yNYrbr0m+MKs+FqyZTAsmxnYUpqnxS
+i1JVtjUW7/wrfSUUYAJksL44IP/z0PCNG/sCQAN4D6dM3vQvSz+JEP446VcUEgbO
+cjWb89jHrNZCWOwEMWaoa5QLLFe2NnMoSuqin4n9af4DbUdAmQ+32RerUKkCQFaI
+Sre/wQGMqKj5DCK5NQ2wVwc/Ji7N4YH1YXQxkGBAQrzjXlA4GysWJiDNBJcnwClX
+rf7OPQTSTqOQWF/vd6kCQCOFBynbz3G7XjO525EcnJyoBuVm22fOc67JpILeI0ry
+cum6Dsxj6BKUnfbvS1pOtb9aPoWOkQYss7NdWZhuTrU=
+-----END RSA PRIVATE KEY-----
+"""
+request = """
+{"method": "system"}
+"""
+response = """
+response.body
+"""
+-- want_system.json --
+{
+	"kernel": {
+		"network": "tcp",
+		"sum": "0594902707f6e8141ba872ac25ad05fac265885d"
+	},
+	"module": {
+		"rest": {
+			"log_add_source": true,
+			"log_level": "DEBUG",
+			"log_mode": "log",
+			"options": {
+				"server": {
+					"system": {
+						"addr": "localhost:7676",
+						"cert_pem": "-----BEGIN CERTIFICATE-----\nMIIB6DCCAVGgAwIBAgIBAjANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDEwlhdXRo\nb3JpdHkwHhcNMjQwMTA2MDcxMjI1WhcNMjQwMTA2MDgxMjI1WjAXMRUwEwYDVQQD\nDAxzdGF0ZV9jbGllbnQwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAMmWMFMM\nb97gkULSo/HvDMzZ6WWDRtgLOU3Dfj7o0POU82e/JzNeoQFkDI9TDy6drB+JvL9h\ndiNPn6ahrR04DG5GIOLGmUy4kerTZ1kN840uvRVYFcXGTOh8ZV/7Ptq2CFMS31hS\nv4FM4jsdh7RLkkCkcDlF6IXrpOlH6djJDDLfAgMBAAGjRzBFMA4GA1UdDwEB/wQE\nAwIHgDAdBgNVHSUEFjAUBggrBgEFBQcDAgYIKwYBBQUHAwEwFAYDVR0RBA0wC4IJ\nbG9jYWxob3N0MA0GCSqGSIb3DQEBCwUAA4GBAKl+7Bnc8X6CAUVPSl6GvLMlLXdP\nUyfWoPKKeovgTeTmbYKh6Hxtdx00wLzri/ZoYtOcJtT/VDzy2wiNt5mdVCf/c+NZ\n4xQpEalZKDrf0mGFm1piG0CmUnqL09GjNSSwejtrQPNPRnE0y+7tmeCtgPggw8AL\nka42Pwc7VFhsbcQl\n-----END CERTIFICATE-----\n",
+						"key_pem": "-----BEGIN RSA PRIVATE KEY-----\nMIICXAIBAAKBgQDJljBTDG/e4JFC0qPx7wzM2ellg0bYCzlNw34+6NDzlPNnvycz\nXqEBZAyPUw8unawfiby/YXYjT5+moa0dOAxuRiDixplMuJHq02dZDfONLr0VWBXF\nxkzofGVf+z7atghTEt9YUr+BTOI7HYe0S5JApHA5ReiF66TpR+nYyQwy3wIDAQAB\nAoGBAJ7iNzhdxxa9nQA0EW+wYEBdSG3wKDhDsGiwOqLO0VILBkWxDe6ZGQGFn7if\nWIn/UBiTcSbOZFS0fzrQlyc+c9xXT2ebozUG3grTCrIsbHl4NA1rqNzx0oMqSnkn\npoekVykfdwydjxxSZlb09cV7T4F/Fn05j4oCialR0yRaZBbRAkEA9YPnfsM/4I1j\nwQ34EAIXODwFN/mlVky0c/rq+JYqrNFk3at4HGgOEUs9wJ61D1q58v5WGLh6YdT1\nlPxai3KLbQJBANIyCQiQKBeCZKGzTi7iz6yNYrbr0m+MKs+FqyZTAsmxnYUpqnxS\ni1JVtjUW7/wrfSUUYAJksL44IP/z0PCNG/sCQAN4D6dM3vQvSz+JEP446VcUEgbO\ncjWb89jHrNZCWOwEMWaoa5QLLFe2NnMoSuqin4n9af4DbUdAmQ+32RerUKkCQFaI\nSre/wQGMqKj5DCK5NQ2wVwc/Ji7N4YH1YXQxkGBAQrzjXlA4GysWJiDNBJcnwClX\nrf7OPQTSTqOQWF/vd6kCQCOFBynbz3G7XjO525EcnJyoBuVm22fOc67JpILeI0ry\ncum6Dsxj6BKUnfbvS1pOtb9aPoWOkQYss7NdWZhuTrU=\n-----END RSA PRIVATE KEY-----\n",
+						"private": [
+							"key_pem"
+						],
+						"request": "{\"method\": \"system\"}\n",
+						"response": "response.body\n"
+					}
+				}
+			},
+			"path": "rest",
+			"sum": "c1eb308de06a25af7511d05849c7ead87dd64233"
+		}
+	}
+}

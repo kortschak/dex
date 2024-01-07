@@ -11,7 +11,9 @@ env HOME=${WORK}
 
 env GOBIN=${WORK}/bin
 env PATH=${GOBIN}:${PATH}
-go install github.com/kortschak/dex/cmd/rest@latest
+cd ${PKG_ROOT}
+go install ./cmd/rest
+cd ${WORK}
 
 dex -log debug -lines &dex&
 sleep 1s
