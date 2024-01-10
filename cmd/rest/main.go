@@ -694,7 +694,7 @@ func errorContext(err error, window int, data []byte) []byte {
 	left := max(0, pos-window)
 	right := min(pos+window+1, len(data))
 	view := make([]byte, right-left+2*len(dots))
-	copy(view[3:], data[left:right])
+	copy(view[len(dots):], data[left:right])
 	if left != 0 {
 		copy(view, dots)
 		left = 0
