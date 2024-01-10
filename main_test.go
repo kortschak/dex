@@ -29,8 +29,9 @@ var (
 
 func TestMain(m *testing.M) {
 	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"dex": Main,
-		"GET": get,
+		"dex":  Main,
+		"GET":  get,
+		"POST": post,
 	}))
 }
 
@@ -131,6 +132,59 @@ func get() int {
 		err = json.Indent(&dst, buf.Bytes(), "", "\t")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed format JSON data: %v\n", err)
+			return 1
+		}
+		buf = dst
+	}
+	os.Stdout.Write(buf.Bytes())
+	if !bytes.HasSuffix(buf.Bytes(), []byte{'\n'}) {
+		fmt.Println()
+	}
+	return 0
+}
+
+func post() int {
+	jsonData := flag.Bool("json", false, "response data from POST is JSON")
+	content := flag.String("content", "", "data content-type")
+	flag.Parse()
+	if flag.NArg() != 2 {
+		fmt.Fprintln(os.Stderr, "usage: POST [-json] [-content <content-type>] <body-path> <url>")
+		return 2
+	}
+	f, err := os.Open(flag.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read request body: %v\n", err)
+		return 1
+	}
+	defer f.Close()
+	cli := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	resp, err := cli.Post(flag.Arg(1), *content, f)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed post: %v\n", err)
+		return 1
+	}
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed copy buffer: %v\n", err)
+		return 1
+	}
+	err = resp.Body.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed response body close: %v\n", err)
+		return 1
+	}
+	if *jsonData {
+		var dst bytes.Buffer
+		err = json.Indent(&dst, buf.Bytes(), "", "\t")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed format response JSON data: %v\n", err)
 			return 1
 		}
 		buf = dst

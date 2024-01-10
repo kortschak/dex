@@ -1,0 +1,73 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/rest ./cmd/runner
+cd ${WORK}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+POST -json body.txt http://localhost:7878/
+cmp stdout want_response.json
+cmp got.txt body.txt
+
+#kill dex
+#wait dex
+#stderr '"tag":"POST data","value":"\\"Test data\.\\n\\""'
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[module.rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.rest.options.server.write_file]
+addr = "localhost:7878"
+request = """
+{
+	"method": "run",
+	"uid": {
+		"module": "runner",
+		"service": "write_file",
+	},
+	"params": {
+		"path": "bash",
+		"args": ["-c", "echo -n "+debug("POST data", '"'+string(request.Body)+'"')+" > got.txt"],
+	},
+}
+"""
+response = """
+{"result":"ok"}
+"""
+
+[module.runner]
+path = "runner"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[service.write_file]
+module = "runner"
+
+-- body.txt --
+Test data.
+-- want_response.json --
+{
+	"result": "ok"
+}
