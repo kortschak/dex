@@ -1,0 +1,39 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+# This can be any module.
+go install ./cmd/runner
+cd ${WORK}
+
+dex -log debug -lines &
+sleep 1s
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[module.runner]
+path = "runner"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[service.dummy]
+module = "runner"
+# FIXME: This should be caught in config validation.
+# The serial here implies that a device is present,
+# but it is not and so when we come to send any details
+# for the device we panic. We shouldn't crash here.
+serial = ""

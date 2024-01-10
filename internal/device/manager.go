@@ -65,6 +65,9 @@ func (m *Manager) Serial() string {
 // SendTo queues requests to send button actions to the specified service.
 // requests are not acted on until a subsequent call to SetPages.
 func (m *Manager) SendTo(service rpc.UID, actions []config.Button) error {
+	if m == nil {
+		return fmt.Errorf("no device for service: %s", service)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.pages.sendTo(m.controller, service, actions)
