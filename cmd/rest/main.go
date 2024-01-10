@@ -672,9 +672,42 @@ func evalReq(prg cel.Program, ts time.Time, req *http.Request) (*rest.Notificati
 	var note rest.Notification
 	err = json.Unmarshal(b, &note)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: data: %q", err, errorContext(err, 10, b))
 	}
 	return &note, nil
+}
+
+func errorContext(err error, window int, data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
+	var pos int
+	switch err := err.(type) {
+	default:
+		return data
+	case *json.SyntaxError:
+		pos = int(err.Offset)
+	case *json.UnmarshalTypeError:
+		pos = int(err.Offset)
+	}
+	const dots = "…"
+	left := max(0, pos-window)
+	right := min(pos+window+1, len(data))
+	view := make([]byte, right-left+2*len(dots))
+	copy(view[3:], data[left:right])
+	if left != 0 {
+		copy(view, dots)
+		left = 0
+	} else {
+		left = len(dots)
+	}
+	if right != len(data) {
+		copy(view[len(view)-len(dots):], dots)
+		right = len(view)
+	} else {
+		right = len(view) - len(dots)
+	}
+	return view[left:right]
 }
 
 func reqToMap(req *http.Request) (map[string]any, error) {
