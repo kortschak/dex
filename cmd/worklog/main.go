@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -174,6 +175,7 @@ type daemon struct {
 
 	serverAddr     string
 	htmlSrc        string
+	canModify      bool
 	dashboardRules atomic.Value // map[string]map[string]ruleDetail
 	serverCancel   context.CancelFunc
 
@@ -243,14 +245,19 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				d.serverCancel = nil
 			}
 		} else {
-			if m.Body.Options.Web.Addr != d.serverAddr || m.Body.Options.Web.HTML != d.htmlSrc {
+			if m.Body.Options.Web.Addr != d.serverAddr || m.Body.Options.Web.HTML != d.htmlSrc || m.Body.Options.Web.AllowModification != d.canModify {
 				if d.serverCancel != nil {
 					d.serverCancel()
 				}
+				d.htmlSrc = ""
+				d.canModify = false
 				d.log.LogAttrs(ctx, slog.LevelDebug, "configure web server")
-				d.serverAddr, d.serverCancel, err = d.serve(m.Body.Options.Web.Addr, m.Body.Options.Web.HTML)
+				d.serverAddr, d.serverCancel, err = d.serve(m.Body.Options.Web.Addr, m.Body.Options.Web.HTML, m.Body.Options.Web.AllowModification)
 				if err != nil {
 					d.log.LogAttrs(ctx, slog.LevelError, "configure web server", slog.Any("error", err))
+				} else {
+					d.htmlSrc = m.Body.Options.Web.HTML
+					d.canModify = m.Body.Options.Web.AllowModification
 				}
 			}
 			if m.Body.Options.Web.Rules != nil {
@@ -637,7 +644,7 @@ func (d *daemon) beat(ctx context.Context, p time.Duration) {
 //go:embed ui
 var ui embed.FS
 
-func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, error) {
+func (d *daemon) serve(addr, path string, canModify bool) (string, context.CancelFunc, error) {
 	ctx := d.ctx
 
 	mux := http.NewServeMux()
@@ -649,13 +656,19 @@ func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, er
 		ui = os.DirFS(path)
 	}
 	mux.Handle("/", http.FileServer(http.FS(ui)))
-	mux.HandleFunc("/amend/", d.amend(ctx))
 	mux.HandleFunc("/dump/", d.dump(ctx))
 	mux.HandleFunc("/data/", d.dashboardData(ctx))
 	mux.HandleFunc("/summary/", d.summaryData(ctx))
 	mux.HandleFunc("/query", d.query(ctx))
 	mux.HandleFunc("/query/", d.query(ctx))
-
+	isLocalAddr, err := isLoopback(ctx, addr)
+	if err != nil {
+		return "", nil, err
+	}
+	if canModify && isLocalAddr {
+		mux.HandleFunc("/amend/", d.amend(ctx))
+		mux.HandleFunc("/load/", d.load(ctx))
+	}
 	srv := &http.Server{
 		Addr:     addr,
 		Handler:  mux,
@@ -685,6 +698,26 @@ func (d *daemon) serve(addr string, path string) (string, context.CancelFunc, er
 	cancel := func() { srv.Shutdown(ctx) }
 
 	return addr, cancel, nil
+}
+
+func isLoopback(ctx context.Context, addr string) (bool, error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false, err
+	}
+	if host == "" {
+		return false, nil
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return false, err
+	}
+	for _, ip := range ips {
+		if !ip.IsLoopback() {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
@@ -787,6 +820,63 @@ func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 			return
 		}
 		http.ServeContent(w, req, "dump.json", time.Now(), bytes.NewReader(b))
+	}
+}
+
+func (d *daemon) load(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var replace bool
+		r := req.URL.Query().Get("replace")
+		if r != "" {
+			var err error
+			replace, err = strconv.ParseBool(r)
+			if err != nil {
+				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		var buf bytes.Buffer
+		_, err := io.Copy(&buf, req.Body)
+		req.Body.Close()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		switch typ := req.Header.Get("content-type"); typ {
+		case "", "application/json":
+		default:
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("content-type", typ), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		db, ok := d.db.Load().(*store.DB)
+		if !ok {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		var dump struct {
+			Buckets []worklog.BucketMetadata `json:"buckets"`
+		}
+		err = json.Unmarshal(buf.Bytes(), &dump)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		err = db.Load(dump.Buckets, replace)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	}
 }
 

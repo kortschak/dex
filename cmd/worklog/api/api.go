@@ -48,6 +48,12 @@ type Web struct {
 	// events on a dashboard. The map keys are source bucket
 	// and destination bucket.
 	Rules map[string]map[string]WebRule `json:"rules,omitempty"`
+
+	// AllowModification enables the amend and load endpoints
+	// on the server, allowing direct modification of the
+	// bucket contents. For this configuration to be effective
+	// Addr must be a loopback device.
+	AllowModification bool `json:"can_modify"`
 }
 
 type WebRule struct {
