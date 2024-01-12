@@ -38,19 +38,47 @@ const second = 1000;
 const minute = 60*second
 const hour = 60*minute
 
-var reloadEvery = minute;
+const reloadEvery = minute;
+const checkEvery = 10*second;
 
 var urlParams = new URL(window.location.href).searchParams;
 var requestedDate = urlParams.get('date');
 
+const visible = "visible";
+const hidden = "hidden";
+function changeVis(e) {
+	const state = {
+		focus: visible, focusin: visible, pageshow: visible,
+		blur: hidden, focusout: hidden, pagehide: hidden
+	};
+	e = e || window.event;
+	if (e.type in state) {
+		document.body.className = state[e.type];
+	} else {
+		document.body.className = this[visibility] ? hidden : visible;
+	}
+}
+var visibility = hidden;
+if (visibility in document) {
+	changeVis({type: document[visibility] ? "blur" : "focus"});
+	document.addEventListener("visibilitychange", changeVis);
+}
+
 $.get(urlFor(requestedDate), function(data) {
 	render(data);
 });
+var sinceReload = 0;
 setInterval(function () {
-	$.get(urlFor(requestedDate), function(data) {
-		render(data);
-	});
-}, reloadEvery);
+	if (sinceReload <= reloadEvery) {
+		sinceReload += checkEvery;
+	} 
+	if (sinceReload > reloadEvery && document.body.className == visible) {
+		$.get(urlFor(requestedDate), function(data) {
+			render(data);
+		});
+		sinceReload = 0;
+	}
+}, checkEvery);
 
 var data = {};
 
