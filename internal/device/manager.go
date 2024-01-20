@@ -191,6 +191,12 @@ type pageManager struct {
 // pos is a button position on a page.
 type pos struct{ row, col int }
 
+// pagePos is a global button position.
+type pagePos struct {
+	page string
+	pos
+}
+
 // svcConn is an rpc.Connection with a label to the service it is connecting
 // to. It is primarily used for testing purposes.
 type svcConn struct {
@@ -327,6 +333,7 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 		}
 	}
 
+	stopped := make(map[pagePos]bool)
 	for name, buttons := range want {
 		page, exists := dev.Page(name)
 		if !exists {
@@ -354,8 +361,11 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 			switch {
 			case !wantButton:
 				if haveButton {
-					p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
-					page.Button(pos.row, pos.col).Stop()
+					if !stopped[pagePos{name, pos}] {
+						p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
+						page.Button(pos.row, pos.col).Stop()
+						stopped[pagePos{name, pos}] = true
+					}
 
 					// shared above: factor out.
 					p.log.LogAttrs(ctx, slog.LevelDebug, "notify pages drop buttons")
@@ -380,9 +390,10 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 			case reflect.DeepEqual(p.state[name][pos], module):
 				p.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
 			default:
-				if haveButton {
+				if haveButton && !stopped[pagePos{name, pos}] {
 					p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
 					page.Button(pos.row, pos.col).Stop()
+					stopped[pagePos{name, pos}] = true
 				}
 
 				var press, release []func(ctx context.Context, page string, row, col int, t time.Time) error
@@ -404,11 +415,16 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 					for _, a := range actions {
 						a := a // TODO: Remove this when loopvar behaviour is changed in go1.22.
 						if a.Change == nil {
-							// Draw image if it exists.
+							// Draw image if it exists, or stop the button if not active.
 							if a.Image != "" {
 								p.drawImage(ctx, dev, rpc.NewMessage(uid, DrawMessage{
 									Page: a.Page, Row: a.Row, Col: a.Col, Image: a.Image,
 								}))
+							} else if haveButton && !isActive(a) {
+								delete(want[name][pos], uid)
+								if len(want[name][pos]) == 0 {
+									delete(want[name], pos)
+								}
 							}
 							continue
 						}
@@ -440,7 +456,9 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 					}
 				}
 
-				p.log.LogAttrs(ctx, slog.LevelDebug, "restart button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
+				if len(press) != 0 || len(release) != 0 {
+					p.log.LogAttrs(ctx, slog.LevelDebug, "start button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
+				}
 				page.Button(pos.row, pos.col).OnPress(bundleActions(press))
 				page.Button(pos.row, pos.col).OnRelease(bundleActions(release))
 			}
@@ -545,7 +563,11 @@ func getState(state map[string]map[pos]map[rpc.UID][]config.Button, reqs map[str
 					svc = make(map[rpc.UID][]config.Button)
 					actions[pos{a.Row, a.Col}] = svc
 				}
-				svc[r.Service] = append(svc[r.Service], a)
+				if isActive(a) {
+					svc[r.Service] = append(svc[r.Service], a)
+				} else {
+					svc[r.Service] = []config.Button{a}
+				}
 			}
 		}
 	}
@@ -568,6 +590,10 @@ func getState(state map[string]map[pos]map[rpc.UID][]config.Button, reqs map[str
 		}
 	}
 	return want
+}
+
+func isActive(b config.Button) bool {
+	return (b.Change != nil && b.Do != nil) || b.Image != ""
 }
 
 // cloneState returns a deep copy of orig.
