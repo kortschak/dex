@@ -232,3 +232,13 @@ The service can be stopped with `systemctl --user stop dex.service` and disabled
 Interaction with Stream Deck devices depends on github.com/sstallion/go-hid. This package makes use of [non-Go dependencies](https://github.com/libusb/hidapi/blob/master/BUILD.md#prerequisites).
 
 The `watcher` module depends on libxss on linux (libxss-dev in deb-based distributions). Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
+
+## Linux udev rules
+
+On Linux, udev rules for HID will need to be added.
+
+In a new file, "/etc/udev/rules.d/99-streamdeck.rules" add
+```
+ACTION=="add", ATTRS{idVendor}=="0fd9", MODE="0666"
+```
+and then run `sudo udevadm trigger`.
