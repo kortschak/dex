@@ -11,7 +11,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/google/cel-go v0.18.2
 	github.com/google/go-cmp v0.6.0
-	github.com/kortschak/ardilla v0.0.0-20230414051513-067142ccb9ca
+	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
 	github.com/kortschak/goroutine v1.1.1
 	github.com/kortschak/jsonrpc2 v0.0.0-20231228060217-8d9a431c7ab8
 	github.com/rogpeppe/go-internal v1.12.0

@@ -480,6 +480,11 @@ func (c *Controller) watchButtons(ctx context.Context) {
 	}
 	s := make(chan buttonEvents)
 	go func() {
+		const maxLoggedErrors = 10
+		var (
+			nErr    int
+			lastErr error
+		)
 		for {
 			states, err := c.deck.KeyStates()
 			if err != nil {
@@ -493,7 +498,30 @@ func (c *Controller) watchButtons(ctx context.Context) {
 					return
 				default:
 				}
-				log.LogAttrs(ctx, slog.LevelError, "failed to get states", slog.Any("error", err))
+				switch err {
+				case ardilla.ErrNotConnected:
+					pid := c.deck.PID()
+					dev := pid.String()
+					serial, _ := c.deck.Serial()
+					log.LogAttrs(ctx, slog.LevelWarn, "device not connected", slog.String("device", dev), slog.Any("pid", pid), slog.String("serial", serial))
+					c.deck.Reconnect(ctx, time.Second)
+					log.LogAttrs(ctx, slog.LevelWarn, "device reconnected", slog.String("device", dev), slog.Any("pid", pid), slog.String("serial", serial))
+					c.displayed.Redraw(ctx)
+				default:
+					if err != lastErr {
+						nErr = 0
+					}
+					lastErr = err
+					nErr++
+					switch {
+					case nErr == maxLoggedErrors:
+						log.LogAttrs(ctx, slog.LevelWarn, "failed to get states too many errors", slog.Any("error", err))
+						continue
+					case nErr > maxLoggedErrors:
+						continue
+					}
+					log.LogAttrs(ctx, slog.LevelWarn, "failed to get states", slog.Any("error", err))
+				}
 				continue
 			}
 			s <- buttonEvents{buttons: states, time: time.Now()}
