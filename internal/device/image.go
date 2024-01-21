@@ -60,6 +60,14 @@ func DecodeImage(rect image.Rectangle, data, datadir string) (image.Image, error
 			}
 			return animation.Text(val).GIF(rect, pal, 1, 0)
 		case "text/filename":
+			val, ok := strings.CutPrefix(val, "~/")
+			if ok {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return errorImage(fmt.Errorf("file: %w", err), rect, pal, 1, 0)
+				}
+				val = filepath.Join(home, val)
+			}
 			if !filepath.IsAbs(val) {
 				val = filepath.Join(datadir, val)
 			}
