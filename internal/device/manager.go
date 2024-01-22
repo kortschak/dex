@@ -191,6 +191,11 @@ type pageManager struct {
 // pos is a button position on a page.
 type pos struct{ row, col int }
 
+func (p pos) isValidFor(dev device) bool {
+	rows, cols := dev.Layout()
+	return uint(p.row) < uint(rows) && uint(p.col) < uint(cols)
+}
+
 // pagePos is a global button position.
 type pagePos struct {
 	page string
@@ -345,6 +350,12 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 		}
 
 		for pos, module := range buttons {
+			if !pos.isValidFor(dev) {
+				rows, cols := dev.Layout()
+				p.log.LogAttrs(ctx, slog.LevelError, "invalid button position", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col), slog.Int("layout_rows", rows), slog.Int("layout_cols", cols))
+				continue
+			}
+
 			var haveButton, wantButton bool
 			for _, actions := range module {
 				if len(actions) != 0 {
