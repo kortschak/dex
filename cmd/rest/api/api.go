@@ -24,8 +24,9 @@ type Config struct {
 
 // Service defines service configuration options.
 type Service struct {
-	Name    string `json:"name,omitempty"`
-	Active  *bool  `json:"active,omitempty"`
+	Name    string  `json:"name,omitempty"`
+	Active  *bool   `json:"active,omitempty"`
+	Serial  *string `json:"serial,omitempty"`
 	Options struct {
 		// Service-level server definition.
 		Server Server `json:"server,omitempty"`
