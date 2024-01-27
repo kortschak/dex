@@ -134,12 +134,17 @@ func NewController(ctx context.Context, kernel sys.Kernel, pid ardilla.PID, seri
 	log.LogAttrs(ctx, slog.LevelInfo, "opened deck", slog.String("pid", fmt.Sprintf("0x%04x", uint16(c.model))), slog.String("model", c.model.String()), slog.String("serial", serial))
 	c.displayed.controller = c
 	buttons := make([]Button, len(c.displayed.buttons))
+	black, err := c.background(color.Black)
+	if err != nil {
+		return nil, err
+	}
 	for i := range buttons {
 		b := &buttons[i]
 		c.displayed.buttons[i] = b
 		b.deck = &c.deck
 		b.row, b.col = i/cols, i%cols
-		b.redraw.Store(c.background(color.Black))
+		b.redraw.Store(redraw{black, true})
+		b.blank = black
 		b.log = log
 	}
 	c.pages = map[string]Page{DefaultPage: c.displayed}
@@ -188,12 +193,17 @@ func (c *Controller) NewPage(name string) error {
 	c.log.LogAttrs(context.Background(), slog.LevelDebug, "new page", slog.String("page", name))
 	page := Page{controller: c, buttons: make([]*Button, c.rows*c.cols)}
 	buttons := make([]Button, len(page.buttons))
+	black, err := c.background(color.Black)
+	if err != nil {
+		return err
+	}
 	for i := range buttons {
 		b := &buttons[i]
 		page.buttons[i] = b
 		b.deck = &c.deck
 		b.row, b.col = i/c.cols, i%c.cols
-		b.redraw.Store(c.background(color.Black))
+		b.redraw.Store(redraw{black, true})
+		b.blank = black
 		b.log = c.log
 	}
 	c.pages[name] = page
@@ -203,12 +213,12 @@ func (c *Controller) NewPage(name string) error {
 
 // background returns a uniformly colored image bounded by the size of the
 // device's buttons if the device is visual.
-func (c *Controller) background(col color.Color) redraw {
+func (c *Controller) background(col color.Color) (*ardilla.RawImage, error) {
 	bounds, err := c.deck.Bounds()
 	if err != nil {
-		return redraw{nil, false}
+		return nil, err
 	}
-	return redraw{swatch{&image.Uniform{col}, bounds}, true}
+	return c.RawImage(swatch{&image.Uniform{col}, bounds})
 }
 
 // swatch is a subimage of a uniform color.
@@ -276,16 +286,10 @@ func (c *Controller) Page(name string) (p Page, ok bool) {
 func (c *Controller) SetDisplayTo(ctx context.Context, name string) error {
 	c.pMu.Lock()
 	defer c.pMu.Unlock()
-	if name == c.current {
-		return nil
-	}
 	return c.setDisplayTo(ctx, name)
 }
 
 func (c *Controller) setDisplayTo(ctx context.Context, name string) error {
-	if name == c.current {
-		return nil
-	}
 	c.log.LogAttrs(ctx, slog.LevelDebug, "set page", slog.String("from", c.current), slog.String("to", name))
 	page, ok := c.pages[name]
 	if !ok {
@@ -658,6 +662,9 @@ type Button struct {
 	// is made active and whether a redraw is needed
 	// when Redraw is called.
 	redraw atomicRedraw
+
+	// blank is the standard blank button image.
+	blank image.Image
 }
 
 type redraw struct {
@@ -700,6 +707,10 @@ func (b *Button) OnRelease(do func(ctx context.Context, page string, row, col in
 // method. If the image satisfies [animation.Animator] the animation will be
 // run on the button's screen.
 func (b *Button) Draw(ctx context.Context, img image.Image) {
+	if b.deck == nil {
+		// Testing buttons do not have a deck.
+		return
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -743,22 +754,26 @@ func (b *Button) Draw(ctx context.Context, img image.Image) {
 			}
 		}()
 	default:
-		b.cancelAnimation = nil
-		err := b.pauser.wait(ctx)
-		if err != nil {
-			return
-		}
-		img, err = b.deck.RawImage(img)
-		if err != nil {
-			b.log.LogAttrs(ctx, slog.LevelError, "make raw image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
-		}
+		ctx, b.cancelAnimation = context.WithCancel(ctx)
 		b.dMu.Lock()
-		err = b.deck.SetImage(b.row, b.col, img)
-		b.dMu.Unlock()
-		b.redraw.Store(redraw{img, true})
-		if err != nil {
-			b.log.LogAttrs(ctx, slog.LevelError, "set image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
-		}
+		go func() {
+			defer b.dMu.Unlock()
+			err := b.pauser.wait(ctx)
+			if err != nil {
+				return
+			}
+			img, err = b.deck.RawImage(img)
+			if err != nil {
+				b.log.LogAttrs(ctx, slog.LevelError, "make raw image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
+			}
+			b.mu.Lock()
+			err = b.deck.SetImage(b.row, b.col, img)
+			b.mu.Unlock()
+			b.redraw.Store(redraw{img, true})
+			if err != nil {
+				b.log.LogAttrs(ctx, slog.LevelError, "set image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
+			}
+		}()
 	}
 }
 
@@ -771,8 +786,11 @@ func (b *Button) Stop() {
 	if b.cancelAnimation != nil {
 		b.cancelAnimation()
 	}
-	b.redraw.Store(redraw{nil, false})
+	b.redraw.Store(redraw{b.blank, true})
+	// Allow the image to be drawn...
 	b.Unpause()
+	// ... and then pause again.
+	b.Pause()
 	b.mu.Unlock()
 }
 

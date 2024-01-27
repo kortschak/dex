@@ -263,7 +263,13 @@ func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) er
 	configured := moduleInstances(cfg)
 	running := moduleInstances(m.current)
 	pages := make(map[string][]string)
-	for uid, cfgs := range running {
+	removeOrder := make([]string, 0, len(running))
+	for uid := range running {
+		removeOrder = append(removeOrder, uid)
+	}
+	sort.Strings(removeOrder)
+	for _, uid := range removeOrder {
+		cfgs := running[uid]
 		if len(cfgs) == 0 {
 			continue
 		}
@@ -442,7 +448,7 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 			m.serviceSerial[svc] = *cfg.Serial
 		}
 		delete(m.missingService, svc)
-		if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreOptions) {
+		if cfg.Serial != nil {
 			// Register requested button events.
 			m.log.LogAttrs(ctx, slog.LevelDebug, "request notifications", slog.String("uid", uid), slog.String("name", cfg.Name), slog.Any("listen", cfg.Listen))
 			err := m.devices[*cfg.Serial].SendTo(rpc.UID{Module: uid, Service: cfg.Name}, cfg.Listen)
@@ -463,7 +469,13 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 	}
 
 	// Handle module configurations.
-	for uid, mod := range modules {
+	initOrder := make([]string, 0, len(modules))
+	for uid := range modules {
+		initOrder = append(initOrder, uid)
+	}
+	sort.Strings(initOrder)
+	for _, uid := range initOrder {
+		mod := modules[uid]
 		if !m.spawned[uid] {
 			m.log.LogAttrs(ctx, slog.LevelDebug, "spawn module", slog.String("uid", uid))
 			// log modes (see config.Module.LogMode):
@@ -550,7 +562,7 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 				if cfg.Serial != nil && m.missingSerial[*cfg.Serial] {
 					continue
 				}
-				if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreOptions) {
+				if cfg.Serial != nil {
 					// Register requested button events.
 					m.log.LogAttrs(ctx, slog.LevelDebug, "request notifications", slog.String("uid", uid), slog.String("name", cfg.Name), slog.Any("listen", cfg.Listen))
 					err := m.devices[*cfg.Serial].SendTo(rpc.UID{Module: uid, Service: cfg.Name}, cfg.Listen)

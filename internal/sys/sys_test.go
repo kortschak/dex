@@ -34,7 +34,6 @@ var managerTests = []struct {
 	closed  bool
 
 	wantKernel []action
-	ignoreConn bool
 
 	wantDevices map[string][]action
 	wantSerials map[rpc.UID]string
@@ -861,6 +860,31 @@ var managerTests = []struct {
 					},
 				},
 				{Name: "set pages", Args: []any{(*string)(nil), []string{"", "foo-1"}}},
+				{
+					Name: "send to",
+					Args: []any{
+						rpc.UID{Module: "foo", Service: "action"},
+						[]config.Button{
+							{
+								Col:    0,
+								Row:    1,
+								Page:   "foo-1",
+								Change: ptr("press"),
+								Do:     ptr("notify"),
+								Args: []int{
+									1,
+									2,
+								},
+							},
+							{
+								Row:    2,
+								Col:    4,
+								Change: ptr("release"),
+								Do:     ptr("home"),
+							},
+						},
+					},
+				},
 				{Name: "set pages", Args: []any{(*string)(nil), []string{"", "foo-1"}}},
 			},
 		},
@@ -1089,6 +1113,31 @@ var managerTests = []struct {
 					},
 				},
 				{Name: "set pages", Args: []any{(*string)(nil), []string{"", "foo-1"}}},
+				{
+					Name: "send to",
+					Args: []any{
+						rpc.UID{Module: "foo", Service: "action"},
+						[]config.Button{
+							{
+								Col:    0,
+								Row:    1,
+								Page:   "foo-1",
+								Change: ptr("press"),
+								Do:     ptr("notify"),
+								Args: []int{
+									1,
+									2,
+								},
+							},
+							{
+								Row:    2,
+								Col:    4,
+								Change: ptr("release"),
+								Do:     ptr("home"),
+							},
+						},
+					},
+				},
 				{Name: "set pages", Args: []any{(*string)(nil), []string{"", "foo-1"}}},
 			},
 		},
@@ -1350,15 +1399,6 @@ var managerTests = []struct {
 	},
 	{
 		name: "two_component_reconfigure",
-
-		// Module iteration order is non-deterministic, so with
-		// more than one module, action orders become difficult.
-		// This test sequence is constructed to have a deterministic
-		// order of module addition, but reconfig order cannot be
-		// controlled without sorting module keys, which would only
-		// be necessary for testing.
-		ignoreConn: true,
-
 		actions: []any{
 			0: func(ctx context.Context, m *Manager[*testKernel, *testDevice, *testButton]) {
 				m.SetFuncs(rpc.Funcs{
@@ -1510,6 +1550,10 @@ var managerTests = []struct {
 				},
 			},
 			{
+				Name: "conn",
+				Args: []any{"foo"},
+			},
+			{
 				Name: "notify",
 				Args: []any{
 					"foo",
@@ -1545,6 +1589,10 @@ var managerTests = []struct {
 				},
 			},
 			{
+				Name: "conn",
+				Args: []any{"foo"},
+			},
+			{
 				Name: "spawn",
 				Args: []any{
 					"bar",
@@ -1554,6 +1602,10 @@ var managerTests = []struct {
 						"four",
 					},
 				},
+			},
+			{
+				Name: "conn",
+				Args: []any{"bar"},
 			},
 			{
 				Name: "notify",
@@ -1591,6 +1643,14 @@ var managerTests = []struct {
 				},
 			},
 			{
+				Name: "conn",
+				Args: []any{"foo"},
+			},
+			{
+				Name: "conn",
+				Args: []any{"bar"},
+			},
+			{
 				Name: "notify",
 				Args: []any{
 					"bar",
@@ -1607,8 +1667,28 @@ var managerTests = []struct {
 				},
 			},
 			{
+				Name: "conn",
+				Args: []any{"foo"},
+			},
+			{
+				Name: "conn",
+				Args: []any{"bar"},
+			},
+			{
+				Name: "conn",
+				Args: []any{"foo"},
+			},
+			{
+				Name: "conn",
+				Args: []any{"foo"},
+			},
+			{
 				Name: "kill",
-				Args: []any{string("foo")},
+				Args: []any{"foo"},
+			},
+			{
+				Name: "conn",
+				Args: []any{"bar"},
 			},
 		},
 		wantDevices: map[string][]action{
@@ -1642,11 +1722,14 @@ var managerTests = []struct {
 				{
 					Name: "send to",
 					Args: []any{
-						rpc.UID{Module: "bar", Service: "action2"},
+						rpc.UID{
+							Module:  "bar",
+							Service: "action2",
+						},
 						[]config.Button{
 							{
-								Col:    1,
 								Row:    1,
+								Col:    1,
 								Page:   "bar-1",
 								Change: ptr("press"),
 								Do:     ptr("notify"),
@@ -1664,12 +1747,65 @@ var managerTests = []struct {
 						},
 					},
 				},
+				{
+					Name: "send to",
+					Args: []any{
+						rpc.UID{Module: "foo", Service: "action1"},
+						[]config.Button{
+							{
+								Row:    1,
+								Col:    0,
+								Page:   "foo-1",
+								Change: ptr("press"),
+								Do:     ptr("notify"),
+								Args: []int{
+									1,
+									2,
+								},
+							},
+							{
+								Row:    2,
+								Col:    4,
+								Change: ptr("release"),
+								Do:     ptr("home"),
+							},
+						},
+					},
+				},
 				{Name: "set pages", Args: []any{(*string)(nil), []string{"", "bar-1", "foo-1"}}},
 				{
 					Name: "send to",
 					Args: []any{
 						rpc.UID{Module: "bar", Service: "action2"},
 						[]config.Button(nil),
+					},
+				},
+				{
+					Name: "send to",
+					Args: []any{
+						rpc.UID{
+							Module:  "foo",
+							Service: "action1",
+						},
+						[]config.Button{
+							{
+								Row:    1,
+								Col:    0,
+								Page:   "foo-1",
+								Change: ptr("press"),
+								Do:     ptr("notify"),
+								Args: []int{
+									1,
+									2,
+								},
+							},
+							{
+								Row:    2,
+								Col:    4,
+								Change: ptr("release"),
+								Do:     ptr("home"),
+							},
+						},
 					},
 				},
 				{Name: "set pages", Args: []any{(*string)(nil), []string{"", "foo-1"}}},
@@ -1720,7 +1856,7 @@ func TestNewManager(t *testing.T) {
 				AddSource: addSource,
 			}))
 
-			k := newTestKernel(test.ignoreConn)
+			k := newTestKernel()
 			d := newTestDevice()
 			m, err := NewManager[*testKernel, *testDevice, *testButton](k.newKernel, d.newDevice, nil, "datadir", log, &level, addSource)
 			if err != nil {

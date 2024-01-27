@@ -428,6 +428,12 @@ var pageTransactionTests = []struct {
 						{Row: 1, Col: 1, Page: "baz-page", Change: ptr("press"), Do: ptr("go-foo")},
 					},
 				},
+				{rpc.UID{Module: "foo", Service: "foo-1"}, testConn("foo-conn")}: {
+					Service: rpc.UID{Module: "foo", Service: "foo-1"},
+					Buttons: []config.Button{
+						{Row: 1, Col: 1, Page: "foo-page", Change: ptr("press"), Do: ptr("go-bar")},
+					},
+				},
 			},
 		},
 		wantDevice: &testDevice{
@@ -563,6 +569,12 @@ var pageTransactionTests = []struct {
 						{Row: 1, Col: 1, Page: "baz-page", Change: ptr("press"), Do: ptr("go-baz")},
 					},
 				},
+				{rpc.UID{Module: "foo", Service: "foo-1"}, testConn("foo-conn")}: {
+					Service: rpc.UID{Module: "foo", Service: "foo-1"},
+					Buttons: []config.Button{
+						{Row: 1, Col: 1, Page: "foo-page", Change: ptr("press"), Do: ptr("go-bar")},
+					},
+				},
 			},
 		},
 		wantDevice: &testDevice{
@@ -622,8 +634,10 @@ var pageTransactionTests = []struct {
 		},
 		reqs: []sendToRequest{
 			{
-				Service: rpc.UID{Module: "foo", Service: "foo-1"},
-				Actions: nil,
+				Service: rpc.UID{Module: "bar", Service: "bar-1"},
+				Actions: []config.Button{
+					{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("go-foo")},
+				},
 			},
 		},
 		pages: setPages{deflt: nil, pages: []string{"", "foo-page"}},
@@ -638,10 +652,12 @@ var pageTransactionTests = []struct {
 				},
 			},
 			last: map[string][]sendToRequest{
-				"foo-page": {
+				"default": {
 					{
-						Service: rpc.UID{Module: "foo", Service: "foo-1"},
-						Actions: nil,
+						Service: rpc.UID{Module: "bar", Service: "bar-1"},
+						Actions: []config.Button{
+							{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("go-foo")},
+						},
 					},
 				},
 			},
@@ -649,6 +665,12 @@ var pageTransactionTests = []struct {
 				{uid: rpc.UID{Module: "foo", Service: "foo-1"}, Connection: testConn("foo-conn")}: {
 					Service: rpc.UID{Module: "foo", Service: "foo-1"},
 					Buttons: nil,
+				},
+				{uid: rpc.UID{Module: "bar", Service: "bar-1"}, Connection: testConn("bar-conn")}: {
+					Service: rpc.UID{Module: "bar", Service: "bar-1"},
+					Buttons: []config.Button{
+						{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("go-foo")},
+					},
 				},
 			},
 		},
@@ -730,18 +752,6 @@ var pageTransactionTests = []struct {
 					{Row: 0, Col: 1, Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
 				},
 			},
-			{
-				Service: rpc.UID{Module: "runner", Service: "subl"},
-				Actions: []config.Button{
-					{Row: 1, Col: 1},
-				},
-			},
-			{
-				Service: rpc.UID{Module: "runner", Service: "smerge"},
-				Actions: []config.Button{
-					{Row: 1, Col: 2},
-				},
-			},
 		},
 		pages: setPages{deflt: nil, pages: []string{""}},
 		want: &pageManager{
@@ -787,18 +797,6 @@ var pageTransactionTests = []struct {
 							{Row: 0, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
 						},
 					},
-					{
-						Service: rpc.UID{Module: "runner", Service: "subl"},
-						Actions: []config.Button{
-							{Row: 1, Col: 1, Page: "default"},
-						},
-					},
-					{
-						Service: rpc.UID{Module: "runner", Service: "smerge"},
-						Actions: []config.Button{
-							{Row: 1, Col: 2, Page: "default"},
-						},
-					},
 				},
 			},
 			notify: map[svcConn]Notification{
@@ -807,7 +805,6 @@ var pageTransactionTests = []struct {
 					Buttons: []config.Button{
 						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
 						{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
-						{Row: 1, Col: 1, Page: "default"}, // Signal to daemon for deletion.
 					},
 				},
 				{uid: rpc.UID{Module: "runner", Service: "smerge"}, Connection: testConn("runner-conn")}: {
@@ -815,7 +812,6 @@ var pageTransactionTests = []struct {
 					Buttons: []config.Button{
 						{Row: 0, Col: 1, Page: "default", Image: "data:text/plain,smerge"},
 						{Row: 0, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
-						{Row: 1, Col: 2, Page: "default"}, // Signal to daemon for deletion.
 					},
 				},
 			},
@@ -829,7 +825,6 @@ var pageTransactionTests = []struct {
 		},
 	},
 	{
-		// The reflects the user removing the null actions from the config file.
 		name: "change_location_cleanup",
 		device: &testDevice{
 			rows: 3, cols: 5,
@@ -958,7 +953,22 @@ var pageTransactionTests = []struct {
 					},
 				},
 			},
-			notify: map[svcConn]Notification{},
+			notify: map[svcConn]Notification{
+				{uid: rpc.UID{Module: "runner", Service: "smerge"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "smerge"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 1, Page: "default", Image: "data:text/plain,smerge"},
+						{Row: 0, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+					},
+				},
+				{uid: rpc.UID{Module: "runner", Service: "subl"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "subl"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+					},
+				},
+			},
 		},
 		wantDevice: &testDevice{
 			rows: 3, cols: 5,
@@ -1025,9 +1035,10 @@ var pageTransactionTests = []struct {
 		},
 		reqs: []sendToRequest{
 			{
-				Service: rpc.UID{Module: "runner", Service: "smerge"},
+				Service: rpc.UID{Module: "runner", Service: "subl"},
 				Actions: []config.Button{
-					{Row: 1, Col: 2},
+					{Row: 1, Col: 1, Page: "default", Image: "data:text/plain,subl"},
+					{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
 				},
 			},
 		},
@@ -1046,9 +1057,15 @@ var pageTransactionTests = []struct {
 			last: map[string][]sendToRequest{
 				"default": {
 					{
-						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Service: rpc.UID{Module: "runner", Service: "subl"},
 						Actions: []config.Button{
-							{Row: 1, Col: 2, Page: "default"},
+							{Row: 1, Col: 1, Page: "default", Image: "data:text/plain,subl"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
 						},
 					},
 				},
@@ -1056,8 +1073,13 @@ var pageTransactionTests = []struct {
 			notify: map[svcConn]Notification{
 				{uid: rpc.UID{Module: "runner", Service: "smerge"}, Connection: testConn("runner-conn")}: {
 					Service: rpc.UID{Module: "runner", Service: "smerge"},
+					Buttons: nil,
+				},
+				{uid: rpc.UID{Module: "runner", Service: "subl"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "subl"},
 					Buttons: []config.Button{
-						{Row: 1, Col: 2, Page: "default"}, // Signal to daemon for deletion.
+						{Row: 1, Col: 1, Page: "default", Image: "data:text/plain,subl"},
+						{Row: 1, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
 					},
 				},
 			},
@@ -1119,6 +1141,284 @@ func TestPageTransaction(t *testing.T) {
 				t.Errorf("unexpected device result:\n--- want:\n+++ got:\n%s",
 					cmp.Diff(test.wantDevice, test.device, allow))
 			}
+		})
+	}
+}
+
+var layoutSetTests = []struct {
+	name          string
+	a, b          layout
+	wantIntersect layout
+	wantSubtract  layout
+}{
+	// Sanity.
+	{
+		name: "empty",
+		a:    nil, b: nil, wantIntersect: layout{}, wantSubtract: layout{},
+	},
+	{
+		name:          "identical",
+		a:             layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		b:             layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{},
+	},
+	{
+		name:          "a_empty",
+		a:             nil,
+		b:             layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "b"}}}}},
+		wantIntersect: layout{},
+		wantSubtract:  layout{},
+	},
+	{
+		name:          "b_empty",
+		a:             layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		b:             nil,
+		wantIntersect: layout{},
+		wantSubtract:  layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+	},
+
+	// Page level sets.
+	{
+		name: "a⊂b_page_level",
+		a:    layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		b: layout{
+			"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}},
+			"b": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "b"}}}},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{},
+	},
+	{
+		name: "a⊃b_page_level",
+		a: layout{
+			"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}},
+			"b": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "b"}}}},
+		},
+		b:             layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{"b": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "b"}}}}},
+	},
+	{
+		name: "patial_overlap_page_level",
+		a: layout{
+			"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}},
+			"b": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "b"}}}},
+		},
+		b: layout{
+			"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}},
+			"c": {{3, 3}: {rpc.UID{Module: "c", Service: "c"}: []config.Button{{Page: "c"}}}},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{"b": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "b"}}}}},
+	},
+
+	// Position level sets.
+	{
+		name: "a⊂b_position_level",
+		a: layout{
+			"a": {
+				{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}},
+				{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "b"}}},
+			},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{},
+	},
+	{
+		name: "a⊃b_position_level",
+		a: layout{
+			"a": {
+				{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}},
+				{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}}},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}},
+			},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{"a": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}}}}},
+	},
+	{
+		name: "patial_overlap_position_level",
+		a: layout{
+			"a": {
+				{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}},
+				{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}}},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}},
+				{3, 3}: {rpc.UID{Module: "c", Service: "c"}: []config.Button{{Page: "a"}}},
+			},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{"a": {{2, 2}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}}}}},
+	},
+
+	// Module level sets.
+	{
+		name: "a⊂b_module_level",
+		a: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}},
+				},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}},
+					rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}},
+				},
+			},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{},
+	},
+	{
+		name: "a⊃b_module_level",
+		a: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}},
+					rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}},
+				},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}},
+				},
+			},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{"a": {{1, 1}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}}}}},
+	},
+	{
+		name: "patial_overlap_module_level",
+		a: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}},
+					rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}},
+				},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}},
+					rpc.UID{Module: "c", Service: "c"}: []config.Button{{Page: "a"}},
+				},
+			},
+		},
+		wantIntersect: layout{"a": {{1, 1}: {rpc.UID{Module: "a", Service: "a"}: []config.Button{{Page: "a"}}}}},
+		wantSubtract:  layout{"a": {{1, 1}: {rpc.UID{Module: "b", Service: "b"}: []config.Button{{Page: "a"}}}}},
+	},
+
+	// Button level sets.
+	{
+		name: "a⊂b_button_level",
+		a: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{
+						{Page: "a"},
+					},
+				},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{
+						{Page: "a"},
+						{Page: "a", Do: ptr("diff")},
+					},
+				},
+			},
+		},
+		wantIntersect: layout{ /* no match due to difference in []config.Button */ },
+		wantSubtract:  layout{ /* path match */ },
+	},
+	{
+		name: "a⊃b_button_level",
+		a: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{
+						{Page: "a"},
+						{Page: "a", Do: ptr("diff")},
+					},
+				},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{
+						{Page: "a"},
+					},
+				},
+			},
+		},
+		wantIntersect: layout{ /* no match due to difference in []config.Button */ },
+		wantSubtract:  layout{ /* path match */ },
+	},
+	{
+		name: "patial_overlap_button_level",
+		a: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{
+						{Page: "a"},
+						{Page: "a", Do: ptr("diff")},
+					},
+				},
+			},
+		},
+		b: layout{
+			"a": {
+				{1, 1}: {
+					rpc.UID{Module: "a", Service: "a"}: []config.Button{
+						{Page: "a"},
+						{Page: "a", Do: ptr("other_diff")},
+					},
+				},
+			},
+		},
+		wantIntersect: layout{ /* no match due to difference in []config.Button */ },
+		wantSubtract:  layout{ /* path match */ },
+	},
+}
+
+func TestLayoutSets(t *testing.T) {
+	for _, test := range layoutSetTests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Run("intersect", func(t *testing.T) {
+				got := intersectLayouts(test.a, test.b)
+				if !cmp.Equal(got, test.wantIntersect) {
+					t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s",
+						cmp.Diff(test.wantIntersect, got))
+				}
+			})
+			t.Run("subtract", func(t *testing.T) {
+				got := subtractLayout(test.a, test.b)
+				if !cmp.Equal(got, test.wantSubtract) {
+					t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s",
+						cmp.Diff(test.wantSubtract, got))
+				}
+			})
 		})
 	}
 }

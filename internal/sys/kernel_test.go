@@ -18,14 +18,12 @@ import (
 )
 
 type testKernel struct {
-	ignoreConn bool
 	*recorder
 }
 
-func newTestKernel(ignoreConn bool) *testKernel {
+func newTestKernel() *testKernel {
 	return &testKernel{
-		ignoreConn: ignoreConn,
-		recorder:   &recorder{},
+		recorder: &recorder{},
 	}
 }
 
@@ -55,9 +53,7 @@ func (k *testKernel) Handle(ctx context.Context, req *jsonrpc2.Request) (result 
 }
 
 func (k *testKernel) Conn(ctx context.Context, uid string) (rpc.Connection, time.Time, bool) {
-	if !k.ignoreConn {
-		k.addAction("conn", uid)
-	}
+	k.addAction("conn", uid)
 	return &testConn{uid: uid, recorder: k.recorder}, time.Time{}, true
 }
 

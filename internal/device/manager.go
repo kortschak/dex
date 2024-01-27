@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"maps"
 	"reflect"
-	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -80,9 +79,20 @@ func (m *Manager) SendTo(service rpc.UID, actions []config.Button) error {
 func (m *Manager) SetPages(ctx context.Context, deflt *string, pages []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	current := m.controller.CurrentName() // Save the current page name.
 	err := m.pages.setPages(ctx, m.controller, deflt, pages)
 	if err != nil {
 		return err
+	}
+	// Attempt to set display back to the previous current page,
+	// falling back to the default if it no longer exists.
+	err = m.SetDisplayTo(ctx, current)
+	if err != nil {
+		m.controller.log.LogAttrs(ctx, slog.LevelDebug, "setting page to last current", slog.Any("error", err))
+		err = m.SetDisplayTo(ctx, m.controller.DefaultName())
+		if err != nil {
+			m.controller.log.LogAttrs(ctx, slog.LevelWarn, "setting page to default", slog.Any("error", err))
+		}
 	}
 	m.pages.notify = nil
 	return nil
@@ -184,9 +194,14 @@ type pageManager struct {
 	last map[string][]sendToRequest
 	reqs map[string][]sendToRequest
 
-	state  map[string]map[pos]map[rpc.UID][]config.Button
+	state  layout
 	notify map[svcConn]Notification
 }
+
+// layout is a device button layout:
+//
+//	page.position.module.[actions]
+type layout map[string]map[pos]map[rpc.UID][]config.Button
 
 // pos is a button position on a page.
 type pos struct{ row, col int }
@@ -238,7 +253,8 @@ type device interface {
 	handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 }
 
-// sendTo queues a set of actions to be added.
+// sendTo queues a set of actions to be added to the next device update by
+// setPages.
 func (p *pageManager) sendTo(dev device, service rpc.UID, actions []config.Button) error {
 	if p.reqs == nil {
 		p.reqs = make(map[string][]sendToRequest)
@@ -304,8 +320,13 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 	if deflt == nil {
 		deflt = &defaultName
 	}
-	want := getState(p.state, p.reqs, pages, *deflt)
+
+	// Construct target layout.
+	want := mkLayout(ctx, dev, p.reqs, pages, *deflt, p.log)
+	unchanged := intersectLayouts(p.state, want)
+
 	p.notify = make(map[svcConn]Notification) // Retain temporarily for testing.
+	// Stop pages that no longer exist in the target layout.
 	for name := range p.state {
 		if len(want[name]) != 0 {
 			continue
@@ -317,7 +338,6 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 			return err
 		}
 
-		// share below: factor out.
 		p.log.LogAttrs(ctx, slog.LevelDebug, "notify pages drop")
 		notify := make(map[svcConn]struct{})
 		for _, module := range p.state[name] {
@@ -331,15 +351,45 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 		}
 		for conn := range notify {
 			p.notify[conn] = Notification{Service: conn.uid, Buttons: nil}
-			err := conn.Notify(ctx, "state", rpc.NewMessage(kernelUID, Notification{Service: conn.uid}))
-			if err != nil {
-				p.log.LogAttrs(ctx, slog.LevelError, "failed to notify drop state", slog.Any("uid", conn.uid), slog.Any("error", err))
+		}
+	}
+
+	// Stop buttons that are changing or are no longer wanted.
+	stopped := make(map[pagePos]bool)
+	for name, buttons := range subtractLayout(p.state, unchanged) {
+		page, exists := dev.Page(name)
+		if !exists {
+			// This should never happen.
+			p.log.LogAttrs(ctx, slog.LevelWarn, "attempt to remove absent page", slog.String("page", name))
+			continue
+		}
+		for pos, module := range buttons {
+			if !stopped[pagePos{name, pos}] {
+				p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
+				page.Button(pos.row, pos.col).Stop()
+				stopped[pagePos{name, pos}] = true
+			}
+
+			p.log.LogAttrs(ctx, slog.LevelDebug, "notify pages drop buttons")
+			notify := make(map[svcConn]struct{})
+			for uid := range module {
+				if uid.IsKernel() {
+					continue
+				}
+				conn, _, ok := dev.conn(ctx, uid.Module)
+				if !ok {
+					return fmt.Errorf("failed to get conn to %s", uid.Module)
+				}
+				notify[svcConn{uid, conn}] = struct{}{}
+			}
+			for conn := range notify {
+				p.notify[conn] = Notification{Service: conn.uid, Buttons: nil}
 			}
 		}
 	}
 
-	stopped := make(map[pagePos]bool)
-	for name, buttons := range want {
+	// Start buttons that are new in the layout target.
+	for name, buttons := range subtractLayout(want, unchanged) {
 		page, exists := dev.Page(name)
 		if !exists {
 			err := dev.NewPage(name)
@@ -348,130 +398,107 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 			}
 			page, _ = dev.Page(name)
 		}
-
+		// Prevent the images from being rendered if we
+		// are not the active page. This pause will be
+		// released for the desired active page by the
+		// caller.
+		page.Pause()
 		for pos, module := range buttons {
-			if !pos.isValidFor(dev) {
-				rows, cols := dev.Layout()
-				p.log.LogAttrs(ctx, slog.LevelError, "invalid button position", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col), slog.Int("layout_rows", rows), slog.Int("layout_cols", cols))
-				continue
+			if !stopped[pagePos{name, pos}] {
+				p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
+				page.Button(pos.row, pos.col).Stop()
+				stopped[pagePos{name, pos}] = true
 			}
 
-			var haveButton, wantButton bool
-			for _, actions := range module {
-				if len(actions) != 0 {
-					wantButton = true
-					break
+			var press, release []func(ctx context.Context, page string, row, col int, t time.Time) error
+			for uid, actions := range module {
+				var (
+					conn rpc.Connection
+					ok   bool
+				)
+				if !uid.IsKernel() {
+					conn, _, ok = dev.conn(ctx, uid.Module)
+					if !ok {
+						return fmt.Errorf("failed to get conn to %s", uid.Module)
+					}
+					note := p.notify[svcConn{uid, conn}]
+					note.Service = uid
+					note.Buttons = append(note.Buttons, actions...)
+					p.notify[svcConn{uid, conn}] = note
+				}
+				for _, a := range actions {
+					a := a // TODO: Remove this when loopvar behaviour is changed in go1.22.
+					if a.Change == nil {
+						// Draw image if it exists, or stop the button if not active.
+						if a.Image != "" {
+							// We are running as a single locked thread here, so
+							// defer the drawing of the button image until after
+							// the page is made active.
+							go p.drawImage(ctx, dev, rpc.NewMessage(uid, DrawMessage{
+								Page: a.Page, Row: a.Row, Col: a.Col, Image: a.Image,
+							}))
+						} else if !isActive(a) {
+							delete(want[name][pos], uid)
+							if len(want[name][pos]) == 0 {
+								delete(want[name], pos)
+							}
+						}
+						continue
+					}
+					do := func(ctx context.Context, page string, row, col int, t time.Time) error {
+						// Draw image if it exists.
+						if a.Image != "" {
+							p.drawImage(ctx, dev, rpc.NewMessage(uid, DrawMessage{
+								Page: a.Page, Row: a.Row, Col: a.Col, Image: a.Image,
+							}))
+						}
+						if a.Do != nil && *a.Do != "" {
+							if uid.IsKernel() {
+								// Button's service belongs to kernel, so
+								// this is a direct kernel call.
+								return p.doKernel(ctx, *a.Do, dev, rpc.NewMessage(uid, a.Args))
+							}
+							return conn.Notify(ctx, *a.Do, rpc.NewMessage(kernelUID, a.Args))
+						}
+						return nil
+					}
+					switch *a.Change {
+					case "press":
+						press = append(press, do)
+					case "release":
+						release = append(release, do)
+					default:
+						return fmt.Errorf("invalid state change: %s", *a.Change)
+					}
 				}
 			}
-			for _, actions := range p.state[name][pos] {
-				if len(actions) != 0 {
-					haveButton = true
-					break
-				}
+
+			if len(press) != 0 || len(release) != 0 {
+				p.log.LogAttrs(ctx, slog.LevelDebug, "start button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
 			}
-			switch {
-			case !wantButton:
-				if haveButton {
-					if !stopped[pagePos{name, pos}] {
-						p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
-						page.Button(pos.row, pos.col).Stop()
-						stopped[pagePos{name, pos}] = true
-					}
+			page.Button(pos.row, pos.col).OnPress(bundleActions(press))
+			page.Button(pos.row, pos.col).OnRelease(bundleActions(release))
+		}
+	}
 
-					// shared above: factor out.
-					p.log.LogAttrs(ctx, slog.LevelDebug, "notify pages drop buttons")
-					notify := make(map[svcConn]struct{})
-					for uid := range p.state[name][pos] {
-						if uid.IsKernel() {
-							continue
-						}
-						conn, _, ok := dev.conn(ctx, uid.Module)
-						if !ok {
-							return fmt.Errorf("failed to get conn to %s", uid.Module)
-						}
-						notify[svcConn{uid, conn}] = struct{}{}
+	for name, buttons := range unchanged {
+		for pos, module := range buttons {
+			p.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
+			for uid, actions := range module {
+				var (
+					conn rpc.Connection
+					ok   bool
+				)
+				if !uid.IsKernel() {
+					conn, _, ok = dev.conn(ctx, uid.Module)
+					if !ok {
+						return fmt.Errorf("failed to get conn to %s", uid.Module)
 					}
-					for conn := range notify {
-						err := conn.Notify(ctx, "state", rpc.NewMessage(kernelUID, Notification{Service: conn.uid}))
-						if err != nil {
-							p.log.LogAttrs(ctx, slog.LevelError, "failed to notify drop state", slog.Any("uid", conn.uid), slog.Any("error", err))
-						}
-					}
+					note := p.notify[svcConn{uid, conn}]
+					note.Service = uid
+					note.Buttons = append(note.Buttons, actions...)
+					p.notify[svcConn{uid, conn}] = note
 				}
-			case reflect.DeepEqual(p.state[name][pos], module):
-				p.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
-			default:
-				if haveButton && !stopped[pagePos{name, pos}] {
-					p.log.LogAttrs(ctx, slog.LevelDebug, "stop button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
-					page.Button(pos.row, pos.col).Stop()
-					stopped[pagePos{name, pos}] = true
-				}
-
-				var press, release []func(ctx context.Context, page string, row, col int, t time.Time) error
-				for uid, actions := range module {
-					var (
-						conn rpc.Connection
-						ok   bool
-					)
-					if !uid.IsKernel() {
-						conn, _, ok = dev.conn(ctx, uid.Module)
-						if !ok {
-							return fmt.Errorf("failed to get conn to %s", uid.Module)
-						}
-						note := p.notify[svcConn{uid, conn}]
-						note.Service = uid
-						note.Buttons = append(note.Buttons, actions...)
-						p.notify[svcConn{uid, conn}] = note
-					}
-					for _, a := range actions {
-						a := a // TODO: Remove this when loopvar behaviour is changed in go1.22.
-						if a.Change == nil {
-							// Draw image if it exists, or stop the button if not active.
-							if a.Image != "" {
-								p.drawImage(ctx, dev, rpc.NewMessage(uid, DrawMessage{
-									Page: a.Page, Row: a.Row, Col: a.Col, Image: a.Image,
-								}))
-							} else if haveButton && !isActive(a) {
-								delete(want[name][pos], uid)
-								if len(want[name][pos]) == 0 {
-									delete(want[name], pos)
-								}
-							}
-							continue
-						}
-						do := func(ctx context.Context, page string, row, col int, t time.Time) error {
-							// Draw image if it exists.
-							if a.Image != "" {
-								p.drawImage(ctx, dev, rpc.NewMessage(uid, DrawMessage{
-									Page: a.Page, Row: a.Row, Col: a.Col, Image: a.Image,
-								}))
-							}
-							if a.Do != nil && *a.Do != "" {
-								if uid.IsKernel() {
-									// Button's service belongs to kernel, so
-									// this is a direct kernel call.
-									return p.doKernel(ctx, *a.Do, dev, rpc.NewMessage(uid, a.Args))
-								}
-								return conn.Notify(ctx, *a.Do, rpc.NewMessage(kernelUID, a.Args))
-							}
-							return nil
-						}
-						switch *a.Change {
-						case "press":
-							press = append(press, do)
-						case "release":
-							release = append(release, do)
-						default:
-							return fmt.Errorf("invalid state change: %s", *a.Change)
-						}
-					}
-				}
-
-				if len(press) != 0 || len(release) != 0 {
-					p.log.LogAttrs(ctx, slog.LevelDebug, "start button", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col))
-				}
-				page.Button(pos.row, pos.col).OnPress(bundleActions(press))
-				page.Button(pos.row, pos.col).OnRelease(bundleActions(release))
 			}
 		}
 	}
@@ -481,6 +508,7 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 
 	p.log.LogAttrs(ctx, slog.LevelDebug, "notify pages")
 	for conn, note := range p.notify {
+		note.Buttons = unique(note.Buttons)
 		p.log.LogAttrs(ctx, slog.LevelDebug, "notify service", slog.Any("notification", note))
 		err := conn.Notify(ctx, "state", rpc.NewMessage(kernelUID, note))
 		if err != nil {
@@ -539,13 +567,9 @@ type Notification struct {
 	Buttons []config.Button `json:"buttons"`
 }
 
-// getState returns a device state goal based on a set of requests, the list of
+// mkLayout returns a device layout goal based on a set of requests, the list of
 // pages, and the default page name.
-func getState(state map[string]map[pos]map[rpc.UID][]config.Button, reqs map[string][]sendToRequest, pages []string, deflt string) map[string]map[pos]map[rpc.UID][]config.Button {
-	if reqs == nil {
-		return state
-	}
-
+func mkLayout(ctx context.Context, dev device, reqs map[string][]sendToRequest, pages []string, deflt string, log *slog.Logger) layout {
 	validPage := make(map[string]bool, len(pages))
 	for _, p := range pages {
 		if p == "" {
@@ -553,80 +577,132 @@ func getState(state map[string]map[pos]map[rpc.UID][]config.Button, reqs map[str
 		}
 		validPage[p] = true
 	}
-
-	want := cloneState(state)
+	want := make(layout)
 	for name, req := range reqs {
+		if !validPage[name] {
+			continue
+		}
 		for _, r := range req {
-			for _, module := range want[name] {
-				if len(r.Actions) == 0 || !validPage[name] {
-					delete(module, r.Service)
-					continue
-				}
-			}
 			for _, a := range r.Actions {
 				actions, ok := want[a.Page]
 				if !ok {
 					actions = make(map[pos]map[rpc.UID][]config.Button)
 					want[a.Page] = actions
 				}
-				svc, ok := actions[pos{a.Row, a.Col}]
+				p := pos{a.Row, a.Col}
+				if !p.isValidFor(dev) {
+					rows, cols := dev.Layout()
+					log.LogAttrs(ctx, slog.LevelError, "invalid button position", slog.String("page", name), slog.Int("row", p.row), slog.Int("col", p.col), slog.Int("layout_rows", rows), slog.Int("layout_cols", cols))
+					continue
+				}
+				svc, ok := actions[p]
 				if !ok {
 					svc = make(map[rpc.UID][]config.Button)
-					actions[pos{a.Row, a.Col}] = svc
+					actions[p] = svc
 				}
 				if isActive(a) {
 					svc[r.Service] = append(svc[r.Service], a)
-				} else {
-					svc[r.Service] = []config.Button{a}
 				}
 			}
 		}
 	}
-	for name, page := range want {
-		if !validPage[name] {
-			delete(want, name)
-			continue
-		}
-		for pos, module := range page {
-			if len(module) == 0 {
-				delete(page, pos)
-				continue
-			}
+	for _, page := range want {
+		for _, module := range page {
 			for svc, actions := range module {
 				module[svc] = unique(actions)
 			}
-		}
-		if len(page) == 0 {
-			delete(want, name)
 		}
 	}
 	return want
 }
 
-func isActive(b config.Button) bool {
-	return (b.Change != nil && b.Do != nil) || b.Image != ""
+// intersectLayouts returns the intersection of layouts a and b. Intersection is
+// defined based on equality of key path and leaf value.
+func intersectLayouts(a, b layout) layout {
+	n := make(layout)
+	for name := range keyIntersect(a, b) {
+		for button := range keyIntersect(a[name], b[name]) {
+			actions := intersect(a[name][button], b[name][button])
+			if len(actions) == 0 {
+				continue
+			}
+			page, ok := n[name]
+			if !ok {
+				page = make(map[pos]map[rpc.UID][]config.Button)
+				n[name] = page
+			}
+			// Fields in elements of actions must not be mutated
+			// in the resulting clone as they may be shared.
+			page[button] = actions
+		}
+	}
+	return n
 }
 
-// cloneState returns a deep copy of orig.
-func cloneState(orig map[string]map[pos]map[rpc.UID][]config.Button) map[string]map[pos]map[rpc.UID][]config.Button {
-	if orig == nil {
-		return make(map[string]map[pos]map[rpc.UID][]config.Button)
-	}
-	state := maps.Clone(orig)
-	for name, page := range state {
-		page := maps.Clone(page)
-		for pos, module := range page {
-			module := maps.Clone(module)
+// subtractLayout returns layout a with elements of b removed recursively.
+// Subtraction is defined based on key path equality.
+func subtractLayout(a, b layout) layout {
+	n := make(layout)
+	for name, page := range a {
+		for button, module := range page {
 			for svc, actions := range module {
+				_, ok := b[name][button][svc]
+				if ok {
+					continue
+				}
+				p, ok := n[name]
+				if !ok {
+					p = make(map[pos]map[rpc.UID][]config.Button)
+					n[name] = p
+				}
+				m, ok := p[button]
+				if !ok {
+					m = make(map[rpc.UID][]config.Button)
+					p[button] = m
+				}
 				// Fields in elements of actions must not be mutated
 				// in the resulting clone as they may be shared.
-				module[svc] = slices.Clone(actions)
+				m[svc] = actions
 			}
-			page[pos] = module
 		}
-		state[name] = page
 	}
-	return state
+	return n
+}
+
+// keyIntersect returns the key set intersection of a and b, a∩b.
+func keyIntersect[M ~map[K]V, K comparable, V any](a, b M) map[K]struct{} {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	n := make(map[K]struct{}, len(a))
+	for k := range a {
+		n[k] = struct{}{}
+	}
+	for k := range n {
+		if _, ok := b[k]; !ok {
+			delete(n, k)
+		}
+	}
+	return n
+}
+
+// intersect returns the set intersection of a and b, a∩b. Set elements
+// are the concatenation of a key and its corresponding value.
+func intersect[M ~map[K]V, K comparable, V any](a, b M) M {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	n := maps.Clone(a)
+	for k, av := range n {
+		if bv, ok := b[k]; !ok || !reflect.DeepEqual(av, bv) {
+			delete(n, k)
+		}
+	}
+	return n
+}
+
+func isActive(b config.Button) bool {
+	return (b.Change != nil && b.Do != nil) || b.Image != ""
 }
 
 // unique returns paths lexically sorted in ascending order and with repeated
