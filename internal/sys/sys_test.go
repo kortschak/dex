@@ -1802,3 +1802,372 @@ func (r *recorder) addAction(name string, args ...any) error {
 	r.mu.Unlock()
 	return nil
 }
+
+var sameInstConfigTests = []struct {
+	name     string
+	old, new *config.Service
+	option   cmp.Option
+	want     bool
+}{
+	{
+		name:   "boot_nil_cmp_ignoreListen",
+		old:    nil,
+		new:    &config.Service{},
+		option: ignoreListen,
+		want:   false,
+	},
+	{
+		name:   "boot_nil_cmp_ignoreOptions",
+		old:    nil,
+		new:    &config.Service{},
+		option: ignoreOptions,
+		want:   false,
+	},
+	{
+		name:   "boot_nil_cmp_ignoreDynamic",
+		old:    nil,
+		new:    &config.Service{},
+		option: ignoreDynamic,
+		want:   false,
+	},
+	{
+		name: "same_ignoreListen",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreListen,
+		want:   true,
+	},
+	{
+		name: "same_ignoreOptions",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreOptions,
+		want:   true,
+	},
+	{
+		name: "same_ignoreDynamic",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreDynamic,
+		want:   true,
+	},
+	{
+		name: "different_listen_pos_ignoreListen",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 2, Col: 2, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreListen,
+		want:   true,
+	},
+	{
+		name: "different_listen_pos_ignoreOptions",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 2, Col: 2, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreOptions,
+		want:   false,
+	},
+	{
+		name: "different_listen_pos_ignoreDynamic",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 2, Col: 2, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreDynamic,
+		want:   false,
+	},
+	{
+		name: "different_listen_args_ignoreListen",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"one", "two"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreListen,
+		want:   true,
+	},
+	{
+		name: "different_listen_args_ignoreOptions",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"one", "two"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreOptions,
+		want:   false,
+	},
+	{
+		name: "different_listen_args_ignoreDynamic",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"one", "two"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreDynamic,
+		want:   false,
+	},
+	{
+		name: "different_serial_ignoreListen",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("cereal"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"one", "two"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreListen,
+		want:   false,
+	},
+	{
+		name: "different_serial_ignoreOptions",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("cereal"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"one", "two"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreOptions,
+		want:   false,
+	},
+	{
+		name: "different_serial_ignoreDynamic",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("cereal"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"one", "two"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		option: ignoreDynamic,
+		want:   false,
+	},
+	{
+		name: "different_sum_ignoreListen",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{0: 1},
+		},
+		option: ignoreListen,
+		want:   true,
+	},
+	{
+		name: "different_sum_ignoreOptions",
+		old: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{},
+		},
+		new: &config.Service{
+			Name:    "svc",
+			Active:  ptr(true),
+			Module:  ptr("mod"),
+			Serial:  ptr("serial"),
+			Listen:  []config.Button{{Row: 1, Col: 1, Change: ptr("press"), Do: ptr("action"), Args: map[string]any{"path": "p", "args": []string{"1", "2"}}}},
+			Options: map[string]any{"key1": map[string]any{"key2": "val"}},
+			Sum:     &config.Sum{0: 1},
+		},
+		option: ignoreOptions,
+		want:   true,
+	},
+}
+
+func TestSameInstConfig(t *testing.T) {
+	for _, test := range sameInstConfigTests {
+		t.Run(test.name, func(t *testing.T) {
+			const svcKey = "key"
+			m := &Manager[*testKernel, *testDevice, *testButton]{}
+			if test.old != nil {
+				m.current = &config.System{Services: map[string]*config.Service{
+					svcKey: test.old,
+				}}
+			}
+			got := m.sameInstConfig(svcKey, test.new, test.option)
+			if got != test.want {
+				t.Errorf("unexpected result from sameInstConfig: got:%t want:%t", got, test.want)
+			}
+		})
+	}
+}

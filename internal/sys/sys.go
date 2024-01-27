@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -440,7 +441,7 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 			m.serviceSerial[svc] = *cfg.Serial
 		}
 		delete(m.missingService, svc)
-		if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreConfig) {
+		if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreOptions) {
 			// Register requested button events.
 			m.log.LogAttrs(ctx, slog.LevelDebug, "request notifications", slog.String("uid", uid), slog.String("name", cfg.Name), slog.Any("listen", cfg.Listen))
 			err := m.devices[*cfg.Serial].SendTo(rpc.UID{Module: uid, Service: cfg.Name}, cfg.Listen)
@@ -548,7 +549,7 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 				if cfg.Serial != nil && m.missingSerial[*cfg.Serial] {
 					continue
 				}
-				if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreConfig) {
+				if cfg.Serial != nil && !m.sameInstConfig(cfg.Name, &cfg, ignoreOptions) {
 					// Register requested button events.
 					m.log.LogAttrs(ctx, slog.LevelDebug, "request notifications", slog.String("uid", uid), slog.String("name", cfg.Name), slog.Any("listen", cfg.Listen))
 					err := m.devices[*cfg.Serial].SendTo(rpc.UID{Module: uid, Service: cfg.Name}, cfg.Listen)
@@ -611,9 +612,14 @@ var ignoreListen = cmp.FilterValues(
 	cmp.Ignore(),
 )
 
-var ignoreConfig = cmp.FilterValues(
-	func(_, _ map[string]any) bool { return true },
-	cmp.Ignore(),
+var (
+	ignoreOptions = cmp.FilterPath(
+		func(p cmp.Path) bool {
+			return p.Last().Type() == mapStringAny && p.String() == "Options"
+		},
+		cmp.Ignore(),
+	)
+	mapStringAny = reflect.TypeOf(map[string]any{})
 )
 
 func (m *Manager[K, D, B]) sameModConfig(uid string, mod *config.Module) bool {
@@ -625,13 +631,13 @@ func (m *Manager[K, D, B]) sameModConfig(uid string, mod *config.Module) bool {
 	return cmp.Equal(mod, m.current.Modules[uid], ignoreDynamic)
 }
 
-func (m *Manager[K, D, B]) sameInstConfig(uid string, mod *config.Service, ignore cmp.Option) bool {
+func (m *Manager[K, D, B]) sameInstConfig(uid string, mod *config.Service, option cmp.Option) bool {
 	oldIsNil := m.current == nil
 	newIsNil := mod == nil
 	if oldIsNil != newIsNil {
 		return false
 	}
-	return cmp.Equal(mod, m.current.Services[uid], ignoreDynamic, ignore)
+	return cmp.Equal(mod, m.current.Services[uid], ignoreDynamic, option)
 }
 
 var ignoreDynamic = cmp.FilterValues(
