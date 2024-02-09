@@ -19,6 +19,7 @@ import (
 func (w *Watcher) Watch(ctx context.Context) error {
 	defer func() {
 		w.watcher.Close()
+		<-w.done
 		close(w.changes)
 	}()
 

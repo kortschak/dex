@@ -87,6 +87,7 @@ type Watcher struct {
 	dir      string
 	debounce time.Duration
 	watcher  *fsnotify.Watcher
+	done     chan struct{}
 	changes  chan<- Change
 	hash     hash.Hash
 	hashes   map[string]Sum
@@ -118,7 +119,9 @@ func (w *Watcher) init(ctx context.Context) (*Watcher, error) {
 	if err != nil {
 		return nil, err
 	}
+	w.done = make(chan struct{})
 	go func() {
+		defer close(w.done)
 		for _, e := range de {
 			name := e.Name()
 			if filepath.Ext(name) != ".toml" {
