@@ -94,7 +94,7 @@ func TestDaemon(t *testing.T) {
 			}()
 
 			uid := rpc.UID{Module: "watcher"}
-			err = kernel.Spawn(ctx, os.Stdout, g.NewHandler("🔶 "), uid.Module,
+			err = kernel.Spawn(ctx, os.Stdout, g.NewHandler("🔶 "), nil, uid.Module,
 				exePath, "-log", level.Level().String(), fmt.Sprintf("-lines=%t", *lines),
 			)
 			if err != nil {

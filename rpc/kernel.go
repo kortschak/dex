@@ -436,7 +436,7 @@ func (k *Kernel) state(ctx context.Context, req *jsonrpc2.Request, m Message[Non
 // "deregister" notification before exiting. The child process is passed the
 // read end of a pipe on stdin. No writes are ever made by the parent, but the
 // child may use the pipe to detect termination of the parent.
-func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name string, args ...string) error {
+func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, done func(), uid, name string, args ...string) error {
 	k.dMu.Lock()
 	defer k.dMu.Unlock()
 
@@ -486,6 +486,9 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name 
 		k.log.LogAttrs(ctx, slog.LevelInfo, "cleanup zombie", slog.Any("uid", uid))
 		const concurrently = false
 		k.close(ctx, uid, d, concurrently)
+		if done != nil {
+			go done()
+		}
 	}()
 	return nil
 }

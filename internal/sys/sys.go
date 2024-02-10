@@ -137,7 +137,7 @@ type Kernel interface {
 
 	Conn(ctx context.Context, uid string) (rpc.Connection, time.Time, bool)
 
-	Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name string, args ...string) error
+	Spawn(ctx context.Context, stdout, stderr io.Writer, done func(), uid, name string, args ...string) error
 	SetDrop(uid string, drop func() error) error
 	Kill(uid string)
 
@@ -200,6 +200,9 @@ type Store interface {
 // Configure changes a managed system's state to match the provided
 // configuration. If the system is not yet running, it will be started.
 func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.log.LogAttrs(ctx, slog.LevelDebug, "set config", slog.Any("config", slogext.PrivateRedact{Val: cfg, Tag: "json"}))
 
 	paths, err := config.Vet(cfg)
@@ -511,7 +514,26 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 				stdout = os.Stdout
 				stderr = os.Stderr
 			}
-			err := m.kernel.Spawn(ctx, stdout, stderr, uid, mod.Path, args...)
+			var done func()
+			done = func() {
+				// Check whether the daemon is in m.spawned and if it is,
+				// restart the executable. Removal of the uid from m.spawned
+				// is done in Configure when a module is not wanted.
+
+				m.mu.Lock()
+				defer m.mu.Unlock()
+				if !m.spawned[uid] {
+					return
+				}
+				m.log.LogAttrs(ctx, slog.LevelWarn, "daemon died", slog.String("uid", uid))
+				err := m.kernel.Spawn(ctx, stdout, stderr, done, uid, mod.Path, args...)
+				if err != nil {
+					m.log.LogAttrs(ctx, slog.LevelError, "failed to restart", slog.String("uid", uid), slog.Any("error", err))
+				} else {
+					m.log.LogAttrs(ctx, slog.LevelInfo, "daemon respawned", slog.String("uid", uid))
+				}
+			}
+			err := m.kernel.Spawn(ctx, stdout, stderr, done, uid, mod.Path, args...)
 			if err != nil {
 				m.log.LogAttrs(ctx, slog.LevelWarn, "failed to start", slog.String("uid", uid), slog.Any("error", err))
 				continue
@@ -793,9 +815,6 @@ func (m *Manager[K, D, B]) setFuncs(funcs rpc.Funcs) {
 
 // startNetwork starts the RPC network.
 func (m *Manager[K, D, B]) startNetwork(ctx context.Context, network string, options jsonrpc2.NetListenOptions) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	m.log.LogAttrs(ctx, slog.LevelDebug, "start rpc kernel", slog.String("network", network), slog.Any("options", listenOptionsValue{options}))
 	k, err := m.newKernel(ctx, network, options, m.parentLog)
 	if err != nil {
@@ -825,7 +844,7 @@ func (m *Manager[K, D, B]) Close() error {
 	return err
 }
 
-// Close terminates the kernel and all devices but retains the final state
+// close terminates the kernel and all devices but retains the final state
 // of the kernel and devices. It is intended to be used for testing.
 func (m *Manager[K, D, B]) close() error {
 	if !m.running {
@@ -834,6 +853,7 @@ func (m *Manager[K, D, B]) close() error {
 	for _, d := range m.devices {
 		d.Close()
 	}
+	m.spawned = nil // Prevent daemons from attempting to respawn.
 	err := m.kernel.Close()
 	m.running = false
 	return err
