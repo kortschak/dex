@@ -16,6 +16,8 @@ Modules running in the system are started by the kernel which passes a set of we
 
 In addition to these required flags, if the `log` `module.*.log_mode` configuration is used, the module must understand the boolean `log_stdout` flag which indicates that it should log to stdout instead of stderr.
 
+When a module is spawned it is given the read end of a pipe in stdin that may be used to detect unexpected termination of the kernel process.
+
 ## Configuration
 
 The complete specification of the required by the system is defined in the [configuration schema](https://pkg.go.dev/github.com/kortschak/dex/config#pkg-constants) using the [CUE language](https://cuelang.org/) and in the [Go types](https://pkg.go.dev/github.com/kortschak/dex/config#System) used to hold the configuration values.

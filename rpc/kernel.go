@@ -47,9 +47,10 @@ type Kernel struct {
 }
 
 type daemon struct {
-	uid     string
-	cmd     *execabs.Cmd
-	builtin *Daemon
+	uid       string
+	cmd       *execabs.Cmd
+	keepalive *os.File
+	builtin   *Daemon
 
 	// conn is the connection to the daemon
 	// from the kernel.
@@ -415,7 +416,9 @@ func (k *Kernel) state(ctx context.Context, req *jsonrpc2.Request, m Message[Non
 // is started by executing name with the provided args. The new process is given
 // stdout and stderr as redirects for those output streams. Spawned daemons are
 // expected to send a "register" JSON RPC 2 call to the kernel on start and a
-// "deregister" notification before exiting.
+// "deregister" notification before exiting. The child process is passed the
+// read end of a pipe on stdin. No writes are ever made by the parent, but the
+// child may use the pipe to detect termination of the parent.
 func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name string, args ...string) error {
 	k.dMu.Lock()
 	defer k.dMu.Unlock()
@@ -431,15 +434,20 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name 
 		"-addr", k.listener.Addr().String())
 	cmd := execabs.CommandContext(ctx, name, args...)
 	k.log.LogAttrs(ctx, slog.LevelInfo, "spawn", slog.String("command", cmd.String()), slog.String("uid", uid))
+	lifeline, keepalive, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stdin = lifeline
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		return err
 	}
 	k.log.LogAttrs(ctx, slog.LevelDebug, "started", slog.String("uid", uid), slog.Int("pid", cmd.Process.Pid))
 
-	d := &daemon{uid: uid, cmd: cmd, ready: make(chan struct{})}
+	d := &daemon{uid: uid, cmd: cmd, keepalive: keepalive, ready: make(chan struct{})}
 	k.daemons[uid] = d
 
 	// Watch the daemon process in case it fails to deregister.
@@ -580,6 +588,7 @@ func (k *Kernel) kill(uid string, d *daemon) {
 
 func (k *Kernel) close(ctx context.Context, uid string, d *daemon, concurrently bool) {
 	close := func() {
+		defer d.keepalive.Close()
 		k.log.LogAttrs(ctx, slog.LevelDebug, "closing connection", slog.String("uid", uid))
 		if d.conn == nil {
 			k.log.LogAttrs(ctx, slog.LevelDebug, "connection to close not established", slog.String("uid", uid))

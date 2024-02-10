@@ -110,6 +110,11 @@ func Main() int {
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	waitParent(func() {
+		log.LogAttrs(ctx, slog.LevelError, "dex died")
+		cancel()
+	})
+
 	h := newDaemon(*uid, log, &level, addSource, ctx, cancel)
 	err = h.dial(ctx, *network, *addr, net.Dialer{})
 	if err != nil {
@@ -123,6 +128,13 @@ func Main() int {
 	log.LogAttrs(ctx, slog.LevelInfo, "exit")
 
 	return success
+}
+
+func waitParent(fn func()) {
+	go func() {
+		os.Stdin.Read([]byte{0})
+		fn()
+	}()
 }
 
 func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *atomic.Bool, ctx context.Context, cancel context.CancelFunc) *daemon {
