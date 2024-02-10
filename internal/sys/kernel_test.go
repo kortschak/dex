@@ -57,7 +57,7 @@ func (k *testKernel) Conn(ctx context.Context, uid string) (rpc.Connection, time
 	return &testConn{uid: uid, recorder: k.recorder}, time.Time{}, true
 }
 
-func (k *testKernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name string, args ...string) error {
+func (k *testKernel) Spawn(ctx context.Context, stdout, stderr io.Writer, _ func(), uid, name string, args ...string) error {
 	return k.addAction("spawn", uid, name, args)
 }
 
