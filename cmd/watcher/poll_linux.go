@@ -32,6 +32,8 @@ struct details {
 #define enodisplay     1
 #define enoscreensaver 2
 
+int handleXError(Display *dpy, XErrorEvent *event);
+
 Status get_focused_window(Display *display, Window *window_return);
 Status get_window_classname(Display *display, Window window, char **class_ret, char **name_ret);
 Status get_window_name(Display *display, Window window, char **name_ret);
@@ -47,14 +49,18 @@ int activeWindow(struct details *d) {
 	Window window;
 	int flags = 0;
 
+	XErrorHandler oldHandler = XSetErrorHandler(handleXError);
+
 	Display *display = XOpenDisplay(NULL);
 	if (display == NULL) {
+		XSetErrorHandler(oldHandler);
 		return -enodisplay;
 	}
 	XScreenSaverInfo saver_info;
 	ok = get_screen_saver_info(display, &saver_info);
 	if (!ok) {
 		XCloseDisplay(display);
+		XSetErrorHandler(oldHandler);
 		return -enoscreensaver;
 	}
 	d->idle = saver_info.idle;
@@ -62,6 +68,7 @@ int activeWindow(struct details *d) {
 	ok = get_focused_window(display, &window);
 	if (!ok) {
 		XCloseDisplay(display);
+		XSetErrorHandler(oldHandler);
 		return flags;
 	}
 	flags = 1;
@@ -75,6 +82,7 @@ int activeWindow(struct details *d) {
 		flags |= 4;
 	}
 	XCloseDisplay(display);
+	XSetErrorHandler(oldHandler);
 	return flags;
 }
 
