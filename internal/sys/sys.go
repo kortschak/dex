@@ -376,6 +376,7 @@ func (m *Manager[K, D, B]) setDevices(ctx context.Context, devices []config.Devi
 		d, err := m.newDevice(ctx, dev.PID, *dev.Serial, m.kernel, m.parentLog)
 		if err != nil {
 			if !dev.Required {
+				m.log.LogAttrs(ctx, slog.LevelWarn, "non-required device missing", slog.String("pid", fmt.Sprintf("0x%04x", uint16(dev.PID))), slog.String("model", dev.PID.String()), slog.String("serial", *dev.Serial), slog.Any("error", err))
 				m.missingSerial[*dev.Serial] = true
 				continue
 			}
