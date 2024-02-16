@@ -203,7 +203,7 @@ The `log_mode` option is static and set when the module is spawned.
 
 On linux you can start `dex` as a service using systemd. Since `dex` handles a single user's interaction with the Stream Deck it should be a user service.
 
-You can place the unit file below either in `~/.config/systemd/user` or in `/etc/systemd/user` and then start the service; run `systemctl --user daemon-reload`, `systemctl --user enable dex.service`, and then start the service with `systemctl --user start dex.service`.
+You can place the unit file below either in `~/.config/systemd/user` or in `/etc/systemd/user`, run `systemctl --user daemon-reload`, and then start the service; `systemctl --user start dex.service`.
 ```
 [Unit]
 Description=Dex Service
@@ -225,7 +225,16 @@ StandardError=file:%h/.local/state/dex/log/dex.log
 ```
 or another more convenient path.
 
-The service can be stopped with `systemctl --user stop dex.service` and disabled with `systemctl --user disable dex.service`.
+Since the service will most likely need access to your user environment (depending on the configuration), if you want the service to start on login, it is best to start the service with an autostart desktop file. For example
+```
+[Desktop Entry]
+Type=Application
+Name=dex
+Exec=systemctl --user start dex.service
+Comment=Start dex Stream Deck controller
+```
+
+The service can be stopped with `systemctl --user stop dex.service`.
 
 ## Non-Go Dependencies
 
