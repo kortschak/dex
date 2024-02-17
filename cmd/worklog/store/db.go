@@ -240,7 +240,7 @@ func bucketMetadata(db querier, bid string) (*worklog.BucketMetadata, error) {
 	if rows.Next() {
 		return &m, errors.New("unexpected item")
 	}
-	return &m, nil
+	return &m, rows.Close()
 }
 
 const InsertEvent = `insert into events(bucketrow, starttime, endtime, datastr) values ((select rowid from buckets where id = ?), ?, ?, ?)`
@@ -329,7 +329,7 @@ func (db *DB) LastEvent(uid string) (*worklog.Event, error) {
 	if rows.Next() {
 		return &e, errors.New("unexpected item")
 	}
-	return &e, nil
+	return &e, rows.Close()
 }
 
 // Dump dumps the complete database into a slice of [worklog.BucketMetadata].
@@ -500,7 +500,7 @@ func (db *DB) buckets() ([]worklog.BucketMetadata, error) {
 		}
 		b = append(b, m)
 	}
-	return b, nil
+	return b, rows.Close()
 }
 
 const Event = `select id, starttime, endtime, datastr from events where bucketrow = (
@@ -554,7 +554,7 @@ func (db *DB) events(bid string) ([]worklog.Event, error) {
 		}
 		e = append(e, m)
 	}
-	return e, nil
+	return e, rows.Close()
 }
 
 const (
@@ -666,7 +666,7 @@ func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn fu
 			return err
 		}
 	}
-	return nil
+	return rows.Close()
 }
 
 const AmendEvents = `begin transaction;
