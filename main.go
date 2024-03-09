@@ -119,7 +119,7 @@ func Main() int {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		sig := <-c
-		log.LogAttrs(ctx, slog.LevelInfo, "terminating", slog.Any("signal", sig))
+		log.LogAttrs(ctx, slog.LevelInfo, "terminating", slog.Any("signal", slogext.Stringer{Stringer: sig}))
 		cancel()
 	}()
 

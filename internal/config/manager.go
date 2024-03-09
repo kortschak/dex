@@ -21,6 +21,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/kortschak/dex/config"
+	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
 
@@ -48,7 +49,7 @@ func NewManager(log *slog.Logger) *Manager {
 // error returned will be fs.PathError.
 func (m *Manager) Apply(c Change) error {
 	ctx := context.Background()
-	m.log.LogAttrs(ctx, slog.LevelDebug, "apply", slog.Any("op", opValue{c.Op()}))
+	m.log.LogAttrs(ctx, slog.LevelDebug, "apply", slog.Any("op", slogext.Stringer{Stringer: c.Op()}))
 	for _, ev := range c.Event {
 		switch {
 		case ev.Has(fsnotify.Write):
@@ -126,7 +127,7 @@ func (m *Manager) Unify(schema string) (cfg *System, val cue.Value, included, re
 	if err != nil {
 		panic(fmt.Errorf("internal inconsistency: %v", err))
 	}
-	m.log.LogAttrs(context.Background(), slog.LevelDebug, "unified config", slog.Any("sum", sumValue{sum}))
+	m.log.LogAttrs(context.Background(), slog.LevelDebug, "unified config", slog.Any("sum", slogext.Stringer{Stringer: &sum}))
 	return &c, u, paths, nil, nil
 }
 

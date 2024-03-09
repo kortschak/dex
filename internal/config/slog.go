@@ -54,22 +54,6 @@ type eventValue struct {
 	Code int    `json:"op_code"`
 }
 
-type opValue struct {
-	fsnotify.Op
-}
-
-func (v opValue) LogValue() slog.Value {
-	return slog.StringValue(v.String())
-}
-
-type sumValue struct {
-	Sum
-}
-
-func (v sumValue) LogValue() slog.Value {
-	return slog.StringValue(v.String())
-}
-
 type hashesValue struct {
 	m map[string]Sum
 }

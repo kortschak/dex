@@ -23,6 +23,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/kortschak/dex/internal/animation"
+	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/sys"
 	"github.com/kortschak/dex/rpc"
 )
@@ -131,7 +132,7 @@ func NewController(ctx context.Context, kernel sys.Kernel, pid ardilla.PID, seri
 		model:       deck.PID(),
 		serial:      serial,
 	}
-	log.LogAttrs(ctx, slog.LevelInfo, "opened deck", slog.String("pid", fmt.Sprintf("0x%04x", uint16(c.model))), slog.String("model", c.model.String()), slog.String("serial", serial))
+	log.LogAttrs(ctx, slog.LevelInfo, "opened deck", slog.String("pid", fmt.Sprintf("0x%04x", uint16(c.model))), slog.Any("model", slogext.Stringer{Stringer: c.model}), slog.String("serial", serial))
 	c.displayed.controller = c
 	buttons := make([]Button, len(c.displayed.buttons))
 	black, err := c.background(color.Black)

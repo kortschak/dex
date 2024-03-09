@@ -110,7 +110,7 @@ func NewKernel(ctx context.Context, network string, options jsonrpc2.NetListenOp
 	}
 	k.server = jsonrpc2.NewServer(ctx, k.listener, &k)
 
-	k.log.LogAttrs(ctx, slog.LevelDebug, "new kernel", slog.String("network", k.network), slog.String("addr", k.listener.Addr().String()))
+	k.log.LogAttrs(ctx, slog.LevelDebug, "new kernel", slog.String("network", k.network), slog.Any("addr", slogext.Stringer{Stringer: k.listener.Addr()}))
 	return &k, nil
 }
 
@@ -433,7 +433,7 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, uid, name 
 		"-network", k.network,
 		"-addr", k.listener.Addr().String())
 	cmd := execabs.CommandContext(ctx, name, args...)
-	k.log.LogAttrs(ctx, slog.LevelInfo, "spawn", slog.String("command", cmd.String()), slog.String("uid", uid))
+	k.log.LogAttrs(ctx, slog.LevelInfo, "spawn", slog.Any("command", slogext.Stringer{Stringer: cmd}), slog.String("uid", uid))
 	lifeline, keepalive, err := os.Pipe()
 	if err != nil {
 		return err
@@ -578,7 +578,7 @@ func (k *Kernel) kill(uid string, d *daemon) {
 			pid := d.cmd.Process.Pid
 			k.log.LogAttrs(ctx, slog.LevelWarn, "slow child",
 				slog.Int("pid", pid),
-				slog.String("cmd", d.cmd.String()),
+				slog.Any("cmd", slogext.Stringer{Stringer: d.cmd}),
 				slog.Any("killed", d.cmd.Process.Kill()),
 			)
 		}

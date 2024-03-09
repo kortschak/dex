@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/kortschak/dex/internal/slogext"
 )
 
 // Watch processes the receiver's fsnotify.Watcher events, performing
@@ -53,11 +55,11 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					}
 					cfg, sum, err := unmarshalConfigs(w.hash, b)
 					if w.hashes[ev.Name] == sum {
-						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 						continue
 					}
 					if cfg != nil {
-						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 						w.hashes[ev.Name] = sum
 					}
 
@@ -73,7 +75,8 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					}
 
 				case ev.Has(fsnotify.Rename):
-					w.log.LogAttrs(ctx, slog.LevelDebug, "rename", slog.String("name", ev.Name), slog.Any("sum", sumValue{w.hashes[ev.Name]}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+					sum := w.hashes[ev.Name]
+					w.log.LogAttrs(ctx, slog.LevelDebug, "rename", slog.String("name", ev.Name), slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 					delete(w.hashes, ev.Name)
 
 				case ev.Has(fsnotify.Remove):

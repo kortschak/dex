@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -36,6 +37,18 @@ func (h GoID) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (h GoID) WithGroup(name string) slog.Handler {
 	return GoID{h.Handler.WithGroup(name)}
+}
+
+// Stringer implements slog.LogValuer for [fmt.Stringer].
+type Stringer struct {
+	fmt.Stringer
+}
+
+func (v Stringer) LogValue() slog.Value {
+	if v.Stringer == nil {
+		return slog.StringValue("<nil>")
+	}
+	return slog.StringValue(v.String())
 }
 
 // Request implements slog.LogValuer for [jsonrpc2.Request].

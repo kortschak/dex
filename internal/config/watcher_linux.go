@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/kortschak/dex/internal/slogext"
 )
 
 // Watch processes the receiver's fsnotify.Watcher events, performing
@@ -54,11 +56,11 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					}
 					cfg, sum, err := unmarshalConfigs(w.hash, b)
 					if w.hashes[ev.Name] == sum {
-						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 						continue
 					}
 					if cfg != nil {
-						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 						w.hashes[ev.Name] = sum
 					}
 					w.changes <- Change{
@@ -73,7 +75,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 				case ev.Has(fsnotify.Rename):
 					w.log.LogAttrs(ctx, slog.LevelDebug, "rename", slog.String("name", ev.Name))
 					sum := w.hashes[ev.Name]
-					w.log.LogAttrs(ctx, slog.LevelDebug, "set renames", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}), slog.Any("renames", renamesValue{renames}))
+					w.log.LogAttrs(ctx, slog.LevelDebug, "set renames", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}), slog.Any("renames", renamesValue{renames}))
 					renames[sum] = ev
 					delete(w.hashes, ev.Name)
 				case ev.Has(fsnotify.Create):
@@ -87,11 +89,11 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					cfg, sum, err := unmarshalConfigs(w.hash, b)
 					prev, ok := renames[sum]
 					if !ok {
-						w.log.LogAttrs(ctx, slog.LevelDebug, "no renames", slog.Any("sum", sumValue{sum}), slog.Any("renames", renamesValue{renames}))
+						w.log.LogAttrs(ctx, slog.LevelDebug, "no renames", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("renames", renamesValue{renames}))
 						continue
 					}
 					delete(renames, sum)
-					w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", sumValue{sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+					w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 					w.hashes[ev.Name] = sum
 					w.changes <- Change{
 						Event:  []fsnotify.Event{prev, ev},
