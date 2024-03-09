@@ -116,10 +116,10 @@ func Main() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-c
-		log.LogAttrs(ctx, slog.LevelInfo, "terminating")
+		sig := <-c
+		log.LogAttrs(ctx, slog.LevelInfo, "terminating", slog.Any("signal", sig))
 		cancel()
 	}()
 
