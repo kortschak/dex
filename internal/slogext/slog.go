@@ -57,7 +57,7 @@ type Request struct {
 }
 
 func (v Request) LogValue() slog.Value {
-	return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: v.Params})
+	return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: v.Params})
 }
 
 // RequestRedactPrivate implements slog.LogValuer for [jsonrpc2.Request],
@@ -68,19 +68,19 @@ type RequestRedactPrivate struct {
 
 func (v RequestRedactPrivate) LogValue() slog.Value {
 	var p any
-	err := json.Unmarshal(v.Request.Params, &p)
+	err := json.Unmarshal(v.Params, &p)
 	if err != nil {
-		return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
 	}
 	p, err = private.Redact(p, "")
 	if err != nil {
-		return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
 	}
 	b, err := json.Marshal(p)
 	if err != nil {
-		return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
 	}
-	return slog.AnyValue(request{ID: v.Request.ID.Raw(), Method: v.Method, Params: b})
+	return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: b})
 }
 
 type request struct {

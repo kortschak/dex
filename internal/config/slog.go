@@ -17,7 +17,7 @@ type changeValue struct {
 }
 
 func (v changeValue) LogValue() slog.Value {
-	events := make([]eventValue, len(v.Change.Event))
+	events := make([]eventValue, len(v.Event))
 	for i, e := range v.Event {
 		events[i] = eventValue{
 			Name: e.Name,
