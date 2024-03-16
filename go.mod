@@ -19,7 +19,7 @@ require (
 	golang.org/x/image v0.14.0
 	golang.org/x/sys v0.15.0
 	golang.org/x/tools v0.16.1
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	modernc.org/sqlite v1.28.0
 )
 
