@@ -216,7 +216,7 @@ func buildQuery(q Query, allow map[string]bool) (sql string, args []any, json ma
 	}
 	fmt.Fprintf(&buf, " from %s", q.From)
 
-	where, args := walk(allow, "", q.Where)
+	where, args := walk(allow, q.Where)
 	if where != "" {
 		fmt.Fprintf(&buf, " where %s", where)
 	}
@@ -231,7 +231,7 @@ func buildQuery(q Query, allow map[string]bool) (sql string, args []any, json ma
 	return buf.String(), args, json, nil
 }
 
-func walk(allow map[string]bool, op string, node any) (expr string, args []any) {
+func walk(allow map[string]bool, node any) (expr string, args []any) {
 	if node == nil {
 		return "", nil
 	}
@@ -272,7 +272,7 @@ func join(allow map[string]bool, op string, node any) (expr string, args []any) 
 	exprs := make([]string, len(list))
 	for i, e := range list {
 		var arg []any
-		exprs[i], arg = walk(allow, "", e)
+		exprs[i], arg = walk(allow, e)
 		args = append(args, arg...)
 	}
 	return fmt.Sprintf("(%s)", strings.Join(exprs, " "+op+" ")), args
@@ -309,7 +309,7 @@ func not(allow map[string]bool, op string, node any) (expr string, args []any) {
 		if len(notExpr) != 1 {
 			panic(fmt.Errorf("not node map is not unit length: %v", node))
 		}
-		expr, args = walk(allow, "", notExpr)
+		expr, args = walk(allow, notExpr)
 		return fmt.Sprintf("(not %s)", expr), args
 	case string:
 		if strings.HasPrefix(notExpr, "$.") {
@@ -330,7 +330,7 @@ func null(allow map[string]bool, op string, node any) (expr string, args []any) 
 		if len(nullExpr) != 1 {
 			panic(fmt.Errorf("not node map is not unit length: %v", node))
 		}
-		expr, args = walk(allow, "", nullExpr)
+		expr, args = walk(allow, nullExpr)
 		return fmt.Sprintf("((%s) %s)", expr, op), args
 	case string:
 		if strings.HasPrefix(nullExpr, "$.") {
