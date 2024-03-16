@@ -1858,7 +1858,7 @@ func TestNewManager(t *testing.T) {
 
 			k := newTestKernel()
 			d := newTestDevice()
-			m, err := NewManager[*testKernel, *testDevice, *testButton](k.newKernel, d.newDevice, nil, "datadir", log, &level, addSource)
+			m, err := NewManager(k.newKernel, d.newDevice, nil, "datadir", log, &level, addSource)
 			if err != nil {
 				t.Fatalf("failed to make manager: %v", err)
 			}

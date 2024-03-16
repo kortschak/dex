@@ -161,7 +161,7 @@ func Main() int {
 	}
 	defer store.Close()
 
-	sysman, err := sys.NewManager[*rpc.Kernel, *device.Manager, *device.Button](
+	sysman, err := sys.NewManager(
 		rpc.NewKernel, device.NewManager[*rpc.Kernel],
 		store, datadir, log, &level, addSource)
 	if err != nil {
@@ -170,7 +170,7 @@ func Main() int {
 	}
 	defer sysman.Close()
 
-	funcs, err := mergeFuncs(sysman, log, sys.Funcs[*rpc.Kernel, *device.Manager, *device.Button](*redact), device.Funcs, state.Funcs)
+	funcs, err := mergeFuncs(sysman, log, sys.Funcs[*rpc.Kernel, *device.Manager](*redact), device.Funcs, state.Funcs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to configure kernel plugins: %v\n", err)
 		return internalError
