@@ -42,10 +42,11 @@ type resolver struct {
 }
 
 func (v listenOptionsValue) LogValue() slog.Value {
-	var resolver *resolver
+	var res *resolver
 	if v.options.NetDialer.Resolver != nil {
-		resolver.PreferGo = v.options.NetDialer.Resolver.PreferGo
-		resolver.StrictErrors = v.options.NetDialer.Resolver.StrictErrors
+		res = &resolver{}
+		res.PreferGo = v.options.NetDialer.Resolver.PreferGo
+		res.StrictErrors = v.options.NetDialer.Resolver.StrictErrors
 	}
 	return slog.AnyValue(netListenOptions{
 		ListenConfig: listenConfig{
@@ -58,7 +59,7 @@ func (v listenOptionsValue) LogValue() slog.Value {
 			DualStack:     v.options.NetDialer.DualStack, //lint:ignore SA1019 Kept for compatibility.
 			FallbackDelay: v.options.NetDialer.FallbackDelay,
 			KeepAlive:     v.options.NetDialer.KeepAlive,
-			Resolver:      resolver,
+			Resolver:      res,
 		},
 	})
 }
