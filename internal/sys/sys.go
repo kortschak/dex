@@ -329,7 +329,7 @@ func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) er
 		}
 	}
 
-	m.configureModules(ctx, cfg.Kernel.Device, cfg.Modules, running, configured, pages)
+	m.configureModules(ctx, cfg.Kernel.Device, cfg.Modules, configured, pages)
 
 	m.current = cfg
 	return nil
@@ -352,7 +352,7 @@ func (m *Manager[K, D, B]) boot(ctx context.Context, cfg *config.System) error {
 		return err
 	}
 
-	m.configureModules(ctx, cfg.Kernel.Device, cfg.Modules, nil, moduleInstances(cfg), make(map[string][]string))
+	m.configureModules(ctx, cfg.Kernel.Device, cfg.Modules, moduleInstances(cfg), make(map[string][]string))
 
 	m.current = cfg
 	return nil
@@ -434,7 +434,7 @@ func (m *Manager[K, D, B]) initBrightness(ctx context.Context, d D) {
 	}
 }
 
-func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []config.Device, modules map[string]*config.Module, running, configured map[string][]config.Service, pages map[string][]string) {
+func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []config.Device, modules map[string]*config.Module, configured map[string][]config.Service, pages map[string][]string) {
 	// Handle kernel module services.
 	for _, cfg := range configured[""] {
 		uid := ""
