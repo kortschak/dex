@@ -213,35 +213,49 @@ char *get_window_property_by_atom(Display *display, Window window, Atom atom, lo
 */
 import "C"
 
-var lastEvent = time.Now()
-
-func activeWindow() (watcher.Details, error) {
-	var d C.struct_details
-	flags := C.activeWindow(&d)
-	if flags < 0 {
-		return watcher.Details{}, detailError(-flags)
+func init() {
+	for _, s := range (&xOrgDetailer{}).strategy() {
+		detailers[s] = newXOrgDetailer
 	}
-	if d.idle > 0 {
-		lastEvent = time.Now().Add(time.Duration(d.idle) * -time.Millisecond).Round(time.Second / 10)
+}
+
+func newXOrgDetailer() (detailer, error) {
+	return &xOrgDetailer{last: time.Now()}, nil
+}
+
+type xOrgDetailer struct {
+	last time.Time
+}
+
+func (*xOrgDetailer) strategy() []string { return []string{"", "xorg"} }
+
+func (d *xOrgDetailer) details() (watcher.Details, error) {
+	var det C.struct_details
+	flags := C.activeWindow(&det)
+	if flags < 0 {
+		return watcher.Details{}, xOrgDetailError(-flags)
+	}
+	if det.idle > 0 {
+		d.last = time.Now().Add(time.Duration(det.idle) * -time.Millisecond).Round(time.Second / 10)
 	}
 	active := watcher.Details{
-		WindowID:   int(d.wid),
-		Name:       C.GoString(d.name),
-		Class:      C.GoString(d.class),
-		WindowName: C.GoString(d.window),
-		LastInput:  lastEvent,
-		Locked:     d.saver_state == C.ScreenSaverOn,
+		WindowID:   int(det.wid),
+		Name:       C.GoString(det.name),
+		Class:      C.GoString(det.class),
+		WindowName: C.GoString(det.window),
+		LastInput:  d.last,
+		Locked:     det.saver_state == C.ScreenSaverOn,
 	}
-	C.freeDetails(&d)
+	C.freeDetails(&det)
 	if flags != 0b111 && !active.Locked {
 		return active, warning{fmt.Errorf("failed to obtain some details: missing %s", missing(flags))}
 	}
 	return active, nil
 }
 
-type detailError int
+type xOrgDetailError int
 
-func (e detailError) Error() string {
+func (e xOrgDetailError) Error() string {
 	if 0 < e && int(e) < len(failureReason) {
 		return "failed to obtain details: " + failureReason[e]
 	}

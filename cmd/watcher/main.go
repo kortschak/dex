@@ -12,10 +12,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -127,6 +129,7 @@ func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *at
 		log:       log,
 		level:     level,
 		addSource: addSource,
+		detailer:  noDetails{},
 		cancel:    cancel,
 	}
 }
@@ -152,6 +155,8 @@ type daemon struct {
 	// conn is the connection to the kernel.
 	conn *jsonrpc2.Connection
 
+	detailer detailer
+
 	log       *slog.Logger
 	level     *slog.LevelVar
 	addSource *atomic.Bool
@@ -165,6 +170,19 @@ type daemon struct {
 	hMu       sync.Mutex
 	heartbeat time.Duration
 	hStop     chan struct{}
+}
+
+type detailer interface {
+	strategy() []string
+	details() (watcher.Details, error)
+}
+
+type noDetails struct{}
+
+func (noDetails) strategy() []string { return []string{"none"} }
+
+func (noDetails) details() (watcher.Details, error) {
+	return watcher.Details{}, errors.New("no details")
 }
 
 func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
@@ -198,6 +216,8 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		}
 		d.log.LogAttrs(ctx, slog.LevelDebug, "configure", slog.Any("details", m))
 
+		d.replaceDetailer(ctx, m.Body.Options.Strategy)
+
 		if m.Body.Options.Rules != nil {
 			rules := make(map[string]cel.Program)
 			for name, src := range m.Body.Options.Rules {
@@ -230,6 +250,24 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 	default:
 		return nil, jsonrpc2.ErrNotHandled
 	}
+}
+
+func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
+	if slices.Contains(d.detailer.strategy(), strategy) {
+		return
+	}
+	det, err := newDetailer(strategy)
+	if err != nil {
+		d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
+		return
+	}
+	if c, ok := d.detailer.(io.Closer); ok {
+		err = c.Close()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
+		}
+	}
+	d.detailer = det
 }
 
 func (d *daemon) poll(ctx context.Context, p time.Duration) {
@@ -275,7 +313,7 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 					return
 				case t := <-ticker.C:
 					d.log.LogAttrs(ctx, slog.LevelDebug, "polling", slog.Any("tick", t))
-					details, err := activeWindow()
+					details, err := d.detailer.details()
 					if err != nil {
 						var warn warning
 						if errors.As(err, &warn) {

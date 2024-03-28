@@ -75,7 +75,19 @@ void activeWindow(struct details *d)
 */
 import "C"
 
-func activeWindow() (watcher.Details, error) {
+func init() {
+	for _, s := range (macosDetailer{}).strategy() {
+		detailers[s] = newMacosDetailer
+	}
+}
+
+func newMacosDetailer() (detailer, error) { return macosDetailer{}, nil }
+
+type macosDetailer struct{}
+
+func (macosDetailer) strategy() []string { return []string{""} }
+
+func (macosDetailer) details() (watcher.Details, error) {
 	// Do the fallback first because MacOS is garbage.
 	pid, name, windowName, err := activeWindowDetails()
 	t := C.struct_details{pid: C.int(pid)}

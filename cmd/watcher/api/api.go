@@ -17,6 +17,7 @@ type Config struct {
 	LogLevel  *slog.Level `json:"log_level,omitempty"`
 	AddSource *bool       `json:"log_add_source,omitempty"`
 	Options   struct {
+		Strategy  string            `json:"strategy,omitempty"`
 		Polling   *rpc.Duration     `json:"polling,omitempty"`
 		Heartbeat *rpc.Duration     `json:"heartbeat,omitempty"`
 		Rules     map[string]string `json:"rules,omitempty"`

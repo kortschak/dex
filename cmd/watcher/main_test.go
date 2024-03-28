@@ -28,11 +28,16 @@ import (
 )
 
 var (
-	verbose = flag.Bool("verbose_log", false, "print full logging")
-	lines   = flag.Bool("show_lines", false, "log source code position")
+	verbose  = flag.Bool("verbose_log", false, "print full logging")
+	lines    = flag.Bool("show_lines", false, "log source code position")
+	strategy = flag.String("strategy", "", "details strategy")
 )
 
 func TestDaemon(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		*strategy = ""
+	}
+
 	tmp := t.TempDir()
 	exePath := filepath.Join(tmp, "worklog")
 	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
@@ -148,12 +153,14 @@ func TestDaemon(t *testing.T) {
 				var resp rpc.Message[string]
 
 				type options struct {
+					Strategy  string            `json:"strategy,omitempty"`
 					Polling   *rpc.Duration     `json:"polling,omitempty"`
 					Heartbeat *rpc.Duration     `json:"heartbeat,omitempty"`
 					Rules     map[string]string `json:"rules,omitempty"`
 				}
 				err := conn.Call(ctx, "configure", rpc.NewMessage(uid, watcher.Config{
 					Options: options{
+						Strategy:  *strategy,
 						Polling:   period,
 						Heartbeat: beat,
 						Rules: map[string]string{
