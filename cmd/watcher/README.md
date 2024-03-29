@@ -61,6 +61,23 @@ Where `serial` is either default or the target device's serial.
 
 See the example for the [`worklog`](../worklog) to see how a non-kernel call is handled.
 
+## Detailers
+
+`watcher` obtains details from the GUI environment. On Linux, by default this is from an X server, but this is configurable to allow alternatives. This is necessary when running under Wayland as Wayland does not make the required information available by design.
+
+The configuration is made in the `options.strategy` configuration field.
+```
+[module.watcher.options]
+strategy = "xorg"
+polling = "1s"
+```
+
+Currently, optional Linux detailers are:
+- `xorg`: use the X server (same as default)
+- `gnome/mutter`: use the [User Activiy GNOME Shell extension](./extensions/user-activity@kortschak.io) in the extensions directory. Requires GNOME v45+.
+
+On MacOS, details are obtained from the OS and no configuration is required.
+
 ## CEL optional types
 
 The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion).

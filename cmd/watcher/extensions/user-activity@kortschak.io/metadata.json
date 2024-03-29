@@ -1,0 +1,10 @@
+{
+  "name": "User Activity",
+  "description": "Provide active window details and activity state",
+  "uuid": "user-activity@kortschak.io",
+  "shell-version": [
+    "45"
+  ],
+  "version": 0.1,
+  "url": "https://github.com/kortschak/dex"
+}

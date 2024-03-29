@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/bbrks/wrap/v2 v2.5.0
 	github.com/fsnotify/fsnotify v1.7.0
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/gofrs/flock v0.8.1
 	github.com/google/cel-go v0.18.2
 	github.com/google/go-cmp v0.6.0
