@@ -177,8 +177,6 @@ func Main() int {
 	}
 	sysman.SetFuncs(funcs)
 
-	cfgman := config.NewManager(log)
-
 	changes := make(chan config.Change)
 	w, err := config.NewWatcher(ctx, cfgdir, changes, -1, log)
 	if err != nil {
@@ -187,6 +185,7 @@ func Main() int {
 	}
 	go w.Watch(ctx)
 
+	cfgman := config.NewManager(log)
 	for cfg := range changes {
 		if cfg.Err != nil {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "config stream error", slog.Any("error", cfg.Err))
@@ -209,6 +208,7 @@ func Main() int {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "manager configure error", slog.Any("error", err))
 		}
 	}
+
 	return success
 }
 
