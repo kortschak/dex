@@ -31,6 +31,10 @@ jobs:
       with:
         fetch-depth: 1
 
+    - name: govulncheck
+      run: |
+        go run golang.org/x/vuln/cmd/govulncheck@latest
+
     - name: non-Go linux dependencies
       if: matrix.platform == 'ubuntu-latest'
       run: |
