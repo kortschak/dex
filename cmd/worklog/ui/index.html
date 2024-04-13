@@ -39,7 +39,8 @@ const minute = 60*second
 const hour = 60*minute
 
 const reloadEvery = minute;
-const checkEvery = 10*second;
+const reloadEveryNotVisible = 10*minute;
+const checkEvery = second;
 
 var urlParams = new URL(window.location.href).searchParams;
 var requestedDate = urlParams.get('date');
@@ -69,10 +70,13 @@ $.get(urlFor(requestedDate), function(data) {
 });
 var sinceReload = 0;
 setInterval(function () {
-	if (sinceReload <= reloadEvery) {
+	if (sinceReload <= reloadEveryNotVisible) {
 		sinceReload += checkEvery;
-	} 
-	if (sinceReload > reloadEvery && document.body.className == visible) {
+	}
+	const reload = sinceReload > reloadEveryNotVisible ||
+		(sinceReload > reloadEvery && document.body.className == visible);
+	console.log(reload, sinceReload, sinceReload > reloadEveryNotVisible, sinceReload > reloadEvery && document.body.className == visible)
+	if (reload) {
 		$.get(urlFor(requestedDate), function(data) {
 			render(data);
 		});
