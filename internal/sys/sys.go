@@ -167,8 +167,10 @@ type Device[B Button] interface {
 
 	SetDisplayTo(ctx context.Context, name string) error
 	SetBrightness(percent int) error
+
+	SleepState() string
 	Wake(ctx context.Context)
-	Sleep() error
+	Blank() error
 	Clear() error
 
 	Close() error

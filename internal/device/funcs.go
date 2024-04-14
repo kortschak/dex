@@ -45,7 +45,7 @@ type PageStateMessage struct {
 // BrightnessMessage is is the RPC message for getting or setting the brightness
 // of a device.
 type BrightnessMessage struct {
-	// Valid actions are "add", "get" and "set"
+	// Valid actions are "add", "get" and "set".
 	Action string `json:"action"`
 	// Absolute brightness for "get" and "set".
 	// Relative for "add", use a negative value
@@ -53,10 +53,17 @@ type BrightnessMessage struct {
 	Brightness int `json:"brightness"`
 }
 
-// SleepMessage is is the RPC message for setting a device's sleep mode.
+// SleepMessage is is the RPC message for setting or getting a device's sleep
+// state.
 type SleepMessage struct {
-	// Valid states are "wake", "sleep" and "clear"
+	// Valid actions are "get" and "set".
+	Action string `json:"action"`
+	// Valid states are "awake", "blanked" and "cleared"
 	State string `json:"state"`
+	// The service owning the device to request
+	// the page change on. If nil, query the
+	// calling manager's service.
+	Service *rpc.UID `json:"service"`
 }
 
 // Funcs returns an [rpc.Funcs] with a function table for accessing a store
@@ -69,7 +76,7 @@ type SleepMessage struct {
 //   - "page_names": see [Controller.PageNames] and [PageStateMessage], returns []string
 //   - "page_details": see [Controller.PageNames] and [PageStateMessage], returns map[string][]config.Button
 //   - "brightness": see [sys.Device.SetBrightness] and [BrightnessMessage]
-//   - "sleep": see [sys.Device.Wake]/[sys.Device.Sleep]/[sys.Device.Clear] and [SleepMessage]
+//   - "sleep": see [sys.Device.Wake]/[sys.Device.Blank]/[sys.Device.Clear] and [SleepMessage]
 func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 	store := manager.Store()
 	return rpc.Funcs{
@@ -357,19 +364,28 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 
-			dev, err := manager.DeviceFor(m.UID)
+			uid := m.UID
+			if m.Body.Service != nil {
+				uid = *m.Body.Service
+			}
+			dev, err := manager.DeviceFor(uid)
 			if err != nil {
 				if err == sys.ErrAllowedMissingDevice {
 					err = nil
 				}
 				return nil, err
 			}
+			if m.Body.Action == "get" {
+				return rpc.NewMessage[any](kernelUID, SleepMessage{
+					State: dev.SleepState(),
+				}), nil
+			}
 			switch m.Body.State {
-			case "wake":
+			case Awake.String():
 				dev.Wake(ctx)
-			case "sleep":
-				err = dev.Sleep()
-			case "clear":
+			case Blanked.String():
+				err = dev.Blank()
+			case Cleared.String():
 				err = dev.Clear()
 			default:
 				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
@@ -377,7 +393,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 					map[string]any{
 						"type":  rpc.ErrCodeBounds,
 						"state": m.Body.State,
-						"uid":   m.UID,
+						"uid":   uid,
 					},
 				)
 			}
@@ -386,7 +402,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				err = rpc.NewError(rpc.ErrCodeDevice,
 					err.Error(),
 					map[string]any{
-						"uid": m.UID,
+						"uid": uid,
 					},
 				)
 			} else if id.IsValid() {

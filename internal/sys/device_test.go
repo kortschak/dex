@@ -94,12 +94,17 @@ func (d *testDevice) SetBrightness(percent int) error {
 	return nil
 }
 
+func (d *testDevice) SleepState() string {
+	d.addAction("sleep_state")
+	return ""
+}
+
 func (d *testDevice) Wake(ctx context.Context) {
 	d.addAction("wake")
 }
 
-func (d *testDevice) Sleep() error {
-	d.addAction("sleep")
+func (d *testDevice) Blank() error {
+	d.addAction("blank")
 	return nil
 }
 

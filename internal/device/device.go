@@ -45,8 +45,10 @@ type Controller struct {
 	current     string
 	defaultPage string
 
+	lastTouch atomic.Value // time.Time
+
 	sleeping    atomic.Bool
-	state       state
+	state       SleepState
 	cancelSleep context.CancelFunc
 
 	cancel context.CancelFunc
@@ -55,13 +57,16 @@ type Controller struct {
 	serial string
 }
 
-// state represents a sleep/wake state.
-type state int
+// SleepState represents a sleep/wake state.
+//
+//go:generate stringer -type SleepState
+//go:generate sed -i -r s/(const.*\x20=\x20)(".*")$/\1\L\2/ sleepstate_string.go
+type SleepState int
 
 const (
-	awake = iota
-	cleared
-	blanked
+	Awake SleepState = iota
+	Cleared
+	Blanked
 )
 
 // locked is a lock-protected [ardilla.Deck].
@@ -132,6 +137,7 @@ func NewController(ctx context.Context, kernel sys.Kernel, pid ardilla.PID, seri
 		model:       deck.PID(),
 		serial:      serial,
 	}
+	c.lastTouch.Store(time.Now()) // Starting a controller is considered an event.
 	log.LogAttrs(ctx, slog.LevelInfo, "opened deck", slog.String("pid", fmt.Sprintf("0x%04x", uint16(c.model))), slog.Any("model", slogext.Stringer{Stringer: c.model}), slog.String("serial", serial))
 	c.displayed.controller = c
 	buttons := make([]Button, len(c.displayed.buttons))
@@ -391,18 +397,33 @@ func (c *Controller) SetBrightness(percent int) error {
 	return c.deck.SetBrightness(percent)
 }
 
+// Last returns the time of the last button press or release. If the returned
+// time.Time is zero, no button action has occurred.
+func (c *Controller) Last() time.Time {
+	return c.lastTouch.Load().(time.Time)
+}
+
+// SleepState returns the current controller sleep state.
+func (c *Controller) SleepState() SleepState {
+	c.pMu.Lock()
+	defer c.pMu.Unlock()
+	return c.state
+}
+
 // Wake unpauses the current page and redraws it.
 func (c *Controller) Wake(ctx context.Context) {
 	c.log.LogAttrs(ctx, slog.LevelDebug, "wake", slog.Bool("sleeping", c.sleeping.Load()))
 	if !c.sleeping.Load() {
 		return
 	}
-	c.cancelSleep()
+	if c.cancelSleep != nil {
+		c.cancelSleep()
+	}
 	c.pMu.Lock()
 	c.displayed.Unpause()
 	c.displayed.Redraw(ctx)
 	c.sleeping.Store(false)
-	c.state = awake
+	c.state = Awake
 	c.pMu.Unlock()
 }
 
@@ -418,12 +439,12 @@ func (c *Controller) GoUntilWake(ctx context.Context, fn func(ctx context.Contex
 func (c *Controller) Blank() error {
 	c.pMu.Lock()
 	defer c.pMu.Unlock()
-	c.log.LogAttrs(context.Background(), slog.LevelDebug, "blank", slog.Bool("blanked", c.state == blanked))
-	if c.state == blanked {
+	c.log.LogAttrs(context.Background(), slog.LevelDebug, "blank", slog.Bool("blanked", c.state == Blanked))
+	if c.state == Blanked {
 		return nil
 	}
 	c.sleeping.Store(true)
-	c.state = blanked
+	c.state = Blanked
 	c.displayed.Pause()
 	return c.displayed.blank()
 }
@@ -456,12 +477,12 @@ func (p Page) blank() error {
 func (c *Controller) Clear() error {
 	c.pMu.Lock()
 	defer c.pMu.Unlock()
-	c.log.LogAttrs(context.Background(), slog.LevelDebug, "clear", slog.Bool("cleared", c.state == cleared))
-	if c.state == cleared {
+	c.log.LogAttrs(context.Background(), slog.LevelDebug, "clear", slog.Bool("cleared", c.state == Cleared))
+	if c.state == Cleared {
 		return nil
 	}
 	c.sleeping.Store(true)
-	c.state = cleared
+	c.state = Cleared
 	c.displayed.Pause()
 	return c.Reset()
 }
@@ -529,7 +550,9 @@ func (c *Controller) watchButtons(ctx context.Context) {
 				}
 				continue
 			}
-			s <- buttonEvents{buttons: states, time: time.Now()}
+			now := time.Now()
+			c.lastTouch.Store(now)
+			s <- buttonEvents{buttons: states, time: now}
 		}
 	}()
 

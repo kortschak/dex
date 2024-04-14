@@ -46,15 +46,30 @@ rules.paging = """
 	"method": "page",
 	"params": {
 		"page":    name in page_for ? page_for[name] : "default",
-		"service": {"service":"kernel_pager"}
+		"service": {"service":"kernel_default_service"}
 	},
 })
 """
 ```
 
-This depends on a kernel service to assign a device. This can be set up in the kernel configuration by adding the following lines.
+A rule may also be used to blank the device when the screen is locked.
 ```
-[service.kernel_pager]
+rules.blanking = """
+locked == last.locked ? {} : {
+	"method": "sleep",
+	"params": {
+		"action":  "set",
+		"state":   locked ? "blanked" : "awake",
+		"service": {"service":"kernel_default_service"}
+	},
+}
+"""
+```
+
+These depend on a kernel service to assign a device. This can be set up in the kernel configuration by adding the following lines.
+```
+# Define a default kernel service.
+[service.kernel_default_service]
 serial = ""
 ```
 Where `serial` is either default or the target device's serial.

@@ -160,17 +160,22 @@ func (m *Manager) RawImage(img image.Image) (*ardilla.RawImage, error) {
 	return m.controller.RawImage(img)
 }
 
+// SleepState returns the current sleep state.
+func (m *Manager) SleepState() string {
+	return m.controller.SleepState().String()
+}
+
 // Wake unpauses the current page and redraws it.
 func (m *Manager) Wake(ctx context.Context) {
 	m.controller.Wake(ctx)
 }
 
-// Sleep pauses the current page and blanks it.
-func (m *Manager) Sleep() error {
+// Blank pauses the current page and blanks it.
+func (m *Manager) Blank() error {
 	return m.controller.Blank()
 }
 
-// Clear pauses the current page and clears it.
+// Clear pauses the current page and clears it to the default image.
 func (m *Manager) Clear() error {
 	return m.controller.Clear()
 }
