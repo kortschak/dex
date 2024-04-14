@@ -22,7 +22,7 @@ import (
 	"github.com/kortschak/dex/rpc"
 )
 
-// FileDebounce is the default duration we wait for the the contents to have
+// FileDebounce is the default duration we wait for the contents to have
 // stabilised to work around some editors writing an empty file and then the
 // buffer.
 const FileDebounce = 10 * time.Millisecond

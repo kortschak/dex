@@ -15,13 +15,13 @@ import (
 	"github.com/kortschak/dex/rpc"
 )
 
-// SetMessage is is the RPC message for setting a value into the store.
+// SetMessage is the RPC message for setting a value into the store.
 type SetMessage struct {
 	Item  string `json:"item"`
 	Value []byte `json:"value"`
 }
 
-// GetMessage is is the RPC message for getting a value from the store.
+// GetMessage is the RPC message for getting a value from the store.
 type GetMessage struct {
 	Item string `json:"item"`
 }
@@ -31,7 +31,7 @@ type GetResult struct {
 	Value []byte `json:"value"`
 }
 
-// PutMessage is is the RPC message for putting a value into the store.
+// PutMessage is the RPC message for putting a value into the store.
 type PutMessage struct {
 	Item  string `json:"item"`
 	Value []byte `json:"value"`

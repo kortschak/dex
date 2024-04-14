@@ -18,7 +18,7 @@ import (
 	"github.com/kortschak/dex/rpc"
 )
 
-// DrawMessage is is the RPC message for drawing an image to a device.
+// DrawMessage is the RPC message for drawing an image to a device.
 type DrawMessage struct {
 	Page  string `json:"page"`
 	Row   int    `json:"row"`
@@ -30,7 +30,7 @@ type DrawMessage struct {
 	Service *rpc.UID `json:"service"`
 }
 
-// PageMessage is is the RPC message for changing page.
+// PageMessage is the RPC message for changing page.
 type PageMessage struct {
 	Page string `json:"page"`
 	// The service owning the device to request
@@ -39,7 +39,7 @@ type PageMessage struct {
 	Service *rpc.UID `json:"service"`
 }
 
-// PageStateMessage is is the RPC message for listing pages.
+// PageStateMessage is the RPC message for listing pages.
 type PageStateMessage struct {
 	// The service owning the device to request
 	// the page list from. If nil, query the
@@ -47,7 +47,7 @@ type PageStateMessage struct {
 	Service *rpc.UID `json:"service"`
 }
 
-// BrightnessMessage is is the RPC message for getting or setting the brightness
+// BrightnessMessage is the RPC message for getting or setting the brightness
 // of a device.
 type BrightnessMessage struct {
 	// Valid actions are "add", "get" and "set".
@@ -62,7 +62,7 @@ type BrightnessMessage struct {
 	Service *rpc.UID `json:"service"`
 }
 
-// SleepMessage is is the RPC message for setting or getting a device's sleep
+// SleepMessage is the RPC message for setting or getting a device's sleep
 // state.
 type SleepMessage struct {
 	// Valid actions are "get" and "set".

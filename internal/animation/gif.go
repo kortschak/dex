@@ -53,7 +53,7 @@ func hasMagic(magic string, r ReadPeeker) bool {
 // GIF is an animated GIF.
 //
 // The GIF [image.Image] implementation is conditional on whether an animation
-// The image is either from the first or last frame; if an terminates the the
+// The image is either from the first or last frame; if an terminates the
 // last frame is used, if it does not terminate the first is used. GIF
 // animations that terminate should ensure that the final frame is a complete
 // renderable image.

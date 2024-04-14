@@ -749,7 +749,7 @@ func (m *Manager[K, D, B]) setBuiltins(ctx context.Context, builtins map[string]
 	return nil
 }
 
-// ErrAllowedMissingDevice is returned by [Manager.DeviceFor] when a a device
+// ErrAllowedMissingDevice is returned by [Manager.DeviceFor] when a device
 // is not available for a service, but the device has been configured with
 // [config.Device.Required] set to false.
 var ErrAllowedMissingDevice = errors.New("allowed missing device")
