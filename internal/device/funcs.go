@@ -55,8 +55,8 @@ type BrightnessMessage struct {
 
 // SleepMessage is is the RPC message for setting a device's sleep mode.
 type SleepMessage struct {
-	// Valid actions are "wake", "sleep" and "clear"
-	State string `json:"sleep"`
+	// Valid states are "wake", "sleep" and "clear"
+	State string `json:"state"`
 }
 
 // Funcs returns an [rpc.Funcs] with a function table for accessing a store
