@@ -22,9 +22,9 @@ POST -json body.txt http://localhost:7878/
 cmp stdout want_response.json
 cmp got.txt body.txt
 
-#kill dex
-#wait dex
-#stderr '"tag":"POST data","value":"\\"Test data\.\\n\\""'
+kill -INT dex
+wait dex
+stderr '"tag":"POST data","value":"\\"Test data\.\\n\\""'
 
 -- config.toml --
 [kernel]

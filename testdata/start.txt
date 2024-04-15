@@ -10,10 +10,13 @@ env HOME=${WORK}
 
 dex -log debug -lines &dex&
 sleep 1s
+kill -INT dex
+wait dex
 
-#stderr 'created config dir'
-#stderr 'created data dir'
-#stderr 'terminating'
+# Directory creation is not expected on darwin.
+[!darwin] stderr 'created config dir'
+[!darwin] stderr 'created data dir'
+stderr 'terminating'
 
 [linux] exists ${HOME}/.config/dex
 [linux] exists ${HOME}/.local/state/dex/state.sqlite3

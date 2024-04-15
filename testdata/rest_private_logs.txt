@@ -21,10 +21,11 @@ sleep 1s
 GET https://localhost:7777
 ! stdout .
 
-#sleep 1s
-#kill dex
-#wait dex
-#! stderr '-----BEGIN RSA PRIVATE KEY-----'
+sleep 1s
+kill -INT dex
+wait dex
+# Logs are always redacted for private fields.
+! stderr '-----BEGIN RSA PRIVATE KEY-----'
 
 -- config.toml --
 [kernel]

@@ -79,6 +79,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU5NdKM8=
 github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
+github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640 h1:SyXagLHGUtehAvbBoUQFpEXIpIEBzPSOeqd6ISD1O2o=
+github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
 github.com/sstallion/go-hid v0.14.1 h1:shbZlKqv5fr1KnxwqtLEPGkOoA6OSUWTx9TblegATvc=
 github.com/sstallion/go-hid v0.14.1/go.mod h1:fPKp4rqx0xuoTV94gwKojsPG++KNKhxuU88goGuGM7I=
 github.com/stoewer/go-strcase v1.2.0 h1:Z2iHWqGXH00XYgqDmNgQbIBxf3wrNq0F3feEy0ainaU=

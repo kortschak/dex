@@ -15,7 +15,7 @@ require (
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
 	github.com/kortschak/goroutine v1.1.1
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
-	github.com/rogpeppe/go-internal v1.12.0
+	github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640
 	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
 	golang.org/x/image v0.14.0
 	golang.org/x/sys v0.19.0
