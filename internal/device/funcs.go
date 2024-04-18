@@ -23,6 +23,10 @@ type DrawMessage struct {
 	Row   int    `json:"row"`
 	Col   int    `json:"col"`
 	Image string `json:"image"`
+	// The service owning the device to request
+	// drawing operation on. If nil, query the
+	// calling manager's service.
+	Service *rpc.UID `json:"service"`
 }
 
 // PageMessage is is the RPC message for changing page.
@@ -51,6 +55,10 @@ type BrightnessMessage struct {
 	// Relative for "add", use a negative value
 	// to reduce brightness.
 	Brightness int `json:"brightness"`
+	// The service owning the device to request
+	// the brightness for. If nil, query the
+	// calling manager's service.
+	Service *rpc.UID `json:"service"`
 }
 
 // SleepMessage is is the RPC message for setting or getting a device's sleep
@@ -61,7 +69,7 @@ type SleepMessage struct {
 	// Valid states are "awake", "blanked" and "cleared"
 	State string `json:"state"`
 	// The service owning the device to request
-	// the page change on. If nil, query the
+	// the sleep state from. If nil, query the
 	// calling manager's service.
 	Service *rpc.UID `json:"service"`
 }
@@ -87,7 +95,11 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				return nil, err
 			}
 
-			dev, err := manager.DeviceFor(m.UID)
+			uid := m.UID
+			if m.Body.Service != nil {
+				uid = *m.Body.Service
+			}
+			dev, err := manager.DeviceFor(uid)
 			if err != nil {
 				if err == sys.ErrAllowedMissingDevice {
 					err = nil
@@ -97,10 +109,10 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			p, ok := dev.Page(m.Body.Page)
 			if !ok {
 				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("no page %s for %s", m.Body.Page, m.UID),
+					fmt.Sprintf("no page %s for %s", m.Body.Page, uid),
 					map[string]any{
 						"type":   rpc.ErrCodeBounds,
-						"uid":    m.UID,
+						"uid":    uid,
 						"serial": dev.Serial(),
 						"page":   m.Body.Page,
 					},
@@ -112,7 +124,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 					fmt.Sprintf("row out of bound: %d", m.Body.Row),
 					map[string]any{
 						"type":   rpc.ErrCodeBounds,
-						"uid":    m.UID,
+						"uid":    uid,
 						"serial": dev.Serial(),
 						"row":    m.Body.Row,
 					},
@@ -123,7 +135,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 					fmt.Sprintf("column out of bound: %d", m.Body.Col),
 					map[string]any{
 						"type":   rpc.ErrCodeBounds,
-						"uid":    m.UID,
+						"uid":    uid,
 						"serial": dev.Serial(),
 						"col":    m.Body.Col,
 					},
@@ -132,21 +144,21 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			bounds, err := dev.Bounds()
 			if err != nil {
 				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("no bounds for %s: %v", m.UID, err),
+					fmt.Sprintf("no bounds for %s: %v", uid, err),
 					map[string]any{
 						"type":   rpc.ErrCodeNoDisplay,
-						"uid":    m.UID,
+						"uid":    uid,
 						"serial": dev.Serial(),
 					},
 				)
 			}
-			img, err := DecodeImage(bounds, m.Body.Image, filepath.Join(manager.Datadir(), m.UID.Module))
+			img, err := DecodeImage(bounds, m.Body.Image, filepath.Join(manager.Datadir(), uid.Module))
 			if !ok {
 				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("%v for %s", err, m.UID),
+					fmt.Sprintf("%v for %s", err, uid),
 					map[string]any{
 						"message": err.Error(),
-						"uid":     m.UID,
+						"uid":     uid,
 						"serial":  dev.Serial(),
 					},
 				)
@@ -186,7 +198,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 						"type":   rpc.ErrCodeNoPage,
 						"page":   m.Body.Page,
 						"serial": dev.Serial(),
-						"uid":    m.UID,
+						"uid":    uid,
 					},
 				)
 			} else if id.IsValid() {
@@ -263,7 +275,11 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 				}
 			}
 
-			dev, err := manager.DeviceFor(m.UID)
+			uid := m.UID
+			if m.Body.Service != nil {
+				uid = *m.Body.Service
+			}
+			dev, err := manager.DeviceFor(uid)
 			if err != nil {
 				if err == sys.ErrAllowedMissingDevice {
 					err = nil
@@ -280,7 +296,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 					data := map[string]any{
 						"op":  "get",
 						"key": "brightness",
-						"uid": m.UID,
+						"uid": uid,
 					}
 					if err != sys.ErrNotFound {
 						code = rpc.ErrCodeInternal
@@ -296,7 +312,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 					err = rpc.NewError(rpc.ErrCodeInternal,
 						fmt.Sprintf("unexpected brightness value length: %d != 1", len(val)),
 						map[string]any{
-							"uid": m.UID,
+							"uid": uid,
 						},
 					)
 					break
@@ -319,7 +335,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 						map[string]any{
 							"brightness": m.Body.Brightness,
 							"type":       rpc.ErrCodeBounds,
-							"uid":        m.UID,
+							"uid":        uid,
 							"serial":     dev.Serial(),
 						},
 					)
@@ -330,7 +346,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 						err.Error(),
 						map[string]any{
 							"serial": dev.Serial(),
-							"uid":    m.UID,
+							"uid":    uid,
 						},
 					)
 				} else {
@@ -341,7 +357,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 								err.Error(),
 								map[string]any{
 									"serial": dev.Serial(),
-									"uid":    m.UID,
+									"uid":    uid,
 								},
 							)
 						}

@@ -416,9 +416,7 @@ func (c *Controller) Wake(ctx context.Context) {
 	if !c.sleeping.Load() {
 		return
 	}
-	if c.cancelSleep != nil {
-		c.cancelSleep()
-	}
+	c.cancelSleep()
 	c.pMu.Lock()
 	c.displayed.Unpause()
 	c.displayed.Redraw(ctx)
