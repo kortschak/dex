@@ -24,6 +24,8 @@ import (
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/kortschak/jsonrpc2"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -31,6 +33,7 @@ import (
 
 	watcher "github.com/kortschak/dex/cmd/watcher/api"
 	"github.com/kortschak/dex/internal/celext"
+	"github.com/kortschak/dex/internal/device"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/rpc"
@@ -101,7 +104,7 @@ func Main() int {
 		cancel()
 	})
 
-	h := newDaemon(*uid, log, &level, addSource, cancel)
+	h := newDaemon(ctx, *uid, log, &level, addSource, cancel)
 	err = h.dial(ctx, *network, *addr, net.Dialer{})
 	if err != nil {
 		log.LogAttrs(ctx, slog.LevelError, err.Error())
@@ -123,9 +126,10 @@ func waitParent(fn func()) {
 	}()
 }
 
-func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *atomic.Bool, cancel context.CancelFunc) *daemon {
+func newDaemon(ctx context.Context, uid string, log *slog.Logger, level *slog.LevelVar, addSource *atomic.Bool, cancel context.CancelFunc) *daemon {
 	return &daemon{
 		uid:       uid,
+		ctx:       ctx,
 		log:       log,
 		level:     level,
 		addSource: addSource,
@@ -157,6 +161,7 @@ type daemon struct {
 
 	detailer detailer
 
+	ctx       context.Context
 	log       *slog.Logger
 	level     *slog.LevelVar
 	addSource *atomic.Bool
@@ -221,7 +226,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		if m.Body.Options.Rules != nil {
 			rules := make(map[string]cel.Program)
 			for name, src := range m.Body.Options.Rules {
-				prg, err := compile(src, d.log)
+				prg, err := d.compile(src)
 				if err != nil {
 					d.log.LogAttrs(ctx, slog.LevelError, "compiling rule", slog.String("name", name), slog.Any("error", err))
 				} else {
@@ -373,10 +378,11 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 	}
 }
 
-func compile(src string, log *slog.Logger) (cel.Program, error) {
+func (d *daemon) compile(src string) (cel.Program, error) {
 	env, err := cel.NewEnv(
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
-		celext.Lib(log),
+		celext.Lib(d.log),
+		cel.Lib(devLib{ctx: d.ctx, uid: d.uid, conn: d.conn, log: d.log}),
 		cel.Declarations(
 			decls.NewVar("time", decls.Timestamp),
 			decls.NewVar("period", decls.Duration),
@@ -518,4 +524,60 @@ func (d *daemon) beat(ctx context.Context, p time.Duration) {
 	default:
 		d.log.LogAttrs(ctx, slog.LevelError, "update heartbeat", slog.Duration("invalid duration", p))
 	}
+}
+
+type devLib struct {
+	ctx  context.Context
+	uid  string
+	conn *jsonrpc2.Connection
+	log  *slog.Logger
+}
+
+func (devLib) ProgramOptions() []cel.ProgramOption { return nil }
+
+var mapStringDyn = cel.MapType(cel.StringType, cel.DynType)
+
+func (l devLib) CompileOptions() []cel.EnvOption {
+	return []cel.EnvOption{
+		cel.Function("sleep_state",
+			cel.Overload(
+				"sleep_state_string_map",
+				[]*cel.Type{cel.StringType},
+				mapStringDyn,
+				cel.UnaryBinding(l.sleepState),
+			),
+		),
+	}
+}
+
+func (l devLib) sleepState(arg ref.Val) ref.Val {
+	srv, ok := arg.(types.String)
+	if !ok {
+		return types.NewErr("invalid type for sleep_state: %T", arg)
+	}
+	var resp rpc.Message[device.SleepMessage]
+	err := l.conn.Call(l.ctx, "sleep",
+		rpc.Message[device.SleepMessage]{
+			Time: time.Now(), UID: rpc.UID{Module: l.uid},
+			Body: device.SleepMessage{
+				Action:  "get",
+				Service: &rpc.UID{Service: string(srv)},
+			},
+		},
+	).Await(l.ctx, &resp)
+	if err != nil {
+		return types.NewErr("%v", err)
+	}
+	return types.NewDynamicMap(types.DefaultTypeAdapter, map[string]any{
+		"state": resp.Body.State,
+		"last":  maybeTime(resp.Body.Last),
+	})
+}
+
+func maybeTime(o *time.Time) time.Time {
+	var t time.Time
+	if o != nil {
+		t = *o
+	}
+	return t
 }

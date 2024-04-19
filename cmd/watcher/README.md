@@ -95,4 +95,4 @@ On MacOS, details are obtained from the OS and no configuration is required.
 
 ## CEL optional types
 
-The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion).
+The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion), and a function to obtain the current sleep state of a device and its last button event time, `sleep_state(<string>) -> <map<string,dyn>>` using the [`sleep` RPC method](https://pkg.go.dev/github.com/kortschak/dex/internal/device#SleepMessage).
