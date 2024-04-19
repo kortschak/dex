@@ -40,7 +40,7 @@ The CEL environment enables the CEL [optional types library](https://pkg.go.dev/
 
 ## CEL extensions
 
-The CEL environment provide extensions from the [celext package](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#Lib) and a JSON decoder to convert `bytes` JSON messages to objects, `<bytes>.decode_json() -> <dyn>`/`decode_json(<bytes>) -> <dyn>`.
+The CEL environment provide extensions from the [celext package](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#Lib), a JSON decoder to convert `bytes` JSON messages to objects, `<bytes>.decode_json() -> <dyn>`/`decode_json(<bytes>) -> <dyn>` and a base64 encoder, `<bytes>.base64() -> <string>`.
 
 ## Security
 

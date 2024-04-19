@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -483,7 +484,7 @@ func compile(src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, er
 	env, err := cel.NewEnv(
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(log),
-		cel.Lib(jsonLib{}),
+		cel.Lib(extLib{}),
 		decls,
 	)
 	if err != nil {
@@ -502,11 +503,11 @@ func compile(src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, er
 	return prg, nil
 }
 
-type jsonLib struct{}
+type extLib struct{}
 
-func (jsonLib) ProgramOptions() []cel.ProgramOption { return nil }
+func (extLib) ProgramOptions() []cel.ProgramOption { return nil }
 
-func (l jsonLib) CompileOptions() []cel.EnvOption {
+func (l extLib) CompileOptions() []cel.EnvOption {
 	return []cel.EnvOption{
 		cel.Function("decode_json",
 			cel.Overload(
@@ -522,10 +523,18 @@ func (l jsonLib) CompileOptions() []cel.EnvOption {
 				cel.UnaryBinding(l.decode),
 			),
 		),
+		cel.Function("base64",
+			cel.MemberOverload(
+				"bytes_base64_string",
+				[]*cel.Type{cel.BytesType},
+				cel.StringType,
+				cel.UnaryBinding(l.base64),
+			),
+		),
 	}
 }
 
-func (jsonLib) decode(arg ref.Val) ref.Val {
+func (extLib) decode(arg ref.Val) ref.Val {
 	msg, ok := arg.(types.Bytes)
 	if !ok {
 		return types.ValOrErr(msg, "no such overload")
@@ -536,6 +545,14 @@ func (jsonLib) decode(arg ref.Val) ref.Val {
 		return types.NewErr(err.Error())
 	}
 	return types.DefaultTypeAdapter.NativeToValue(val)
+}
+
+func (extLib) base64(arg ref.Val) ref.Val {
+	src, ok := arg.(types.Bytes)
+	if !ok {
+		return types.ValOrErr(src, "no such overload")
+	}
+	return types.String(base64.StdEncoding.EncodeToString(src))
 }
 
 // currently only JSON RPC notify is handled
