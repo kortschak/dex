@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"time"
 
 	"github.com/kortschak/jsonrpc2"
 
@@ -68,6 +69,9 @@ type SleepMessage struct {
 	Action string `json:"action"`
 	// Valid states are "awake", "blanked" and "cleared"
 	State string `json:"state"`
+	// Last is the time of the last button event. Only
+	// valid for "get".
+	Last *time.Time `json:"last,omitempty"`
 	// The service owning the device to request
 	// the sleep state from. If nil, query the
 	// calling manager's service.
@@ -407,9 +411,21 @@ func GoFuncs[K sys.Kernel, D sys.Device[B], B sys.Button](ctx context.Context) f
 					return nil, err
 				}
 				if m.Body.Action == "get" {
+					last := dev.Last()
 					return rpc.NewMessage[any](kernelUID, SleepMessage{
 						State: dev.SleepState(),
+						Last:  &last,
 					}), nil
+				}
+				if m.Body.Last != nil {
+					return nil, rpc.NewError(rpc.ErrCodeInvalidMessage,
+						fmt.Sprintf("invalid sleep request includes last: %v", *m.Body.Last),
+						map[string]any{
+							"type": rpc.ErrCodeParameters,
+							"last": *m.Body.Last,
+							"uid":  uid,
+						},
+					)
 				}
 				switch m.Body.State {
 				case Awake.String():

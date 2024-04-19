@@ -165,6 +165,12 @@ func (m *Manager) SleepState() string {
 	return m.controller.SleepState().String()
 }
 
+// Last returns the time of the last button press or release. If the returned
+// time.Time is zero, no button action has occurred.
+func (m *Manager) Last() time.Time {
+	return m.controller.Last()
+}
+
 // Wake unpauses the current page and redraws it.
 func (m *Manager) Wake(ctx context.Context) {
 	m.controller.Wake(ctx)

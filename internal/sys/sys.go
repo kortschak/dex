@@ -169,6 +169,7 @@ type Device[B Button] interface {
 	SetBrightness(percent int) error
 
 	SleepState() string
+	Last() time.Time
 	Wake(ctx context.Context)
 	Blank() error
 	Clear() error

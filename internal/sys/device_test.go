@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
+	"time"
 
 	"github.com/kortschak/ardilla"
 
@@ -97,6 +98,11 @@ func (d *testDevice) SetBrightness(percent int) error {
 func (d *testDevice) SleepState() string {
 	d.addAction("sleep_state")
 	return ""
+}
+
+func (d *testDevice) Last() time.Time {
+	d.addAction("last")
+	return time.Time{}
 }
 
 func (d *testDevice) Wake(ctx context.Context) {
