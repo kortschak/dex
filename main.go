@@ -170,7 +170,12 @@ func Main() int {
 	}
 	defer sysman.Close()
 
-	funcs, err := mergeFuncs(sysman, log, sys.Funcs[*rpc.Kernel, *device.Manager](*redact), device.Funcs, state.Funcs)
+	funcs, err := mergeFuncs(sysman, log,
+		sys.Funcs[*rpc.Kernel, *device.Manager](*redact),
+		device.Funcs,
+		device.GoFuncs[*rpc.Kernel, *device.Manager](ctx),
+		state.Funcs,
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to configure kernel plugins: %v\n", err)
 		return internalError

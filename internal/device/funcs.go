@@ -75,102 +75,17 @@ type SleepMessage struct {
 }
 
 // Funcs returns an [rpc.Funcs] with a function table for accessing a store
-// held by the manager.
+// and device held by the manager.
 //
 // The RPC methods in the table are:
 //
-//   - "draw": see [sys.Page.Button]/[DecodeImage]/[sys.Button.Draw] and [DrawMessage]
 //   - "page": see [Controller.SetDisplayTo] and [PageMessage]
 //   - "page_names": see [Controller.PageNames] and [PageStateMessage], returns []string
 //   - "page_details": see [Controller.PageNames] and [PageStateMessage], returns map[string][]config.Button
 //   - "brightness": see [sys.Device.SetBrightness] and [BrightnessMessage]
-//   - "sleep": see [sys.Device.Wake]/[sys.Device.Blank]/[sys.Device.Clear] and [SleepMessage]
 func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 	store := manager.Store()
 	return rpc.Funcs{
-		"draw": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
-			var m rpc.Message[DrawMessage]
-			err := rpc.UnmarshalMessage(msg, &m)
-			if err != nil {
-				return nil, err
-			}
-
-			uid := m.UID
-			if m.Body.Service != nil {
-				uid = *m.Body.Service
-			}
-			dev, err := manager.DeviceFor(uid)
-			if err != nil {
-				if err == sys.ErrAllowedMissingDevice {
-					err = nil
-				}
-				return nil, err
-			}
-			p, ok := dev.Page(m.Body.Page)
-			if !ok {
-				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("no page %s for %s", m.Body.Page, uid),
-					map[string]any{
-						"type":   rpc.ErrCodeBounds,
-						"uid":    uid,
-						"serial": dev.Serial(),
-						"page":   m.Body.Page,
-					},
-				)
-			}
-			rows, cols := dev.Layout()
-			if m.Body.Row < 0 || rows <= m.Body.Row {
-				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("row out of bound: %d", m.Body.Row),
-					map[string]any{
-						"type":   rpc.ErrCodeBounds,
-						"uid":    uid,
-						"serial": dev.Serial(),
-						"row":    m.Body.Row,
-					},
-				)
-			}
-			if m.Body.Col < 0 || cols <= m.Body.Col {
-				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("column out of bound: %d", m.Body.Col),
-					map[string]any{
-						"type":   rpc.ErrCodeBounds,
-						"uid":    uid,
-						"serial": dev.Serial(),
-						"col":    m.Body.Col,
-					},
-				)
-			}
-			bounds, err := dev.Bounds()
-			if err != nil {
-				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("no bounds for %s: %v", uid, err),
-					map[string]any{
-						"type":   rpc.ErrCodeNoDisplay,
-						"uid":    uid,
-						"serial": dev.Serial(),
-					},
-				)
-			}
-			img, err := DecodeImage(bounds, m.Body.Image, filepath.Join(manager.Datadir(), uid.Module))
-			if !ok {
-				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("%v for %s", err, uid),
-					map[string]any{
-						"message": err.Error(),
-						"uid":     uid,
-						"serial":  dev.Serial(),
-					},
-				)
-			}
-			p.Button(m.Body.Row, m.Body.Col).Draw(ctx, img)
-			var resp *rpc.Message[any]
-			if id.IsValid() {
-				resp = rpc.NewMessage[any](kernelUID, "ok")
-			}
-			return resp, nil
-		},
-
 		"page": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
 			var m rpc.Message[PageMessage]
 			err := rpc.UnmarshalMessage(msg, &m)
@@ -372,59 +287,160 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			}
 			return resp, err
 		},
+	}
+}
 
-		"sleep": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
-			var m rpc.Message[SleepMessage]
-			err := rpc.UnmarshalMessage(msg, &m)
-			if err != nil {
-				return nil, err
-			}
-
-			uid := m.UID
-			if m.Body.Service != nil {
-				uid = *m.Body.Service
-			}
-			dev, err := manager.DeviceFor(uid)
-			if err != nil {
-				if err == sys.ErrAllowedMissingDevice {
-					err = nil
+// GoFuncs returns an [rpc.Funcs] constructor with a function table for
+// accessing a device held by the manager. It differs from Funcs in that the
+// context.Context passed to the functions is provided in the initial call
+// rather than by the RPC handler, and so will not be cancelled on RPC call
+// return. This allows asynchronous calls with long running actions to be
+// started and live beyond the RPC call's return. These include methods that
+// draw to device buttons.
+//
+// The RPC methods in the table are:
+//
+//   - "draw": see [sys.Page.Button]/[DecodeImage]/[sys.Button.Draw] and [DrawMessage]
+//   - "sleep": see [sys.Device.Wake]/[sys.Device.Blank]/[sys.Device.Clear] and [SleepMessage]
+func GoFuncs[K sys.Kernel, D sys.Device[B], B sys.Button](ctx context.Context) func(*sys.Manager[K, D, B], *slog.Logger) rpc.Funcs {
+	return func(manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
+		return rpc.Funcs{
+			"draw": func(_ context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+				var m rpc.Message[DrawMessage]
+				err := rpc.UnmarshalMessage(msg, &m)
+				if err != nil {
+					return nil, err
 				}
-				return nil, err
-			}
-			if m.Body.Action == "get" {
-				return rpc.NewMessage[any](kernelUID, SleepMessage{
-					State: dev.SleepState(),
-				}), nil
-			}
-			switch m.Body.State {
-			case Awake.String():
-				dev.Wake(ctx)
-			case Blanked.String():
-				err = dev.Blank()
-			case Cleared.String():
-				err = dev.Clear()
-			default:
-				return nil, rpc.NewError(rpc.ErrCodeInvalidData,
-					fmt.Sprintf("invalid state request: %q", m.Body.State),
-					map[string]any{
-						"type":  rpc.ErrCodeBounds,
-						"state": m.Body.State,
-						"uid":   uid,
-					},
-				)
-			}
-			var resp *rpc.Message[any]
-			if err != nil {
-				err = rpc.NewError(rpc.ErrCodeDevice,
-					err.Error(),
-					map[string]any{
-						"uid": uid,
-					},
-				)
-			} else if id.IsValid() {
-				resp = rpc.NewMessage[any](kernelUID, "ok")
-			}
-			return resp, err
-		},
+
+				uid := m.UID
+				if m.Body.Service != nil {
+					uid = *m.Body.Service
+				}
+				dev, err := manager.DeviceFor(uid)
+				if err != nil {
+					if err == sys.ErrAllowedMissingDevice {
+						err = nil
+					}
+					return nil, err
+				}
+				p, ok := dev.Page(m.Body.Page)
+				if !ok {
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("no page %s for %s", m.Body.Page, uid),
+						map[string]any{
+							"type":   rpc.ErrCodeBounds,
+							"uid":    uid,
+							"serial": dev.Serial(),
+							"page":   m.Body.Page,
+						},
+					)
+				}
+				rows, cols := dev.Layout()
+				if m.Body.Row < 0 || rows <= m.Body.Row {
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("row out of bound: %d", m.Body.Row),
+						map[string]any{
+							"type":   rpc.ErrCodeBounds,
+							"uid":    uid,
+							"serial": dev.Serial(),
+							"row":    m.Body.Row,
+						},
+					)
+				}
+				if m.Body.Col < 0 || cols <= m.Body.Col {
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("column out of bound: %d", m.Body.Col),
+						map[string]any{
+							"type":   rpc.ErrCodeBounds,
+							"uid":    uid,
+							"serial": dev.Serial(),
+							"col":    m.Body.Col,
+						},
+					)
+				}
+				bounds, err := dev.Bounds()
+				if err != nil {
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("no bounds for %s: %v", uid, err),
+						map[string]any{
+							"type":   rpc.ErrCodeNoDisplay,
+							"uid":    uid,
+							"serial": dev.Serial(),
+						},
+					)
+				}
+				img, err := DecodeImage(bounds, m.Body.Image, filepath.Join(manager.Datadir(), uid.Module))
+				if !ok {
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("%v for %s", err, uid),
+						map[string]any{
+							"message": err.Error(),
+							"uid":     uid,
+							"serial":  dev.Serial(),
+						},
+					)
+				}
+				p.Button(m.Body.Row, m.Body.Col).Draw(ctx, img)
+				var resp *rpc.Message[any]
+				if id.IsValid() {
+					resp = rpc.NewMessage[any](kernelUID, "ok")
+				}
+				return resp, nil
+			},
+
+			"sleep": func(_ context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+				var m rpc.Message[SleepMessage]
+				err := rpc.UnmarshalMessage(msg, &m)
+				if err != nil {
+					return nil, err
+				}
+
+				uid := m.UID
+				if m.Body.Service != nil {
+					uid = *m.Body.Service
+				}
+				dev, err := manager.DeviceFor(uid)
+				if err != nil {
+					if err == sys.ErrAllowedMissingDevice {
+						err = nil
+					}
+					return nil, err
+				}
+				if m.Body.Action == "get" {
+					return rpc.NewMessage[any](kernelUID, SleepMessage{
+						State: dev.SleepState(),
+					}), nil
+				}
+				switch m.Body.State {
+				case Awake.String():
+					dev.Wake(ctx)
+				case Blanked.String():
+					err = dev.Blank()
+				case Cleared.String():
+					err = dev.Clear()
+				default:
+					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
+						fmt.Sprintf("invalid state request: %q", m.Body.State),
+						map[string]any{
+							"type":  rpc.ErrCodeBounds,
+							"state": m.Body.State,
+							"uid":   uid,
+						},
+					)
+				}
+				var resp *rpc.Message[any]
+				if err != nil {
+					err = rpc.NewError(rpc.ErrCodeDevice,
+						err.Error(),
+						map[string]any{
+							"uid": uid,
+						},
+					)
+				} else if id.IsValid() {
+					resp = rpc.NewMessage[any](kernelUID, "ok")
+				}
+				return resp, err
+			},
+		}
 	}
 }
