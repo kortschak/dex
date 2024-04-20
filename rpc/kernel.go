@@ -473,6 +473,7 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, done func(
 		// the exec.Cmd type.
 		k.log.LogAttrs(ctx, slog.LevelDebug, "waiting for termination", slog.String("uid", uid))
 		cmd.Process.Wait()
+		lifeline.Close() // Don't leave the lifeline dangling otherwise we deplete fds.
 		k.log.LogAttrs(ctx, slog.LevelDebug, "terminating", slog.String("uid", uid))
 
 		k.dMu.Lock()
