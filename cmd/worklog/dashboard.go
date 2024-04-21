@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -663,7 +664,7 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 			//
 			// a:     ~~~~~~~~~~~
 
-			e.Data = r.Data
+			e.Data = mergeData(e.Data, r.Data)
 			return append(events, e)
 		case r.overlapLeftOf(w):
 			// Replace left data and truncate rightward.
@@ -678,7 +679,7 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 
 			left := e
 			left.End = r.Start
-			left.Data = r.Data
+			left.Data = mergeData(e.Data, r.Data)
 			events = append(events, left)
 			e.Start = r.End
 		case r.overlapRightOf(w):
@@ -694,7 +695,7 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 
 			right := e
 			right.Start = r.End
-			right.Data = r.Data
+			right.Data = mergeData(e.Data, r.Data)
 			e.End = r.Start
 			if e.End.Before(e.Start) {
 				events = append(events, e)
@@ -720,7 +721,7 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 			middle := e
 			middle.Start = r.Start
 			middle.End = r.End
-			middle.Data = r.Data
+			middle.Data = mergeData(e.Data, r.Data)
 			events = append(events, middle)
 
 			e.Start = r.End
@@ -740,6 +741,33 @@ func (d *daemon) applyAmendments(ctx context.Context, e worklog.Event) []worklog
 		return events[i].End.After(events[j].End)
 	})
 	return events
+}
+
+// mergeData adds elements of src into a clone of dst recursively, removing any
+// elements that are nil in src and replacing elements in dst with elements in
+// src if they have the same key.
+func mergeData(dst, src map[string]any) map[string]any {
+	if dst == nil {
+		dst = make(map[string]any)
+	} else {
+		dst = maps.Clone(dst)
+	}
+	for k, v := range src {
+		switch {
+		case v == nil:
+			delete(dst, k)
+		case is[map[string]any](dst[k]) && is[map[string]any](v):
+			dst[k] = mergeData(dst[k].(map[string]any), v.(map[string]any))
+		default:
+			dst[k] = v
+		}
+	}
+	return dst
+}
+
+func is[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
 }
 
 type worklogEvent worklog.Event

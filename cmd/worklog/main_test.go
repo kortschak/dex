@@ -731,7 +731,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{{
 					Bucket:  "test",
 					Message: "test",
@@ -739,7 +741,8 @@ var amendmentTests = []struct {
 						Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 						End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 						Data: map[string]any{
-							"key": "new_value",
+							"key1": "new_value",
+							"key3": nil,
 						},
 					}},
 				}},
@@ -750,7 +753,8 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "new_value",
+				"key1": "new_value",
+				"key2": "value2",
 			},
 		}},
 	},
@@ -761,7 +765,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{{
 					Bucket:  "test",
 					Message: "test",
@@ -769,7 +775,8 @@ var amendmentTests = []struct {
 						Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 						End:   time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 						Data: map[string]any{
-							"key": "new_value",
+							"key1": "new_value",
+							"key3": nil,
 						},
 					}},
 				}},
@@ -781,7 +788,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -789,7 +798,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value",
+					"key1": "new_value",
+					"key2": "value2",
 				},
 			},
 		},
@@ -801,7 +811,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{{
 					Bucket:  "test",
 					Message: "test",
@@ -809,7 +821,8 @@ var amendmentTests = []struct {
 						Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 						End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 						Data: map[string]any{
-							"key": "new_value",
+							"key1": "new_value",
+							"key3": nil,
 						},
 					}},
 				}},
@@ -821,7 +834,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value",
+					"key1": "new_value",
+					"key2": "value2",
 				},
 			},
 			{
@@ -829,7 +843,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -841,7 +857,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{{
 					Bucket:  "test",
 					Message: "test",
@@ -849,7 +867,8 @@ var amendmentTests = []struct {
 						Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 						End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 						Data: map[string]any{
-							"key": "new_value",
+							"key1": "new_value",
+							"key3": nil,
 						},
 					}},
 				}},
@@ -861,7 +880,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -869,7 +890,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value",
+					"key1": "new_value",
+					"key2": "value2",
 				},
 			},
 			{
@@ -877,7 +899,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -889,7 +913,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{{
 					Bucket:  "test",
 					Message: "test",
@@ -898,14 +924,16 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value",
+								"key1": "new_value",
+								"key3": nil,
 							},
 						},
 						{
 							Start: time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value",
+								"key1": "new_value",
+								"key3": nil,
 							},
 						},
 					},
@@ -918,7 +946,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value",
+					"key1": "new_value",
+					"key2": "value2",
 				},
 			},
 			{
@@ -926,7 +955,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -934,7 +965,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value",
+					"key1": "new_value",
+					"key2": "value2",
 				},
 			},
 		},
@@ -946,7 +978,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -955,7 +989,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_middle",
+								"key1": "new_value_middle",
+								"key3": nil,
 							},
 						}},
 					},
@@ -966,7 +1001,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_left",
+								"key1": "new_value_left",
+								"key3": nil,
 							},
 						}},
 					},
@@ -979,7 +1015,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -987,7 +1025,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_middle",
+					"key1": "new_value_middle",
+					"key2": "value2",
 				},
 			},
 			{
@@ -995,7 +1034,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_left",
+					"key1": "new_value_left",
+					"key2": "value2",
 				},
 			},
 		},
@@ -1007,7 +1047,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -1016,7 +1058,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_right",
+								"key1": "new_value_right",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1027,7 +1070,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_left",
+								"key1": "new_value_left",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1040,7 +1084,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1048,7 +1094,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_right",
+					"key1": "new_value_right",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1056,7 +1103,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1064,7 +1113,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_left",
+					"key1": "new_value_left",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1072,7 +1122,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -1084,7 +1136,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -1093,7 +1147,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_right",
+								"key1": "new_value_right",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1104,7 +1159,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_left",
+								"key1": "new_value_left",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1117,7 +1173,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1125,7 +1183,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_right",
+					"key1": "new_value_right",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1133,7 +1192,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_left",
+					"key1": "new_value_left",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1141,7 +1201,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -1153,7 +1215,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -1162,7 +1226,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_left",
+								"key1": "new_value_left",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1173,7 +1238,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_right",
+								"key1": "new_value_right",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1186,7 +1252,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1194,7 +1262,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_right",
+					"key1": "new_value_right",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1202,7 +1271,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1210,7 +1281,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_left",
+					"key1": "new_value_left",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1218,7 +1290,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -1230,7 +1304,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -1240,7 +1316,8 @@ var amendmentTests = []struct {
 								Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 								End:   time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 								Data: map[string]any{
-									"key": "new_value_middle",
+									"key1": "new_value_middle",
+									"key3": nil,
 								},
 							},
 						},
@@ -1253,14 +1330,16 @@ var amendmentTests = []struct {
 								Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 								End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 								Data: map[string]any{
-									"key": "new_value_left",
+									"key1": "new_value_left",
+									"key3": nil,
 								},
 							},
 							{
 								Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 								End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 								Data: map[string]any{
-									"key": "new_value_right",
+									"key1": "new_value_right",
+									"key3": nil,
 								},
 							},
 						},
@@ -1274,7 +1353,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1282,7 +1363,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_right",
+					"key1": "new_value_right",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1290,7 +1372,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_middle",
+					"key1": "new_value_middle",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1298,7 +1381,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_left",
+					"key1": "new_value_left",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1306,7 +1390,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -1318,7 +1404,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -1328,14 +1416,16 @@ var amendmentTests = []struct {
 								Start: time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 								End:   time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 								Data: map[string]any{
-									"key": "new_value_left",
+									"key1": "new_value_left",
+									"key3": nil,
 								},
 							},
 							{
 								Start: time.Date(2024, time.January, 1, 9, 45, 0, 0, time.UTC),
 								End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 								Data: map[string]any{
-									"key": "new_value_right",
+									"key1": "new_value_right",
+									"key3": nil,
 								},
 							},
 						},
@@ -1348,7 +1438,8 @@ var amendmentTests = []struct {
 								Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 								End:   time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
 								Data: map[string]any{
-									"key": "new_value_middle",
+									"key1": "new_value_middle",
+									"key3": nil,
 								},
 							},
 						},
@@ -1362,7 +1453,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 			{
@@ -1370,7 +1463,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_right",
+					"key1": "new_value_right",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1378,7 +1472,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 50, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_middle",
+					"key1": "new_value_middle",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1386,7 +1481,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_left",
+					"key1": "new_value_left",
+					"key2": "value2",
 				},
 			},
 			{
@@ -1394,7 +1490,9 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 9, 20, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "value",
+					"key1": "value1",
+					"key2": "value2",
+					"key3": "value3",
 				},
 			},
 		},
@@ -1406,7 +1504,9 @@ var amendmentTests = []struct {
 			Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 			End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 			Data: map[string]any{
-				"key": "value",
+				"key1": "value1",
+				"key2": "value2",
+				"key3": "value3",
 				"amend": []worklog.Amendment{
 					{
 						Bucket:  "test",
@@ -1415,7 +1515,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 30, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_middle",
+								"key1": "new_value_middle",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1426,7 +1527,8 @@ var amendmentTests = []struct {
 							Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 							End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 							Data: map[string]any{
-								"key": "new_value_cover",
+								"key1": "new_value_cover",
+								"key3": nil,
 							},
 						}},
 					},
@@ -1439,7 +1541,8 @@ var amendmentTests = []struct {
 				Start:  time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
 				End:    time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
 				Data: map[string]any{
-					"key": "new_value_cover",
+					"key1": "new_value_cover",
+					"key2": "value2",
 				},
 			},
 		},
