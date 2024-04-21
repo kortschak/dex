@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 	"github.com/kortschak/ardilla"
 	"github.com/kortschak/jsonrpc2"
 	"golang.org/x/exp/slices"
+	"golang.org/x/sys/unix"
 
 	"github.com/kortschak/dex/internal/config"
 	"github.com/kortschak/dex/internal/slogext"
@@ -517,6 +519,22 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 				stdout = os.Stdout
 				stderr = os.Stderr
 			}
+
+			enoughFileDescriptors := func() bool {
+				fds, ok, err := withinUlimit(0.95)
+				switch err {
+				case nil, errNotSupported:
+				default:
+					// If we should be able to get a limit, but can't, fail safely.
+					m.log.LogAttrs(ctx, slog.LevelError, "failed to get resource limits", slog.Any("error", err), slog.String("uid", uid))
+					return false
+				}
+				if !ok {
+					m.log.LogAttrs(ctx, slog.LevelWarn, "exceeded file descriptor limit", slog.Int("open_files", fds), slog.String("uid", uid))
+				}
+				return ok
+			}
+
 			var done func()
 			done = func() {
 				// Check whether the daemon is in m.spawned and if it is,
@@ -529,12 +547,19 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 					return
 				}
 				m.log.LogAttrs(ctx, slog.LevelWarn, "daemon died", slog.String("uid", uid))
+				if !enoughFileDescriptors() {
+					m.log.LogAttrs(ctx, slog.LevelWarn, "not restarting", slog.String("uid", uid))
+					return
+				}
 				err := m.kernel.Spawn(ctx, stdout, stderr, done, uid, mod.Path, args...)
 				if err != nil {
 					m.log.LogAttrs(ctx, slog.LevelError, "failed to restart", slog.String("uid", uid), slog.Any("error", err))
 				} else {
 					m.log.LogAttrs(ctx, slog.LevelInfo, "daemon respawned", slog.String("uid", uid))
 				}
+			}
+			if !enoughFileDescriptors() {
+				continue
 			}
 			err := m.kernel.Spawn(ctx, stdout, stderr, done, uid, mod.Path, args...)
 			if err != nil {
@@ -623,6 +648,39 @@ func (m *Manager[K, D, B]) configureModules(ctx context.Context, devices []confi
 			m.log.LogAttrs(ctx, slog.LevelWarn, "failed set pages", slog.Any("serial", serial), slog.Any("pages", p), slog.Any("error", err))
 		}
 	}
+}
+
+var errNotSupported = errors.New("not supported")
+
+func withinUlimit(factor float64) (fds int, ok bool, err error) {
+	var fdPath string
+	switch runtime.GOOS {
+	default:
+		return -1, true, errNotSupported
+	case "darwin":
+		fdPath = "/dev/fd"
+	case "linux":
+		fdPath = "/proc/self/fd"
+	}
+	f, err := os.Open(fdPath)
+	if err != nil {
+		return -1, false, fmt.Errorf("could not open file descriptors directory: %w", err)
+	}
+	defer f.Close()
+	d, err := f.Readdirnames(0)
+	if err != nil {
+		return -1, false, fmt.Errorf("could not read file descriptors directory: %w", err)
+	}
+	fds = len(d)
+
+	var lim unix.Rlimit
+	err = unix.Getrlimit(unix.RLIMIT_NOFILE, &lim)
+	if err != nil {
+		return fds, false, err
+	}
+	ulimit := lim.Cur
+
+	return fds, fds < int(factor*float64(ulimit)), nil
 }
 
 func unique(pages []string) []string {
