@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"testing"
 
 	"github.com/kortschak/dex/internal/animation"
@@ -22,10 +23,11 @@ import (
 var update = flag.Bool("update", false, "regenerate golden images")
 
 var writeTests = []struct {
-	name string
-	data string
-	typ  string
-	err  error
+	name     string
+	data     string
+	typ      string
+	rescales bool
+	err      error
 }{
 	{
 		name: "message",
@@ -53,9 +55,10 @@ var writeTests = []struct {
 		typ:  "image_file",
 	},
 	{
-		name: "gif_file_title",
-		data: "data:text/filename;title=gopher,gopher-dance-long.gif",
-		typ:  "image_file",
+		name:     "gif_file_title",
+		data:     "data:text/filename;title=gopher,gopher-dance-long.gif",
+		typ:      "image_file",
+		rescales: true,
 	},
 	{
 		name: "png_file",
@@ -245,20 +248,26 @@ func TestWrite(t *testing.T) {
 			var (
 				buf  bytes.Buffer
 				name string
+				arch string
 			)
+			// Images that rescale may be affected by float differences
+			// between GOARCHs. Mark images where this is an issue.
+			if test.rescales {
+				arch = "_" + runtime.GOARCH
+			}
 			switch img := img.(type) {
 			case *animation.GIF:
 				err = gif.EncodeAll(&buf, img.GIF)
 				if err != nil {
 					t.Fatalf("unexpected error encoding image: %v", err)
 				}
-				name = test.name + ".gif"
+				name = test.name + arch + ".gif"
 			default:
 				err = png.Encode(&buf, img)
 				if err != nil {
 					t.Fatalf("unexpected error encoding image: %v", err)
 				}
-				name = test.name + ".png"
+				name = test.name + arch + ".png"
 			}
 
 			path := filepath.Join("testdata", name)
