@@ -14,7 +14,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"slices"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"golang.org/x/image/draw"
 
 	"github.com/kortschak/dex/internal/animation"
 )
@@ -26,6 +32,8 @@ var writeTests = []struct {
 	data string
 	typ  string
 	err  error
+
+	skip string
 }{
 	{
 		name: "message",
@@ -56,6 +64,7 @@ var writeTests = []struct {
 		name: "gif_file_title",
 		data: "data:text/filename;title=gopher,gopher-dance-long.gif",
 		typ:  "image_file",
+		skip: "darwin:fails due to scaling",
 	},
 	{
 		name: "png_file",
@@ -226,6 +235,10 @@ func TestWrite(t *testing.T) {
 
 	for _, test := range writeTests {
 		t.Run(test.name, func(t *testing.T) {
+			skip, reason, ok := strings.Cut(test.skip, ":")
+			if ok && slices.Contains(strings.Split(skip, ","), runtime.GOOS) {
+				t.Skip(reason)
+			}
 			rect := image.Rectangle{Max: image.Point{X: 72, Y: 72}}
 
 			img, err := DecodeImage(rect, test.data, "testdata")
@@ -293,5 +306,45 @@ func sameError(a, b error) bool {
 		return false
 	default:
 		return true
+	}
+}
+
+func TestGIFScale(t *testing.T) {
+	f, err := os.Open("testdata/gopher-dance-long.gif")
+	if err != nil {
+		t.Fatalf("failed to read image data: %v", err)
+	}
+	g, err := gif.DecodeAll(f)
+	if err != nil {
+		t.Fatalf("failed to decode image data: %v", err)
+	}
+	rect := image.Rectangle{Max: image.Point{X: 72, Y: 72}}
+	for i, frame := range g.Image {
+		g.Image[i] = image.NewPaletted(rect, g.Image[0].Palette)
+		draw.BiLinear.Scale(g.Image[i], rect, frame, frame.Bounds(), draw.Src, nil)
+	}
+	g.Config.Width = rect.Dx()
+	g.Config.Height = rect.Dy()
+
+	var buf bytes.Buffer
+	err = gif.EncodeAll(&buf, g)
+	if err != nil {
+		t.Fatalf("unexpected error encoding image: %v", err)
+	}
+
+	path := "testdata/gopher-dance-long-scaled.gif"
+	if *update {
+		err = os.WriteFile(path, buf.Bytes(), 0o644)
+		if err != nil {
+			t.Fatalf("unexpected error writing golden file: %v", err)
+		}
+	}
+
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error reading golden file: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), want) {
+		t.Errorf("image mismatch:\n- want:\n+ got:\n%s", cmp.Diff(want, buf.Bytes()))
 	}
 }
