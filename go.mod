@@ -16,10 +16,10 @@ require (
 	github.com/kortschak/goroutine v1.1.1
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640
-	golang.org/x/exp v0.0.0-20231226003508-02704c960a9b
-	golang.org/x/image v0.14.0
+	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
+	golang.org/x/image v0.15.0
 	golang.org/x/sys v0.19.0
-	golang.org/x/tools v0.16.1
+	golang.org/x/tools v0.20.0
 	google.golang.org/protobuf v1.33.0
 	modernc.org/sqlite v1.28.0
 )
@@ -39,8 +39,9 @@ require (
 	github.com/sstallion/go-hid v0.14.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20220827204233-334a2380cb91 // indirect
-	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
