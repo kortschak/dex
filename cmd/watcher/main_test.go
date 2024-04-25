@@ -165,7 +165,7 @@ func TestDaemon(t *testing.T) {
 						Heartbeat: beat,
 						Rules: map[string]string{
 							"change": `
-								name.contains('tester') && (name != last.name || window_id != last.window_id || window != last.window) ?
+								name.contains('tester') && (name != last.name || wid != last.wid || window != last.window) ?
 									[{"method":"change","params":{"page":"tester","details":{"name":name,"window":window}}}]
 								:
 									[{}]`,
