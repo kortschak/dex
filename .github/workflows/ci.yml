@@ -18,6 +18,7 @@ jobs:
 
     env:
       DISPLAY: ':99.0'
+      XDG_SESSION_TYPE: 'x11'
       EGL_PLATFORM: 'x11'
 
     steps:

@@ -272,6 +272,7 @@ func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
 		}
 	}
+	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.Any("strategy", det.strategy()))
 	d.detailer = det
 }
 

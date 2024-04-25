@@ -227,7 +227,7 @@ type xOrgDetailer struct {
 	last time.Time
 }
 
-func (*xOrgDetailer) strategy() []string { return []string{"", "xorg"} }
+func (*xOrgDetailer) strategy() []string { return []string{"xorg"} }
 
 func (d *xOrgDetailer) details() (watcher.Details, error) {
 	var det C.struct_details

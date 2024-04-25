@@ -85,7 +85,7 @@ func newMacosDetailer() (detailer, error) { return macosDetailer{}, nil }
 
 type macosDetailer struct{}
 
-func (macosDetailer) strategy() []string { return []string{""} }
+func (macosDetailer) strategy() []string { return []string{"macos"} }
 
 func (macosDetailer) details() (watcher.Details, error) {
 	// Do the fallback first because MacOS is garbage.

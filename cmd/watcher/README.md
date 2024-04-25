@@ -78,7 +78,7 @@ See the example for the [`worklog`](../worklog) to see how a non-kernel call is 
 
 ## Detailers
 
-`watcher` obtains details from the GUI environment. On Linux, by default this is from an X server, but this is configurable to allow alternatives. This is necessary when running under Wayland as Wayland does not make the required information available by design.
+`watcher` obtains details from the GUI environment. On Linux, by default this is determined from the `XDG_SESSION_TYPE` and `XDG_CURRENT_DESKTOP` environment variables, but is configurable if auto-detection does not work.
 
 The configuration is made in the `options.strategy` configuration field.
 ```
@@ -87,8 +87,8 @@ strategy = "xorg"
 polling = "1s"
 ```
 
-Currently, optional Linux detailers are:
-- `xorg`: use the X server (same as default)
+Currently, available Linux detailers are:
+- `xorg`: use the X server
 - `gnome/mutter`: use the [User Activiy GNOME Shell extension](./extensions/user-activity@kortschak.io) in the extensions directory. Requires GNOME v45+.
 
 On MacOS, details are obtained from the OS and no configuration is required.
