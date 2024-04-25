@@ -3,7 +3,7 @@ module github.com/kortschak/dex
 go 1.22.0
 
 require (
-	cuelang.org/go v0.7.0
+	cuelang.org/go v0.8.1
 	gioui.org v0.0.0-20230502183330-59695984e53c
 	github.com/BurntSushi/toml v1.3.2
 	github.com/bbrks/wrap/v2 v2.5.0
@@ -34,7 +34,6 @@ require (
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mpvl/unique v0.0.0-20150818121801-cbe035fff7de // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sstallion/go-hid v0.14.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
