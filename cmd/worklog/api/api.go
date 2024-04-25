@@ -177,13 +177,14 @@ type DetailMapper interface {
 // WatcherDetails is a set of variables provided to rules from a watcher
 // event message. Each field is provided to the CEL environment as a field
 // of the global, curr, and the previous evaluation's values are available
-// as fields of the global, last. See [watcher.Detail] for the names used
+// as fields of the global, last. See [watcher.Details] for the names used
 // for fields in the CEL environment.
 type WatcherDetails watcher.Details
 
 func (d *WatcherDetails) DetailMap() map[string]any {
 	return map[string]any{
 		"wid":        d.WindowID,
+		"pid":        d.ProcessID,
 		"name":       d.Name,
 		"class":      d.Class,
 		"window":     d.WindowName,

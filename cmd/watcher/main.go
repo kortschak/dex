@@ -396,6 +396,7 @@ func (d *daemon) compile(src string) (cel.Program, error) {
 			decls.NewVar("time", decls.Timestamp),
 			decls.NewVar("period", decls.Duration),
 			decls.NewVar("window_id", decls.Int),
+			decls.NewVar("process_id", decls.Int),
 			decls.NewVar("name", decls.String),
 			decls.NewVar("class", decls.String),
 			decls.NewVar("window", decls.String),
@@ -426,6 +427,7 @@ func eval(prg cel.Program, ts time.Time, curr, last watcher.Details, period time
 		"period": period,
 
 		"window_id":  curr.WindowID,
+		"process_id": curr.ProcessID,
 		"name":       curr.Name,
 		"class":      curr.Class,
 		"window":     curr.WindowName,
@@ -433,6 +435,7 @@ func eval(prg cel.Program, ts time.Time, curr, last watcher.Details, period time
 		"locked":     curr.Locked,
 		"last": map[string]any{
 			"window_id":  last.WindowID,
+			"process_id": last.ProcessID,
 			"name":       last.Name,
 			"class":      last.Class,
 			"window":     last.WindowName,

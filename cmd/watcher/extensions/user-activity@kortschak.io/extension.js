@@ -41,13 +41,13 @@ export default class Extension {
       }
       return {
         'wid':        get('id'),
+        'pid':        get('pid'),
         'name':       get('wm_class_instance'),
         'class':      get('wm_class'),
         'window':     get('title'),
         'last_input': last,
 
         // Unused by watcher, but kept for debugging.
-        'pid':        get('pid'),
         'type':       get('type'), // https://developer-old.gnome.org/meta/stable/MetaWindow.html#MetaWindowType
         'layer':      get('layer') // https://developer-old.gnome.org/meta/stable/meta-Common.html#MetaStackLayer
       };

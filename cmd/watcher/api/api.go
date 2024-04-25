@@ -36,6 +36,7 @@ type Notification struct {
 // evaluation's values are available as fields of the global, last.
 type Details struct {
 	WindowID   int       `json:"wid"`
+	ProcessID  int       `json:"pid"`
 	Name       string    `json:"name"`
 	Class      string    `json:"class"`
 	WindowName string    `json:"window"`

@@ -9,6 +9,7 @@
 	"period": <duration>,
 
 	"window_id":  <int>,
+	"process_id": <int>,
 	"name":       <string>,
 	"class":      <string>,
 	"window":     <string>,
@@ -16,6 +17,7 @@
 	"locked":     <bool>,
 	"last": {
 		"window_id":  <int>,
+		"process_id": <int>,
 		"name":       <string>,
 		"class":      <string>,
 		"window":     <string>,

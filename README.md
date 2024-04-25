@@ -248,7 +248,7 @@ The service can be stopped with `systemctl --user stop dex.service`.
 
 Interaction with Stream Deck devices depends on github.com/sstallion/go-hid. This package makes use of [non-Go dependencies](https://github.com/libusb/hidapi/blob/master/BUILD.md#prerequisites).
 
-The `watcher` module depends on libxss on linux (libxss-dev in deb-based distributions). Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
+The `watcher` module depends on libxss and libxres on linux (libxss-dev and libxres-dev in deb-based distributions). Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
 
 ## Linux udev rules
 

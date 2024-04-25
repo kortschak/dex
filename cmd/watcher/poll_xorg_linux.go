@@ -14,14 +14,16 @@ import (
 )
 
 /*
-#cgo LDFLAGS: -lX11 -lXss
+#cgo LDFLAGS: -lX11 -lXss -lXRes
 #include <stdbool.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/scrnsaver.h>
+#include <X11/extensions/XRes.h>
 
 struct details {
 	int wid;
+	pid_t pid;
 	char* class;
 	char* name;
 	char* window;
@@ -34,6 +36,7 @@ struct details {
 
 int handleXError(Display *dpy, XErrorEvent *event);
 
+pid_t get_window_pid(Display *display, Window window);
 Status get_focused_window(Display *display, Window *window_return);
 Status get_window_classname(Display *display, Window window, char **class_ret, char **name_ret);
 Status get_window_name(Display *display, Window window, char **name_ret);
@@ -73,6 +76,7 @@ int activeWindow(struct details *d) {
 	}
 	flags = 1;
 	d->wid = window;
+	d->pid = get_window_pid(display, window);
 	ok = get_window_classname(display, window, &(d->class), &(d->name));
 	if (ok) {
 		flags |= 2;
@@ -96,6 +100,28 @@ void freeDetails(struct details *d) {
 	if (d->window) {
 		XFree((void*)d->window);
 	}
+}
+
+pid_t get_window_pid(Display *display, Window window) {
+	pid_t pid = -1;
+
+	XResClientIdSpec spec = {
+		.client = window,
+		.mask   = XRES_CLIENT_ID_PID_MASK,
+	};
+	long num_ids;
+	XResClientIdValue *client_ids;
+
+	XResQueryClientIds(display, 1, &spec, &num_ids, &client_ids);
+	for (int i = 0; i < num_ids; i++) {
+		if (client_ids[i].spec.mask == XRES_CLIENT_ID_PID_MASK) {
+			pid = XResGetClientPid(&client_ids[i]);
+			break;
+		}
+	}
+	XResClientIdsDestroy(num_ids, client_ids);
+
+	return pid;
 }
 
 Status get_focused_window(Display *display, Window *window_return) {
@@ -238,6 +264,7 @@ func (d *xOrgDetailer) details() (watcher.Details, error) {
 	}
 	active := watcher.Details{
 		WindowID:   int(det.wid),
+		ProcessID:  int(det.pid),
 		Name:       C.GoString(det.name),
 		Class:      C.GoString(det.class),
 		WindowName: C.GoString(det.window),

@@ -92,6 +92,7 @@ func (macosDetailer) details() (watcher.Details, error) {
 	C.activeWindow(&t)
 	active := watcher.Details{
 		WindowID:   int(t.wid), // Note that this is not reliable. MacOS is garbage.
+		ProcessID:  pid,
 		Name:       name,
 		Class:      C.GoString(t.name),
 		WindowName: C.GoString(t.window),

@@ -40,7 +40,7 @@ jobs:
       if: matrix.platform == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -qq libudev-dev libxss-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev xdotool x11-utils xdotool i3-wm
+        sudo apt-get install -qq libudev-dev libxss-dev libxres-dev gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev xdotool x11-utils xdotool i3-wm
         echo "DISPLAY=${DISPLAY}"
         # Start a virtual frame buffer and wait a bit for it to be ready...
         Xvfb :99 -screen 0 1920x1024x24 &

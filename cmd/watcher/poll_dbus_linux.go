@@ -83,6 +83,7 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 	}
 	var det struct {
 		WindowID   int       `json:"wid"`
+		ProcessID  int       `json:"pid"`
 		Name       string    `json:"name"`
 		Class      string    `json:"class"`
 		WindowName string    `json:"window"`
