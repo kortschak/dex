@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -65,6 +66,10 @@ func TestDaemon(t *testing.T) {
 	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
+	}
+	version, err := getVersion(exePath)
+	if err != nil {
+		t.Fatalf("unexpected error from getVersion: %v", err)
 	}
 
 	// Make certificates and CA.
@@ -326,6 +331,7 @@ func TestDaemon(t *testing.T) {
 					Daemons: map[string]rpc.DaemonState{
 						"rest": {
 							UID:           "rest",
+							Version:       version,
 							Command:       ptr(exePath + " -log " + level.Level().String() + " -lines=false -uid rest -network " + network + " -addr " + addr),
 							LastHeartbeat: &time.Time{},
 							Deadline:      &time.Time{},
@@ -525,4 +531,15 @@ type fileShim struct {
 
 func (f fileShim) Stat() (fs.FileInfo, error) {
 	return f.fi, nil
+}
+
+func getVersion(path string) (string, error) {
+	cmd := execabs.Command(path, "-version")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buf.String()), nil
 }

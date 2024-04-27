@@ -13,9 +13,19 @@ import (
 
 // Print prints the build version.
 func Print() error {
+	v, err := String()
+	if err != nil {
+		return err
+	}
+	fmt.Println(v)
+	return nil
+}
+
+// String returns the build version.
+func String() (string, error) {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
-		return errors.New("no build info")
+		return "", errors.New("no build info")
 	}
 	var revision, modified string
 	for _, bs := range bi.Settings {
@@ -27,17 +37,15 @@ func Print() error {
 		}
 	}
 	if revision == "" {
-		fmt.Println(bi.Main.Version)
-		return nil
+		return bi.Main.Version, nil
 	}
 	switch modified {
 	case "true":
-		fmt.Println(bi.Main.Version, revision, "(modified)")
+		return fmt.Sprintf("%s %s (modified)", bi.Main.Version, revision), nil
 	case "false":
-		fmt.Println(bi.Main.Version, revision)
+		return fmt.Sprintf("%s %s", bi.Main.Version, revision), nil
 	default:
 		// This should never happen.
-		fmt.Println(bi.Main.Version, revision, modified)
+		return fmt.Sprintf("%s %s %s", bi.Main.Version, revision, modified), nil
 	}
-	return nil
 }

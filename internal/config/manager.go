@@ -54,9 +54,8 @@ func (m *Manager) Apply(c Change) error {
 		switch {
 		case ev.Has(fsnotify.Write):
 			m.log.LogAttrs(ctx, slog.LevelDebug, "apply write", slog.Any("change", changeValue{c}))
-			if _, ok := m.fragments[ev.Name]; !ok {
-				return &fs.PathError{Op: "write", Path: ev.Name, Err: fs.ErrNotExist}
-			}
+			_, ok := m.fragments[ev.Name]
+			m.log.LogAttrs(ctx, slog.LevelInfo, "apply write", slog.Bool("exists", ok))
 			m.fragments[ev.Name] = c.Config
 
 		case ev.Has(fsnotify.Rename):

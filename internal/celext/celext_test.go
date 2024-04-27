@@ -28,6 +28,7 @@ import (
 
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/state"
+	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/rpc"
 )
 
@@ -115,7 +116,11 @@ func celMain() (status int) {
 					return nil, jsonrpc2.ErrNotHandled
 				}
 				if req.Method == rpc.Who {
-					return rpc.NewMessage(uid, rpc.None{}), nil
+					version, err := version.String()
+					if err != nil {
+						version = err.Error()
+					}
+					return rpc.NewMessage(uid, version), nil
 				}
 				return nil, jsonrpc2.ErrNotHandled
 			}),

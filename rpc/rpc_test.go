@@ -19,6 +19,7 @@ import (
 
 	"github.com/kortschak/dex/internal/locked"
 	"github.com/kortschak/dex/internal/slogext"
+	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/internal/xdg"
 )
 
@@ -69,7 +70,11 @@ func TestPingPongForward(t *testing.T) {
 							return nil, jsonrpc2.ErrNotHandled
 						}
 						if req.Method == Who {
-							return NewMessage(uid, None{}), nil
+							version, err := version.String()
+							if err != nil {
+								version = err.Error()
+							}
+							return NewMessage(uid, version), nil
 						}
 						if req.Method != "ping" {
 							return nil, jsonrpc2.ErrNotHandled
@@ -103,7 +108,11 @@ func TestPingPongForward(t *testing.T) {
 							return nil, jsonrpc2.ErrNotHandled
 						}
 						if req.Method == Who {
-							return NewMessage(uid, None{}), nil
+							version, err := version.String()
+							if err != nil {
+								version = err.Error()
+							}
+							return NewMessage(uid, version), nil
 						}
 						if req.Method != "ping-call" {
 							return nil, jsonrpc2.ErrNotHandled

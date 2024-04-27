@@ -24,6 +24,8 @@ type System struct {
 	Kernel   *Kernel             `json:"kernel,omitempty" toml:"kernel"`
 	Modules  map[string]*Module  `json:"module,omitempty" toml:"module"`
 	Services map[string]*Service `json:"service,omitempty" toml:"service"`
+
+	Version string `json:"version,omitempty"`
 }
 
 // Kernel is the kernel configuration.

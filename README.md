@@ -253,3 +253,7 @@ In a new file, "/etc/udev/rules.d/99-streamdeck.rules" add
 ACTION=="add", ATTRS{idVendor}=="0fd9", MODE="0666"
 ```
 and then run `sudo udevadm trigger`.
+
+## State debugging
+
+A debug configuration snippet is available in the [debug.toml](./debug.toml) file. This can be used to get system state for reporting bugs. See details within the file.

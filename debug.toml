@@ -1,0 +1,51 @@
+# debug.toml provides state debugging hooks.
+#
+# The rest module must be installed and accessible in `$PATH` as `rest`.
+#
+# It uses ports 63600, 63601 and 63602. If these are already in use
+# adjust the addr options below.
+#
+# It uses module.debug and service.debug_page_details. If these are
+# already used, adjust the configuration names below.
+#
+# Place the file in the dex config directory and then run the following
+# commands to get the running system state:
+#
+#  curl http://localhost:63600/
+#  curl http://localhost:63601/
+#  curl http://localhost:63602/
+
+[module.debug]
+path = "rest"
+log_mode = "log"
+log_level = "error"
+log_add_source = true
+
+[module.debug.options.server.system]
+addr = "localhost:63600"
+request = """
+{"method": "system"}
+"""
+response = """
+response.body
+"""
+[module.debug.options.server.state]
+addr = "localhost:63601"
+request = """
+{"method": "state"}
+"""
+response = """
+response.body
+"""
+[service.debug_page_details]
+module = "debug"
+# Directly assign serial to debug service.
+serial = ""
+[service.debug_page_details.options.server]
+addr = "localhost:63602"
+request = """
+{"method":"page_details"}
+"""
+response = """
+response.body
+"""

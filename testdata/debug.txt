@@ -4,10 +4,10 @@ env HOME=${WORK}
 [linux] env XDG_RUNTIME_DIR=${HOME}/runtime
 [linux] mkdir ${XDG_CONFIG_HOME}/dex
 [linux] mkdir ${XDG_RUNTIME_DIR}
-[linux] mv config.toml ${HOME}/.config/dex/config.toml
+[linux] mv kernel.toml ${HOME}/.config/dex/kernel.toml
 
 [darwin] mkdir ${HOME}'/Library/Application Support/dex'
-[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+[darwin] mv kernel.toml ${HOME}'/Library/Application Support/dex/kernel.toml'
 
 env GOBIN=${WORK}/bin
 env PATH=${GOBIN}:${PATH}
@@ -18,40 +18,25 @@ cd ${WORK}
 dex -log debug -lines &dex&
 sleep 1s
 
-GET -json http://localhost:7373
+# Confirm that drop in to a running system works.
+[linux] cp ${PKG_ROOT}/debug.toml ${HOME}/.config/dex/debug.toml
+[darwin] cp ${PKG_ROOT}/debug.toml ${HOME}'/Library/Application Support/dex/debug.toml'
+sleep 1s
+
+GET -json http://localhost:63600
 cmp stdout want_system.json
 
-GET -json http://localhost:7474
+GET -json http://localhost:63601
 cp stdout got_state.json
 grep_from_file want_state.pattern got_state.json
 
--- config.toml --
+GET -json http://localhost:63602
+cmp stdout want_pages.json
+
+-- kernel.toml --
 [kernel]
 device = []
 network = "tcp"
-
-[module.rest]
-path = "rest"
-log_mode = "log"
-log_level = "debug"
-log_add_source = true
-
-[module.rest.options.server.system]
-addr = "localhost:7373"
-request = """
-{"method": "system"}
-"""
-response = """
-response.body
-"""
-[module.rest.options.server.state]
-addr = "localhost:7474"
-request = """
-{"method": "state"}
-"""
-response = """
-response.body
-"""
 -- want_system.json --
 {
 	"kernel": {
@@ -59,26 +44,41 @@ response.body
 		"sum": "0594902707f6e8141ba872ac25ad05fac265885d"
 	},
 	"module": {
-		"rest": {
+		"debug": {
 			"log_add_source": true,
-			"log_level": "DEBUG",
+			"log_level": "ERROR",
 			"log_mode": "log",
 			"options": {
 				"server": {
 					"state": {
-						"addr": "localhost:7474",
+						"addr": "localhost:63601",
 						"request": "{\"method\": \"state\"}\n",
 						"response": "response.body\n"
 					},
 					"system": {
-						"addr": "localhost:7373",
+						"addr": "localhost:63600",
 						"request": "{\"method\": \"system\"}\n",
 						"response": "response.body\n"
 					}
 				}
 			},
 			"path": "rest",
-			"sum": "d92fd9a89eaa3e1e55caa0e451184e11350972fc"
+			"sum": "9205c687dfe83fba6a00b238287acfbbc7351f60"
+		}
+	},
+	"service": {
+		"debug_page_details": {
+			"module": "debug",
+			"name": "debug_page_details",
+			"options": {
+				"server": {
+					"addr": "localhost:63602",
+					"request": "{\"method\":\"page_details\"}\n",
+					"response": "response.body\n"
+				}
+			},
+			"serial": "",
+			"sum": "fbf11840b8202825893afee5db928724a7a6597b"
 		}
 	},
 	"version": "(devel)"
@@ -87,10 +87,10 @@ response.body
 {
 	"addr": "127\.0\.0\.1:.*",
 	"daemons": {
-		"rest": {
-			"command": ".*/bin/rest -log_stdout -uid rest -network tcp -addr 127\.0\.0\.1:.*",
+		"debug": {
+			"command": ".*/bin/rest -log_stdout -uid debug -network tcp -addr 127\.0\.0\.1:.*",
 			"has_drop": false,
-			"uid": "rest",
+			"uid": "debug",
 			"version": "(?:\(devel\) )?[^ ]+(?: \(modified\))?"
 		}
 	},
@@ -111,3 +111,5 @@ response.body
 	\],
 	"network": "tcp"
 }
+-- want_pages.json --
+null

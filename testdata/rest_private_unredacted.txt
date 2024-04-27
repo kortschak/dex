@@ -101,5 +101,6 @@ response.body
 			"path": "rest",
 			"sum": "c1eb308de06a25af7511d05849c7ead87dd64233"
 		}
-	}
+	},
+	"version": "(devel)"
 }

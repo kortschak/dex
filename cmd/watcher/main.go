@@ -202,7 +202,11 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 
 	switch req.Method {
 	case rpc.Who:
-		return rpc.NewMessage(rpc.UID{Module: d.uid}, rpc.None{}), nil
+		version, err := version.String()
+		if err != nil {
+			version = err.Error()
+		}
+		return rpc.NewMessage(rpc.UID{Module: d.uid}, version), nil
 
 	case rpc.Configure:
 		var m rpc.Message[watcher.Config]

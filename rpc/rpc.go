@@ -19,7 +19,7 @@ import (
 
 // Daemon methods.
 const (
-	Who       = "who"       // call Message[None] → Message[None]
+	Who       = "who"       // call Message[None] → Message[string] (version)
 	Configure = "configure" // call Message[any] → Message[string]
 	Stop      = "stop"      // notify any → nil
 )
@@ -126,6 +126,7 @@ type SysState struct {
 // DaemonState is the state of individual daemons in the system
 type DaemonState struct {
 	UID           string     `json:"uid"`
+	Version       string     `json:"version"`
 	Command       *string    `json:"command,omitempty"` // Command used to start the daemon.
 	Builtin       *string    `json:"builtin,omitempty"` // UID of a built-in.
 	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`

@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sys/execabs"
 
 	"github.com/kortschak/dex/internal/slogext"
+	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/internal/xdg"
 )
 
@@ -48,6 +49,7 @@ type Kernel struct {
 
 type daemon struct {
 	uid       string
+	version   string
 	cmd       *execabs.Cmd
 	keepalive *os.File
 	builtin   *Daemon
@@ -163,7 +165,7 @@ func (k *Kernel) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.C
 }
 
 func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection) {
-	var daemon Message[None]
+	var daemon Message[string]
 	err := conn.Call(ctx, Who, NewMessage(kernelUID, None{})).Await(ctx, &daemon)
 	k.log.LogAttrs(ctx, slog.LevelDebug, "binding response", slog.Any("message", daemon))
 	switch {
@@ -189,6 +191,7 @@ func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection) {
 		k.log.LogAttrs(ctx, slog.LevelError, "unexpected connection", slog.Any("uid", daemon.UID))
 		return
 	}
+	d.version = daemon.Body
 	if d.conn != nil {
 		// UID is already registered, log and ask the second to stop.
 		k.log.LogAttrs(ctx, slog.LevelError, "duplicate uid", slog.String("uid", daemon.UID.Module))
@@ -397,6 +400,7 @@ func (k *Kernel) state(ctx context.Context, req *jsonrpc2.Request, m Message[Non
 	for uid, d := range k.daemons {
 		ds := DaemonState{
 			UID:     d.uid,
+			Version: d.version,
 			HasDrop: d.drop != nil,
 		}
 		if d.cmd != nil {
@@ -510,7 +514,11 @@ func (k *Kernel) Builtin(ctx context.Context, uid string, dialer net.Dialer, bin
 	if err != nil {
 		return err
 	}
-	k.daemons[uid] = &daemon{uid: uid, builtin: builtin, ready: make(chan struct{})}
+	version, err := version.String()
+	if err != nil {
+		version = err.Error()
+	}
+	k.daemons[uid] = &daemon{uid: uid, version: version, builtin: builtin, ready: make(chan struct{})}
 
 	return nil
 }

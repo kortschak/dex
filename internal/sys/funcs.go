@@ -14,6 +14,7 @@ import (
 
 	"github.com/kortschak/dex/internal/private"
 	"github.com/kortschak/dex/internal/slogext"
+	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/rpc"
 )
 
@@ -42,6 +43,10 @@ func Funcs[K Kernel, D Device[B], B Button](redact bool) func(manager *Manager[K
 				}
 				sort.Strings(kernel.Missing)
 				current.Kernel = &kernel
+				current.Version, err = version.String()
+				if err != nil {
+					current.Version = err.Error()
+				}
 				if id.IsValid() {
 					if redact {
 						current, err = private.Redact(current, "json")
