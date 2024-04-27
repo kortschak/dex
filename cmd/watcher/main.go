@@ -17,7 +17,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -178,13 +177,13 @@ type daemon struct {
 }
 
 type detailer interface {
-	strategy() []string
+	strategy() string
 	details() (watcher.Details, error)
 }
 
 type noDetails struct{}
 
-func (noDetails) strategy() []string { return []string{"none"} }
+func (noDetails) strategy() string { return "none" }
 
 func (noDetails) details() (watcher.Details, error) {
 	return watcher.Details{}, errors.New("no details")
@@ -258,7 +257,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 }
 
 func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
-	if slices.Contains(d.detailer.strategy(), strategy) {
+	if d.detailer.strategy() == strategy {
 		return
 	}
 	det, err := newDetailer(strategy)

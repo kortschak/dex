@@ -76,16 +76,14 @@ void activeWindow(struct details *d)
 import "C"
 
 func init() {
-	for _, s := range (macosDetailer{}).strategy() {
-		detailers[s] = newMacosDetailer
-	}
+	detailers[macosDetailer{}.strategy()] = newMacosDetailer
 }
 
 func newMacosDetailer() (detailer, error) { return macosDetailer{}, nil }
 
 type macosDetailer struct{}
 
-func (macosDetailer) strategy() []string { return []string{"macos"} }
+func (macosDetailer) strategy() string { return "macos" }
 
 func (macosDetailer) details() (watcher.Details, error) {
 	// Do the fallback first because MacOS is garbage.

@@ -15,9 +15,7 @@ import (
 )
 
 func init() {
-	for _, s := range (&mutterDetailer{}).strategy() {
-		detailers[s] = newMutterDetailer
-	}
+	detailers[(&mutterDetailer{}).strategy()] = newMutterDetailer
 }
 
 func newMutterDetailer() (detailer, error) {
@@ -33,7 +31,7 @@ type mutterDetailer struct {
 	last time.Time
 }
 
-func (*mutterDetailer) strategy() []string { return []string{"gnome/mutter"} }
+func (*mutterDetailer) strategy() string { return "gnome/mutter" }
 
 func (d *mutterDetailer) Close() error {
 	err := d.conn.Close()

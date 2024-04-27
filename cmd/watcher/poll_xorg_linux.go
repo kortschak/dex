@@ -214,9 +214,7 @@ char *get_window_property_by_atom(Display *display, Window window, Atom atom, lo
 import "C"
 
 func init() {
-	for _, s := range (&xOrgDetailer{}).strategy() {
-		detailers[s] = newXOrgDetailer
-	}
+	detailers[(&xOrgDetailer{}).strategy()] = newXOrgDetailer
 }
 
 func newXOrgDetailer() (detailer, error) {
@@ -227,7 +225,7 @@ type xOrgDetailer struct {
 	last time.Time
 }
 
-func (*xOrgDetailer) strategy() []string { return []string{"xorg"} }
+func (*xOrgDetailer) strategy() string { return "xorg" }
 
 func (d *xOrgDetailer) details() (watcher.Details, error) {
 	var det C.struct_details
