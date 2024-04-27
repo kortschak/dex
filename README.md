@@ -65,6 +65,12 @@ button.
 - [`drop`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) delete all state data associated with a service (identity in the `rpc.Message`).
 - [`drop_module`](https://pkg.go.dev/github.com/kortschak/dex/internal/state#Funcs) — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) delete all state data associated with a module (identity in the `rpc.Message`).
 
+Module executables are expected to implement the following methods:
+
+- `who` — call [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) returns `rpc.Message[string]` containing the version of the module executable.
+- `configure` — call `rpc.Message[any]` returns `rpc.Message[string]` with informational text.
+- `stop` — notify `any` signals the executable to terminate.
+
 ## Provided modules
 
 ### `rest`
