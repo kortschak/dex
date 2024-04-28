@@ -257,6 +257,9 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 }
 
 func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
+	d.pMu.Lock()
+	defer d.pMu.Unlock()
+
 	if d.detailer.strategy() == strategy {
 		return
 	}
@@ -318,7 +321,9 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 					return
 				case t := <-ticker.C:
 					d.log.LogAttrs(ctx, slog.LevelDebug, "polling", slog.Any("tick", t))
+					d.pMu.Lock()
 					details, err := d.detailer.details()
+					d.pMu.Unlock()
 					if err != nil {
 						var warn warning
 						if errors.As(err, &warn) {
