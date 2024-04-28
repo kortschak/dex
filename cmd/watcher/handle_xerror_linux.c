@@ -29,8 +29,29 @@ from The Open Group.
 #include <X11/Xlibint.h>
 #include <stdio.h>
 #include <string.h>
+#include <dlfcn.h>
+
+typedef int (*xGetErrorText) (
+    Display *display,
+    int     code,
+    char    *buffer_return,
+    int     length
+);
+typedef int (*xGetErrorDatabaseText) (
+    Display       *display,
+    _Xconst char  *name,
+    _Xconst char  *message,
+    _Xconst char  *default_string,
+    char          *buffer_return,
+    int           length
+);
+struct X11Lib {
+	xGetErrorText XGetErrorText;
+	xGetErrorDatabaseText XGetErrorDatabaseText;
+};
 
 static int _XPrintDefaultError(
+	struct X11Lib *lib,
     Display *dpy,
     XErrorEvent *event,
     FILE *fp)
@@ -41,15 +62,15 @@ static int _XPrintDefaultError(
     const char *mtype = "XlibMessage";
     register _XExtension *ext = (_XExtension *)NULL;
     _XExtension *bext = (_XExtension *)NULL;
-    XGetErrorText(dpy, event->error_code, buffer, BUFSIZ);
-    XGetErrorDatabaseText(dpy, mtype, "XError", "X Error", mesg, BUFSIZ);
+    lib->XGetErrorText(dpy, event->error_code, buffer, BUFSIZ);
+    lib->XGetErrorDatabaseText(dpy, mtype, "XError", "X Error", mesg, BUFSIZ);
     (void) fprintf(fp, "%s:  %s\n  ", mesg, buffer);
-    XGetErrorDatabaseText(dpy, mtype, "MajorCode", "Request Major code %d",
+    lib->XGetErrorDatabaseText(dpy, mtype, "MajorCode", "Request Major code %d",
 	mesg, BUFSIZ);
     (void) fprintf(fp, mesg, event->request_code);
     if (event->request_code < 128) {
 	snprintf(number, sizeof(number), "%d", event->request_code);
-	XGetErrorDatabaseText(dpy, "XRequest", number, "", buffer, BUFSIZ);
+	lib->XGetErrorDatabaseText(dpy, "XRequest", number, "", buffer, BUFSIZ);
     } else {
 	for (ext = dpy->ext_procs;
 	     ext && (ext->codes.major_opcode != event->request_code);
@@ -63,13 +84,13 @@ static int _XPrintDefaultError(
     }
     (void) fprintf(fp, " (%s)\n", buffer);
     if (event->request_code >= 128) {
-	XGetErrorDatabaseText(dpy, mtype, "MinorCode", "Request Minor code %d",
+	lib->XGetErrorDatabaseText(dpy, mtype, "MinorCode", "Request Minor code %d",
 			      mesg, BUFSIZ);
 	fputs("  ", fp);
 	(void) fprintf(fp, mesg, event->minor_code);
 	if (ext) {
 	    snprintf(mesg, sizeof(mesg), "%s.%d", ext->name, event->minor_code);
-	    XGetErrorDatabaseText(dpy, "XRequest", mesg, "", buffer, BUFSIZ);
+	    lib->XGetErrorDatabaseText(dpy, "XRequest", mesg, "", buffer, BUFSIZ);
 	    (void) fprintf(fp, " (%s)", buffer);
 	}
 	fputs("\n", fp);
@@ -95,7 +116,7 @@ static int _XPrintDefaultError(
                      event->error_code - bext->codes.first_error);
 	else
 	    strcpy(buffer, "Value");
-	XGetErrorDatabaseText(dpy, mtype, buffer, "", mesg, BUFSIZ);
+	lib->XGetErrorDatabaseText(dpy, mtype, buffer, "", mesg, BUFSIZ);
 	if (mesg[0]) {
 	    fputs("  ", fp);
 	    (void) fprintf(fp, mesg, event->resourceid);
@@ -117,23 +138,23 @@ static int _XPrintDefaultError(
 	       (event->error_code == BadValue) ||
 	       (event->error_code == BadAtom)) {
 	if (event->error_code == BadValue)
-	    XGetErrorDatabaseText(dpy, mtype, "Value", "Value 0x%x",
+	    lib->XGetErrorDatabaseText(dpy, mtype, "Value", "Value 0x%x",
 				  mesg, BUFSIZ);
 	else if (event->error_code == BadAtom)
-	    XGetErrorDatabaseText(dpy, mtype, "AtomID", "AtomID 0x%x",
+	    lib->XGetErrorDatabaseText(dpy, mtype, "AtomID", "AtomID 0x%x",
 				  mesg, BUFSIZ);
 	else
-	    XGetErrorDatabaseText(dpy, mtype, "ResourceID", "ResourceID 0x%x",
+	    lib->XGetErrorDatabaseText(dpy, mtype, "ResourceID", "ResourceID 0x%x",
 				  mesg, BUFSIZ);
 	fputs("  ", fp);
 	(void) fprintf(fp, mesg, event->resourceid);
 	fputs("\n", fp);
     }
-    XGetErrorDatabaseText(dpy, mtype, "ErrorSerial", "Error Serial #%d",
+    lib->XGetErrorDatabaseText(dpy, mtype, "ErrorSerial", "Error Serial #%d",
 			  mesg, BUFSIZ);
     fputs("  ", fp);
     (void) fprintf(fp, mesg, event->serial);
-    XGetErrorDatabaseText(dpy, mtype, "CurrentSerial", "Current Serial #%lld",
+    lib->XGetErrorDatabaseText(dpy, mtype, "CurrentSerial", "Current Serial #%lld",
 			  mesg, BUFSIZ);
     fputs("\n  ", fp);
     (void) fprintf(fp, mesg, (unsigned long long)(X_DPY_GET_REQUEST(dpy)));
@@ -144,9 +165,37 @@ static int _XPrintDefaultError(
 
 /*
 handleXError is _XDefaultError from libx11/src/XlibInt.c stripped of its
-exit(1) call.
+exit(1) call and with dynamic XGetErrorText and XGetErrorDatabaseText added.
 */
 int handleXError(Display *dpy, XErrorEvent *event) {
-    _XPrintDefaultError (dpy, event, stderr);
-    return 0;
+	dlerror();
+	void *h = dlopen("libX11.so", RTLD_LAZY);
+	if (h == NULL) {
+		(void) fprintf(stderr, "failed to open libX11: %s\n", dlerror());
+		(void) fprintf(stderr, "X error: resourceid=%ld serial=%ld error_code=%d request_code=%d minor_code=%d\n",
+			event->resourceid, event->serial, event->error_code, event->request_code, event->minor_code);
+		return 0;
+	}
+	struct X11Lib lib = {
+		.XGetErrorText = dlsym(h, "XGetErrorText"),
+		.XGetErrorDatabaseText = dlsym(h, "xGetErrorDatabaseText")
+	};
+	if (lib.XGetErrorText != NULL && lib.XGetErrorDatabaseText != NULL) {
+		_XPrintDefaultError(&lib, dpy, event, stderr);	
+	} else {
+		if (lib.XGetErrorText == NULL) {
+			(void) fprintf(stderr, "failed to get XGetErrorText: %s\n", dlerror());
+		}
+		if (lib.XGetErrorDatabaseText == NULL) {
+			(void) fprintf(stderr, "failed to get XGetErrorDatabaseText: %s\n", dlerror());
+		}
+		(void) fprintf(stderr, "X error: resourceid=%ld serial=%ld error_code=%d request_code=%d minor_code=%d\n",
+			event->resourceid, event->serial, event->error_code, event->request_code, event->minor_code);
+	}
+	dlclose(h);
+	char *e = dlerror();
+	if (e != NULL) {
+		(void) fprintf(stderr, "failed to close libX11: %s\n", e);
+	}
+	return 0;
 }
