@@ -115,11 +115,6 @@ func (macosDetailer) details() (watcher.Details, error) {
 	return active, err
 }
 
-// warning is a warn-only error.
-type warning struct {
-	error
-}
-
 //go:embed get_active_app.applescript
 var getActiveApp string
 

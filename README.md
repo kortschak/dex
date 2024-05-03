@@ -248,7 +248,7 @@ The service can be stopped with `systemctl --user stop dex.service`.
 
 Interaction with Stream Deck devices depends on github.com/sstallion/go-hid. This package makes use of [non-Go dependencies](https://github.com/libusb/hidapi/blob/master/BUILD.md#prerequisites).
 
-The `watcher` module depends on Xlib, libXss and libXRes on linux (libx11-dev, libxss1/libxss-dev and libxres1/libxres-dev in deb-based distributions). Xlib headers are required during compilation, but the libraries may be absent with reduced or absent functionality. Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
+The `watcher` module depends on Xlib, libXss and libXRes on linux (libx11-dev, libxss1/libxss-dev and libxres1/libxres-dev in deb-based distributions). Xlib headers are required during compilation, but the libraries may be absent with reduced or absent functionality. `watcher` may be built with a `no_xorg` build tag to avoid the need for any X11 dependencies; this build will not be able to make use of X11. Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
 
 ## Linux udev rules
 

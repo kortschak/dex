@@ -59,3 +59,8 @@ func defaultStrategy() (string, error) {
 }
 
 var detailers = map[string]func() (detailer, error){}
+
+// warning is a warn-only error.
+type warning struct {
+	error
+}

@@ -1,3 +1,5 @@
+//go:build !no_xorg
+
 /*
 
 Copyright 1985, 1986, 1987, 1998  The Open Group

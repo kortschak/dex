@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !no_xorg
+
 package main
 
 import (
@@ -503,11 +505,6 @@ func (e xOrgDetailError) Error() string {
 
 var failureReason = [...]string{
 	C.enodisplay: "no display",
-}
-
-// warning is a warn-only error.
-type warning struct {
-	error
 }
 
 func missing(flags C.int) string {
