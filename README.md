@@ -1,6 +1,6 @@
 # ![dex logo](dex_logo_24.png) `dex`
 
-`dex` is a work in progress El Gato Stream Deck controller system.
+`dex` is an El Gato Stream Deck controller system.
 
 ## Architecture
 
@@ -263,3 +263,7 @@ and then run `sudo udevadm trigger`.
 ## State debugging
 
 A debug configuration snippet is available in the [debug.toml](./debug.toml) file. This can be used to get system state for reporting bugs. See details within the file.
+
+---
+
+Written in honour of Alex "Mr Harry Joy" Duval. Just another alternative conference report.
