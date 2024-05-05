@@ -767,7 +767,7 @@ function activityData(data, categories) {
 
 			var name = "";
 			if (key == "window") {
-				name = e.data?.app+" | "+e.data?.title;
+				name = e.data?.app+" | "+e.data?.title+((e.data?.pid != undefined) ? " ("+e.data?.pid+")" : "");
 			} else if (key == "afk") {
 				if (e.data?.afk != undefined && !e.data.afk) {
 					name = "not-afk"
