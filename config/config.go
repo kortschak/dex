@@ -218,7 +218,7 @@ _#button: B={
 
 _#data_uri: _#text | _#image | _#image_file | _#named_color | _#web_color
 _#text: =~"^data:text/plain(?:;[^;]+=[^;]*)*,.*$"
-_#image: =~"^data:image/\\*(?:;[^;]+=[^;]*)*;base64,.*$"
+_#image: =~"^data:image/\\*(?:;[^;]+=[^;]*)*;(?:base64|svg),.*$"
 _#image_file: =~"^data:text/filename(?:;[^;]+=[^;]*)*,.*$"
 _#named_color: =~"^data:image/color(?:;[^;]+=[^;]*)*;name,(?:hi)?(?:black|red|green|yellow|blue|magenta|cyan|white)$"
 _#web_color: =~"^data:image/color(?:;[^;]+=[^;]*)*;web,#[0-9a-fA-F]{6}$"

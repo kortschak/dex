@@ -5,13 +5,16 @@
 package device
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -25,6 +28,8 @@ import (
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
 
+	"github.com/tdewolff/canvas"
+	"github.com/tdewolff/canvas/renderers/rasterizer"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/font/basicfont"
 
@@ -98,14 +103,23 @@ func DecodeImage(rect image.Rectangle, data, datadir string) (image.Image, error
 				return errorImage(fmt.Errorf("base64: %w", err), rect, pal, 1, 0)
 			}
 			r = animation.AsReadPeeker(bytes.NewReader(b))
+		case "svg":
+			img, err := rasteriseSVG(rect, strings.NewReader(val), param)
+			if err != nil {
+				return errorImage(fmt.Errorf("svg: %w", err), rect, pal, 1, 0)
+			}
+			return addTitle(img, rect, pal, param)
 		}
 	default:
 		panic("unreachable")
 	}
 	var img image.Image
-	if animation.IsGIF(r) {
+	switch {
+	case animation.IsGIF(r):
 		img, err = animation.DecodeGIF(r)
-	} else {
+	case isSVG(r):
+		img, err = rasteriseSVG(rect, r, param)
+	default:
 		img, _, err = image.Decode(r)
 	}
 	if err != nil {
@@ -165,7 +179,7 @@ func parseDataURI(uri string) (typ, mtyp, par, val, enc string, err error) {
 			return "", "", "", "", "", fmt.Errorf("invalid image data uri: %s", uri)
 		}
 		switch enc {
-		case "base64", "name", "web":
+		case "base64", "name", "svg", "web":
 			mtyp, par, _ := strings.Cut(mtyp, ";")
 			return typ, mtyp, par, val, enc, nil
 		default:
@@ -181,6 +195,65 @@ func cutLast(s, sep string) (before, after string, found bool) {
 		return s[:i], s[i+len(sep):], true
 	}
 	return s, "", false
+}
+
+func isSVG(r animation.ReadPeeker) bool {
+	const effort = 4000
+	b, err := r.Peek(effort)
+	switch err {
+	case nil, bufio.ErrBufferFull, io.EOF:
+	default:
+		return false
+	}
+	dec := xml.NewDecoder(bytes.NewReader(b))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		if tok, ok := tok.(xml.StartElement); ok {
+			return tok.Name.Local == "svg"
+		}
+	}
+}
+
+func rasteriseSVG(rect image.Rectangle, data io.Reader, param map[string]string) (image.Image, error) {
+	cs, err := colorSpace(param)
+	if err != nil {
+		return nil, err
+	}
+	c, err := canvas.ParseSVG(data)
+	if err != nil {
+		return nil, err
+	}
+	b := float64(min(rect.Dx(), rect.Dy()))
+	return rasterizer.Draw(c, canvas.Resolution(b/max(c.Size())), cs), nil
+}
+
+func colorSpace(param map[string]string) (canvas.ColorSpace, error) {
+	cs, ok := param["color_space"]
+	if !ok {
+		return canvas.DefaultColorSpace, nil
+	}
+	switch cs {
+	case "linear":
+		return canvas.LinearColorSpace{}, nil
+	case "srgb":
+		return canvas.SRGBColorSpace{}, nil
+	case "gamma":
+		g := 2.2
+		v, ok := param["gamma"]
+		if ok {
+			var err error
+			g, err = strconv.ParseFloat(v, 64)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return canvas.GammaColorSpace{Gamma: g}, nil
+	default:
+		return nil, fmt.Errorf("svg: invalid color space parameter: %v", cs)
+	}
 }
 
 func addTitle(src image.Image, rect image.Rectangle, pal color.Palette, param map[string]string) (img image.Image, err error) {
