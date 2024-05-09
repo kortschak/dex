@@ -22,13 +22,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
-	"cuelang.org/go/pkg/strings"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
@@ -791,13 +792,72 @@ func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		if len(note.Replace) == 0 {
+			http.ServeContent(w, req, "amended.json", time.Now(), strings.NewReader("[]"))
+			return
+		}
 		_, err = db.AmendEvents(now, &note)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		var amended []worklog.Event
+		for _, r := range mergeReplacement(note.Replace) {
+			e, err := db.EventsRange(db.BucketID(note.Bucket), r.start, r.end, -1)
+			amended = append(amended, e...)
+			if err != nil {
+				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			}
+		}
+		b, err := json.Marshal(amended)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.ServeContent(w, req, "amended.json", time.Now(), bytes.NewReader(b))
 	}
+}
+
+type timeRange struct {
+	start, end time.Time
+}
+
+func mergeReplacement(replace []worklog.Replacement) []timeRange {
+	switch len(replace) {
+	case 0:
+		return nil
+	case 1:
+		return []timeRange{{start: replace[0].Start, end: replace[0].End}}
+	}
+	sort.Slice(replace, func(i, j int) bool {
+		switch {
+		case replace[i].Start.Before(replace[j].Start):
+			return true
+		case replace[i].Start.After(replace[j].Start):
+			return false
+		default:
+			// Choose longer intervals first.
+			return replace[i].End.After(replace[j].End)
+		}
+	})
+	merged := []timeRange{{start: replace[0].Start, end: replace[0].End}}
+	last := &merged[0]
+	for _, r := range replace[1:] {
+		if !r.End.After(last.end) {
+			// Not an extension or a new interval.
+			continue
+		}
+		if !r.Start.After(last.end) {
+			// Not a new interval.
+			last.end = r.End
+			continue
+		}
+		merged = append(merged, timeRange{r.Start, r.End})
+		last = &merged[len(merged)-1]
+	}
+	return merged
 }
 
 func (d *daemon) dump(ctx context.Context) http.HandlerFunc {

@@ -1565,3 +1565,130 @@ func TestAmendments(t *testing.T) {
 		})
 	}
 }
+
+var mergeReplacementsTests = []struct {
+	name    string
+	replace []worklog.Replacement
+	want    []timeRange
+}{
+	{name: "empty"},
+	{
+		name: "one",
+		replace: []worklog.Replacement{
+			{
+				Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+		},
+		want: []timeRange{
+			{
+				start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				end:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+		},
+	},
+	{
+		name: "two_separate",
+		replace: []worklog.Replacement{
+			{
+				Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 2, 9, 15, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 2, 10, 15, 0, 0, time.UTC),
+			},
+		},
+		want: []timeRange{
+			{
+				start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				end:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+			{
+				start: time.Date(2024, time.January, 2, 9, 15, 0, 0, time.UTC),
+				end:   time.Date(2024, time.January, 2, 10, 15, 0, 0, time.UTC),
+			},
+		},
+	},
+	{
+		name: "two_overlap",
+		replace: []worklog.Replacement{
+			{
+				Start: time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+		},
+		want: []timeRange{
+			{
+				start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				end:   time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+			},
+		},
+	},
+	{
+		name: "three",
+		replace: []worklog.Replacement{
+			{
+				Start: time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 1, 10, 5, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 45, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+		},
+		want: []timeRange{
+			{
+				start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				end:   time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+			},
+		},
+	},
+	{
+		name: "four_coequal_start",
+		replace: []worklog.Replacement{
+			{
+				Start: time.Date(2024, time.January, 1, 10, 0, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 1, 10, 5, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 30, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 1, 10, 5, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 45, 0, 0, time.UTC),
+			},
+			{
+				Start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				End:   time.Date(2024, time.January, 1, 10, 15, 0, 0, time.UTC),
+			},
+		},
+		want: []timeRange{
+			{
+				start: time.Date(2024, time.January, 1, 9, 15, 0, 0, time.UTC),
+				end:   time.Date(2024, time.January, 1, 11, 15, 0, 0, time.UTC),
+			},
+		},
+	},
+}
+
+func TestMergeReplacements(t *testing.T) {
+	for _, test := range mergeReplacementsTests {
+		t.Run(test.name, func(t *testing.T) {
+			got := mergeReplacement(test.replace)
+			allow := cmp.AllowUnexported(timeRange{})
+			if !cmp.Equal(test.want, got, allow) {
+				t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(test.want, got, allow))
+			}
+		})
+	}
+}
