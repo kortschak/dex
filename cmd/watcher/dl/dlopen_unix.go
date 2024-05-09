@@ -25,7 +25,6 @@ const (
 	RTLD_LOCAL    = int(C.RTLD_LOCAL)
 	RTLD_NODELETE = int(C.RTLD_NODELETE)
 	RTLD_NOLOAD   = int(C.RTLD_NOLOAD)
-	RTLD_DEEPBIND = int(C.RTLD_DEEPBIND)
 )
 
 // Open opens the dynamic library corresponding to the first found library name
