@@ -193,7 +193,18 @@ func Main() int {
 	cfgman := config.NewManager(log)
 	for cfg := range changes {
 		if cfg.Err != nil {
-			mlog.LogAttrs(ctx, slog.LevelWarn, "config stream error", slog.Any("error", cfg.Err))
+			switch len(cfg.Event) {
+			case 0:
+				mlog.LogAttrs(ctx, slog.LevelWarn, "config stream error", slog.Any("error", cfg.Err))
+			case 1:
+				mlog.LogAttrs(ctx, slog.LevelWarn, "config stream error", slog.String("path", cfg.Event[0].Name), slog.Any("error", cfg.Err))
+			default:
+				path := make([]string, 0, len(cfg.Event))
+				for _, e := range cfg.Event {
+					path = append(path, e.Name)
+				}
+				mlog.LogAttrs(ctx, slog.LevelWarn, "config stream error", slog.Any("path", path), slog.Any("error", cfg.Err))
+			}
 			continue
 		}
 		mlog.LogAttrs(ctx, slog.LevelDebug, "config stream element", slog.Any("config", slogext.PrivateRedact{Val: cfg.Config, Tag: "json"}), slog.Any("events", cfg.Event))
