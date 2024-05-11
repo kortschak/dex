@@ -532,7 +532,20 @@ func (c *Controller) watchButtons(ctx context.Context) {
 					log.LogAttrs(ctx, slog.LevelWarn, "device not connected", slog.String("device", dev), slog.Any("pid", pid), slog.String("serial", serial))
 					c.deck.Reconnect(ctx, time.Second)
 					log.LogAttrs(ctx, slog.LevelWarn, "device reconnected", slog.String("device", dev), slog.Any("pid", pid), slog.String("serial", serial))
-					c.displayed.Redraw(ctx)
+					c.pMu.Lock()
+					var err error
+					switch c.state {
+					case Awake:
+						c.displayed.Redraw(ctx)
+					case Cleared:
+						err = c.Reset()
+					case Blanked:
+						err = c.displayed.blank()
+					}
+					if err != nil {
+						log.LogAttrs(ctx, slog.LevelError, "failed redraw after reconnect", slog.String("device", dev), slog.Any("pid", pid), slog.String("serial", serial), slog.Any("state", slogext.Stringer{Stringer: c.state}), slog.Any("error", err))
+					}
+					c.pMu.Unlock()
 				default:
 					if err != lastErr {
 						nErr = 0
@@ -764,7 +777,8 @@ func (b *Button) Draw(ctx context.Context, img image.Image) {
 				}
 				return ctx.Err()
 			})
-			if err == nil {
+			switch err {
+			case nil:
 				/// ... they are terminating. In which case we
 				// grab a raw image to prevent reanimating.
 				img, err := b.deck.RawImage(img)
@@ -773,8 +787,12 @@ func (b *Button) Draw(ctx context.Context, img image.Image) {
 					return
 				}
 				b.redraw.Store(redraw{img, true})
-			} else if !errors.Is(err, context.Canceled) {
-				b.log.LogAttrs(ctx, slog.LevelError, "animation", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
+			case ardilla.ErrNotConnected:
+				b.log.LogAttrs(ctx, slog.LevelWarn, "set image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
+			default:
+				if !errors.Is(err, context.Canceled) {
+					b.log.LogAttrs(ctx, slog.LevelError, "animation", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
+				}
 			}
 		}()
 	default:
@@ -794,7 +812,11 @@ func (b *Button) Draw(ctx context.Context, img image.Image) {
 			err = b.deck.SetImage(b.row, b.col, img)
 			b.mu.Unlock()
 			b.redraw.Store(redraw{img, true})
-			if err != nil {
+			switch err {
+			case nil:
+			case ardilla.ErrNotConnected:
+				b.log.LogAttrs(ctx, slog.LevelWarn, "set image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
+			default:
 				b.log.LogAttrs(ctx, slog.LevelError, "set image", slog.Int("row", b.row), slog.Int("col", b.col), slog.Any("error", err))
 			}
 		}()
