@@ -16,7 +16,7 @@ require (
 	github.com/kortschak/goroutine v1.1.1
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640
-	github.com/tdewolff/canvas v0.0.0-20240502214346-a72e4acc2272
+	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/image v0.15.0
 	golang.org/x/sys v0.19.0

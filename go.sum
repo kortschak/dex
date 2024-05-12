@@ -114,8 +114,8 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
-github.com/tdewolff/canvas v0.0.0-20240502214346-a72e4acc2272 h1:jF7kG7RCwuC6qP4IrUmsMVKo2ghlgc9pDaSWdJUGSFc=
-github.com/tdewolff/canvas v0.0.0-20240502214346-a72e4acc2272/go.mod h1:mnKFz6b45baRW2VMr+xzoie6MLWOlxKdaLrir2b8vbI=
+github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2 h1:n5JfO/T/+VqXuHym08mEAzmDz2QDwMA71+/zl1SG+dE=
+github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2/go.mod h1:mnKFz6b45baRW2VMr+xzoie6MLWOlxKdaLrir2b8vbI=
 github.com/tdewolff/font v0.0.0-20240417221047-e5855237f87b h1:PPaIj43Z8Lpu1PJtFgBYArGYxn0r++G1WuQTPmbH48Y=
 github.com/tdewolff/font v0.0.0-20240417221047-e5855237f87b/go.mod h1:S1ByajP+rzLFlhudtNTELNuhxoSZ19Coif+JE4kivAo=
 github.com/tdewolff/minify/v2 v2.20.5 h1:IbJpmpAFESnuJPdsvFBJWsDcXE5qHsmaVQrRqhOI9sI=
