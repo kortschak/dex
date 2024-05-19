@@ -33,6 +33,7 @@ import (
 	watcher "github.com/kortschak/dex/cmd/watcher/api"
 	"github.com/kortschak/dex/internal/celext"
 	"github.com/kortschak/dex/internal/device"
+	"github.com/kortschak/dex/internal/localtime"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/rpc"
@@ -132,6 +133,7 @@ func newDaemon(ctx context.Context, uid string, log *slog.Logger, level *slog.Le
 		log:       log,
 		level:     level,
 		addSource: addSource,
+		timezone:  localtime.Static{},
 		detailer:  noDetails{},
 		cancel:    cancel,
 	}
@@ -149,7 +151,10 @@ func (d *daemon) dial(ctx context.Context, network, addr string, dialer net.Dial
 
 func (d *daemon) close() error {
 	d.conn.Notify(context.Background(), rpc.Unregister, rpc.NewMessage(rpc.UID{Module: d.uid}, rpc.None{}))
-	return d.conn.Close()
+	return errors.Join(
+		closeCloser(d.timezone),
+		d.conn.Close(),
+	)
 }
 
 type daemon struct {
@@ -159,6 +164,8 @@ type daemon struct {
 	conn *jsonrpc2.Connection
 
 	detailer detailer
+
+	timezone current
 
 	ctx       context.Context
 	log       *slog.Logger
@@ -179,6 +186,10 @@ type daemon struct {
 type detailer interface {
 	strategy() string
 	details() (watcher.Details, error)
+}
+
+type current interface {
+	Location() (*time.Location, error)
 }
 
 type noDetails struct{}
@@ -224,6 +235,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		}
 		d.log.LogAttrs(ctx, slog.LevelDebug, "configure", slog.Any("details", m))
 
+		d.replaceTimezone(ctx, m.Body.Options.DynamicLocation)
 		d.replaceDetailer(ctx, m.Body.Options.Strategy)
 
 		if m.Body.Options.Rules != nil {
@@ -260,6 +272,55 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 	}
 }
 
+func (d *daemon) replaceTimezone(ctx context.Context, dynamic *bool) {
+	if dynamic == nil {
+		return
+	}
+
+	d.pMu.Lock()
+	defer d.pMu.Unlock()
+
+	if is[*localtime.Dynamic](d.timezone) == *dynamic {
+		return
+	}
+
+	var (
+		tz  current
+		err error
+	)
+	if *dynamic {
+		tz, err = localtime.NewDynamic()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
+			return
+		}
+	} else {
+		tz = localtime.Static{}
+	}
+	err = closeCloser(d.timezone)
+	if err != nil {
+		d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
+	}
+
+	var strategy string
+	switch tz.(type) {
+	case localtime.Static:
+		strategy = "static"
+	case *localtime.Dynamic:
+		strategy = "dynamic"
+	default:
+		strategy = "unknown"
+		d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.String("error", "unknown timezone strategy"))
+	}
+	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.String("timezone", strategy))
+	d.timezone = tz
+}
+
+func is[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
+}
+
 func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 	d.pMu.Lock()
 	defer d.pMu.Unlock()
@@ -278,8 +339,16 @@ func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
 		}
 	}
-	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.Any("strategy", det.strategy()))
+	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.String("strategy", det.strategy()))
 	d.detailer = det
+}
+
+func closeCloser(x any) error {
+	c, ok := x.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return c.Close()
 }
 
 func (d *daemon) poll(ctx context.Context, p time.Duration) {
@@ -326,6 +395,11 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 				case t := <-ticker.C:
 					d.log.LogAttrs(ctx, slog.LevelDebug, "polling", slog.Any("tick", t))
 					d.pMu.Lock()
+					loc, err := d.timezone.Location()
+					if err != nil {
+						d.log.LogAttrs(ctx, slog.LevelWarn, "polling current location", slog.Any("error", err))
+					}
+					t = t.In(loc)
 					details, err := d.detailer.details()
 					d.pMu.Unlock()
 					if err != nil {
@@ -336,6 +410,7 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 							d.log.LogAttrs(ctx, slog.LevelError, "polling", slog.Any("error", err))
 						}
 					}
+					details.LastInput = details.LastInput.In(loc)
 					d.log.LogAttrs(ctx, slog.LevelDebug, "watcher details", slog.Any("details", details))
 					rules, _ := d.rules.Load().(map[string]cel.Program)
 					if rules == nil {

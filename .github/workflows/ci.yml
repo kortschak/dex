@@ -58,6 +58,8 @@ jobs:
       run: |
         go test -v .
         go test -p=1 -run TestDaemon ./cmd/* -verbose_log
+        go test  -run TestDaemon ./cmd/watcher -dynamic_timezone=false -verbose_log
+        go test  -run TestDaemon ./cmd/watcher -dynamic_timezone=true -verbose_log
 
     - name: no xorg watcher
       if: matrix.platform == 'ubuntu-latest'

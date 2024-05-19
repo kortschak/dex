@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +32,34 @@ var (
 	verbose  = flag.Bool("verbose_log", false, "print full logging")
 	lines    = flag.Bool("show_lines", false, "log source code position")
 	strategy = flag.String("strategy", "", "details strategy")
+	timezone tern
 )
+
+func init() {
+	flag.Var(&timezone, "dynamic_timezone", "use dynamic timezone strategy")
+}
+
+type tern struct {
+	val *bool
+}
+
+func (t *tern) String() string {
+	if t.val == nil {
+		return "unset"
+	}
+	return strconv.FormatBool(*t.val)
+}
+
+func (t *tern) Set(f string) error {
+	b, err := strconv.ParseBool(f)
+	if err != nil {
+		return err
+	}
+	t.val = &b
+	return nil
+}
+
+func (t *tern) IsBoolFlag() bool { return true }
 
 func TestDaemon(t *testing.T) {
 	if runtime.GOOS == "darwin" {
@@ -153,16 +181,18 @@ func TestDaemon(t *testing.T) {
 				var resp rpc.Message[string]
 
 				type options struct {
-					Strategy  string            `json:"strategy,omitempty"`
-					Polling   *rpc.Duration     `json:"polling,omitempty"`
-					Heartbeat *rpc.Duration     `json:"heartbeat,omitempty"`
-					Rules     map[string]string `json:"rules,omitempty"`
+					DynamicLocation *bool             `json:"dynamic_location,omitempty"`
+					Strategy        string            `json:"strategy,omitempty"`
+					Polling         *rpc.Duration     `json:"polling,omitempty"`
+					Heartbeat       *rpc.Duration     `json:"heartbeat,omitempty"`
+					Rules           map[string]string `json:"rules,omitempty"`
 				}
 				err := conn.Call(ctx, "configure", rpc.NewMessage(uid, watcher.Config{
 					Options: options{
-						Strategy:  *strategy,
-						Polling:   period,
-						Heartbeat: beat,
+						DynamicLocation: timezone.val,
+						Strategy:        *strategy,
+						Polling:         period,
+						Heartbeat:       beat,
 						Rules: map[string]string{
 							"change": `
 								name.contains('tester') && (name != last.name || wid != last.wid || window != last.window) ?
