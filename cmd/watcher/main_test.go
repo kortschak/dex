@@ -67,7 +67,7 @@ func TestDaemon(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	exePath := filepath.Join(tmp, "worklog")
+	exePath := filepath.Join(tmp, "watcher")
 	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
