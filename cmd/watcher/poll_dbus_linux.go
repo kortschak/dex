@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -27,6 +28,7 @@ func newMutterDetailer() (detailer, error) {
 }
 
 type mutterDetailer struct {
+	mu   sync.Mutex
 	conn *dbus.Conn
 	last time.Time
 }
@@ -34,12 +36,23 @@ type mutterDetailer struct {
 func (*mutterDetailer) strategy() string { return "gnome/mutter" }
 
 func (d *mutterDetailer) Close() error {
-	err := d.conn.Close()
-	d.conn = nil
+	d.mu.Lock()
+	var err error
+	if d.conn != nil {
+		err = d.conn.Close()
+		d.conn = nil
+	}
+	d.mu.Unlock()
 	return err
 }
 
 func (d *mutterDetailer) details() (watcher.Details, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.conn == nil {
+		return watcher.Details{}, errors.New("closed")
+	}
+
 	locked, errLocked := dbusCall[bool](d.conn,
 		"org.gnome.ScreenSaver",
 		"/org/gnome/ScreenSaver",
