@@ -491,7 +491,7 @@ func (k *Kernel) Spawn(ctx context.Context, stdout, stderr io.Writer, done func(
 		k.log.LogAttrs(ctx, slog.LevelInfo, "cleanup zombie", slog.Any("uid", uid))
 		const concurrently = false
 		k.close(ctx, uid, d, concurrently)
-		if done != nil {
+		if done != nil && ctx.Err() == nil {
 			go done()
 		}
 	}()
