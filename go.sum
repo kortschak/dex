@@ -78,8 +78,8 @@ github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 h1:Z9n2FFNU
 github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51/go.mod h1:CzGEWj7cYgsdH8dAjBGEr58BoE7ScuLd+fwFZ44+/x8=
 github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4 h1:LBA2QNMoqB/6H1QG9oSzcVQxqLQJ8vX/Vr4SiyGlLNI=
 github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4/go.mod h1:CzpsZoRc37ZYYkb/iJHFRW9m+pWuyiS3WAqvuBVFiCo=
-github.com/kortschak/goroutine v1.1.1 h1:UTSVtVhK6oBc0Fsk0gYsmEY9ruMmsP9xhNtTXKb4KQg=
-github.com/kortschak/goroutine v1.1.1/go.mod h1:zKpXs1FWN/6mXasDQzfl7g0LrGFIOiA6cLs9eXKyaMY=
+github.com/kortschak/goroutine v1.1.2 h1:lhllcCuERxMIK5cYr8yohZZScL1na+JM5JYPRclWjck=
+github.com/kortschak/goroutine v1.1.2/go.mod h1:zKpXs1FWN/6mXasDQzfl7g0LrGFIOiA6cLs9eXKyaMY=
 github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045 h1:/62MFIoTOYzyhCfXjJc+RIblOdvTxa5nMizgJlG+k6Y=
 github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045/go.mod h1:Bjf+FP//YopUdNWIOtrxpiDZOHlpvpWZOvdVDpWLopg=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=

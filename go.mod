@@ -13,7 +13,7 @@ require (
 	github.com/google/cel-go v0.20.1
 	github.com/google/go-cmp v0.6.0
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
-	github.com/kortschak/goroutine v1.1.1
+	github.com/kortschak/goroutine v1.1.2
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640
 	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
