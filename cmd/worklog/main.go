@@ -45,6 +45,7 @@ import (
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 	"github.com/kortschak/dex/cmd/worklog/store"
 	"github.com/kortschak/dex/internal/celext"
+	"github.com/kortschak/dex/internal/localtime"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/internal/version"
 	"github.com/kortschak/dex/internal/xdg"
@@ -139,7 +140,7 @@ func waitParent(fn func()) {
 }
 
 func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *atomic.Bool, ctx context.Context, cancel context.CancelFunc) *daemon {
-	return &daemon{
+	d := &daemon{
 		uid:       uid,
 		log:       log,
 		level:     level,
@@ -149,6 +150,8 @@ func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *at
 
 		lastReport: make(map[rpc.UID]worklog.Report),
 	}
+	d.timezone.Store(localtime.Static{})
+	return d
 }
 
 func (d *daemon) dial(ctx context.Context, network, addr string, dialer net.Dialer) error {
@@ -178,23 +181,55 @@ type daemon struct {
 	ctx       context.Context // Global cancellation context.
 	cancel    context.CancelFunc
 
-	rules atomic.Value // map[string]ruleDetail
+	rules atomicValue[map[string]ruleDetail]
 
 	rMu        sync.Mutex
 	lastEvents map[string]*worklog.Event
-	db         atomic.Value // *store.DB
+	db         atomic.Pointer[store.DB]
 
 	lastReport map[rpc.UID]worklog.Report
+
+	tMu      sync.Mutex // tMu is only used for protecting configuration of timezone.
+	timezone atomicIfaceValue[current]
 
 	serverAddr     string
 	htmlSrc        string
 	canModify      bool
-	dashboardRules atomic.Value // map[string]map[string]ruleDetail
+	dashboardRules atomicValue[map[string]map[string]ruleDetail]
 	serverCancel   context.CancelFunc
 
 	hMu       sync.Mutex
 	heartbeat time.Duration
 	hStop     chan struct{}
+}
+
+type atomicValue[T any] struct {
+	val atomic.Value
+}
+
+func (v *atomicValue[T]) Store(val T) {
+	v.val.Store(val)
+}
+
+func (v *atomicValue[T]) Load() T {
+	val, _ := v.val.Load().(T) // Zero value is usable.
+	return val
+}
+
+type atomicIfaceValue[T any] struct {
+	val atomic.Pointer[T]
+}
+
+func (v *atomicIfaceValue[T]) Store(val T) {
+	v.val.Store(&val)
+}
+
+func (v *atomicIfaceValue[T]) Load() T {
+	return *v.val.Load()
+}
+
+type current interface {
+	Location() (*time.Location, error)
 }
 
 type ruleDetail struct {
@@ -250,6 +285,8 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			d.addSource.Store(*m.Body.AddSource)
 		}
 		d.log.LogAttrs(ctx, slog.LevelDebug, "configure", slog.Any("details", m))
+
+		d.replaceTimezone(ctx, m.Body.Options.DynamicLocation)
 
 		if m.Body.Options.Heartbeat != nil {
 			d.beat(ctx, m.Body.Options.Heartbeat.Duration)
@@ -317,7 +354,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			}
 
 			path := filepath.Join(dir, "db.sqlite")
-			if db, ok := d.db.Load().(*store.DB); !ok || path != db.Name() {
+			if db := d.db.Load(); db == nil || path != db.Name() {
 				err = d.openDB(ctx, db, path, m.Body.Options.Hostname)
 				if err != nil {
 					return nil, rpc.NewError(rpc.ErrCodeInternal,
@@ -335,7 +372,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				d.configureRules(ctx, m.Body.Options.Rules)
 			}
 
-			if db, ok := d.db.Load().(*store.DB); ok {
+			if db := d.db.Load(); db != nil {
 				d.configureDB(ctx, db)
 			}
 		}
@@ -353,6 +390,63 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 	default:
 		return nil, jsonrpc2.ErrNotHandled
 	}
+}
+
+func (d *daemon) replaceTimezone(ctx context.Context, dynamic *bool) {
+	if dynamic == nil {
+		return
+	}
+
+	d.tMu.Lock()
+	defer d.tMu.Unlock()
+
+	if is[*localtime.Dynamic](d.timezone.Load()) == *dynamic {
+		return
+	}
+
+	var (
+		tz  current
+		err error
+	)
+	if *dynamic {
+		tz, err = localtime.NewDynamic()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
+			return
+		}
+	} else {
+		tz = localtime.Static{}
+	}
+	err = closeCloser(d.timezone.Load())
+	if err != nil {
+		d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
+	}
+
+	var strategy string
+	switch tz.(type) {
+	case localtime.Static:
+		strategy = "static"
+	case *localtime.Dynamic:
+		strategy = "dynamic"
+	default:
+		strategy = "unknown"
+		d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.String("error", "unknown timezone strategy"))
+	}
+	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.String("timezone", strategy))
+	d.timezone.Store(tz)
+}
+
+func is[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
+}
+
+func closeCloser(x any) error {
+	c, ok := x.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return c.Close()
 }
 
 func (d *daemon) configureWebRule(ctx context.Context, rules map[string]map[string]worklog.WebRule) {
@@ -429,7 +523,7 @@ func (d *daemon) openDB(ctx context.Context, db *store.DB, path, hostname string
 }
 
 func (d *daemon) configureDB(ctx context.Context, db *store.DB) {
-	rules, _ := d.rules.Load().(map[string]ruleDetail)
+	rules := d.rules.Load()
 	for bucket, rule := range rules {
 		d.log.LogAttrs(ctx, slog.LevelDebug, "create bucket", slog.Any("bucket", bucket))
 		m, err := db.CreateBucket(bucket, rule.name, rule.typ, d.uid, time.Now(), nil)
@@ -451,7 +545,7 @@ func (d *daemon) configureDB(ctx context.Context, db *store.DB) {
 
 func (d *daemon) record(ctx context.Context, src rpc.UID, curr, last worklog.Report) {
 	d.log.LogAttrs(ctx, slog.LevelDebug, "record", slog.Any("report", curr))
-	rules, _ := d.rules.Load().(map[string]ruleDetail)
+	rules := d.rules.Load()
 	if rules == nil {
 		return
 	}
@@ -468,8 +562,8 @@ func (d *daemon) record(ctx context.Context, src rpc.UID, curr, last worklog.Rep
 	for bucket, rule := range rules {
 		act["bucket"] = bucket
 
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "no database", slog.Any("act", act))
 			continue
 		}
@@ -783,8 +877,8 @@ func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -871,8 +965,8 @@ func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -930,8 +1024,8 @@ func (d *daemon) backup(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -1011,8 +1105,8 @@ func (d *daemon) load(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -1050,8 +1144,8 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return

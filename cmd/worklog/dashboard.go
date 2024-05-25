@@ -32,7 +32,11 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		date, err := dateQuery(req.URL)
+		local, err := d.timezone.Load().Location()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "polling current location", slog.Any("error", err))
+		}
+		date, err := dateQuery(req.URL, local)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusBadRequest)
@@ -44,14 +48,14 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		rules, ok := d.dashboardRules.Load().(map[string]map[string]ruleDetail)
-		if !ok {
+		rules := d.dashboardRules.Load()
+		if rules == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no dashboard rules"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -72,15 +76,14 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 	}
 }
 
-func dateQuery(u *url.URL) (time.Time, error) {
+func dateQuery(u *url.URL, loc *time.Location) (time.Time, error) {
 	d := u.Query().Get("date")
 	if d == "" {
 		return time.Now(), nil
 	}
-	loc := time.Local // TODO: Resolve how we store time. Probably UTC.
 	if tz := u.Query().Get("tz"); tz != "" {
 		var err error
-		loc, err = time.LoadLocation(tz)
+		loc, err = locationFor(tz)
 		if err != nil {
 			return time.Time{}, err
 		}
@@ -296,7 +299,11 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 			return
 		}
 
-		start, end, err := dateRangeQuery(req.RequestURI)
+		local, err := d.timezone.Load().Location()
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "polling current location", slog.Any("error", err))
+		}
+		start, end, err := dateRangeQuery(req.RequestURI, local)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusBadRequest)
@@ -309,14 +316,14 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		db, ok := d.db.Load().(*store.DB)
-		if !ok {
+		db := d.db.Load()
+		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		rules, ok := d.dashboardRules.Load().(map[string]map[string]ruleDetail)
-		if !ok {
+		rules := d.dashboardRules.Load()
+		if rules == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no dashboard rules"), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -339,7 +346,7 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 	}
 }
 
-func dateRangeQuery(uri string) (start, end time.Time, err error) {
+func dateRangeQuery(uri string, loc *time.Location) (start, end time.Time, err error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return start, end, err
@@ -349,7 +356,6 @@ func dateRangeQuery(uri string) (start, end time.Time, err error) {
 		return start, end, errors.New("missing start parameter")
 	}
 	e := u.Query().Get("end")
-	loc := time.Local // TODO: Resolve how we store time. Probably UTC.
 	if tz := u.Query().Get("tz"); tz != "" {
 		loc, err = locationFor(tz)
 		if err != nil {
@@ -763,11 +769,6 @@ func mergeData(dst, src map[string]any) map[string]any {
 		}
 	}
 	return dst
-}
-
-func is[T any](v any) bool {
-	_, ok := v.(T)
-	return ok
 }
 
 type worklogEvent worklog.Event

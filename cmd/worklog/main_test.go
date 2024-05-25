@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -34,11 +35,38 @@ import (
 )
 
 var (
-	update  = flag.Bool("update", false, "update tests")
-	verbose = flag.Bool("verbose_log", false, "print full logging")
-	lines   = flag.Bool("show_lines", false, "log source code position")
-	keep    = flag.Bool("keep", false, "keep database directories after tests")
+	update   = flag.Bool("update", false, "update tests")
+	verbose  = flag.Bool("verbose_log", false, "print full logging")
+	lines    = flag.Bool("show_lines", false, "log source code position")
+	keep     = flag.Bool("keep", false, "keep database directories after tests")
+	timezone tern
 )
+
+func init() {
+	flag.Var(&timezone, "dynamic_timezone", "use dynamic timezone strategy")
+}
+
+type tern struct {
+	val *bool
+}
+
+func (t *tern) String() string {
+	if t.val == nil {
+		return "unset"
+	}
+	return strconv.FormatBool(*t.val)
+}
+
+func (t *tern) Set(f string) error {
+	b, err := strconv.ParseBool(f)
+	if err != nil {
+		return err
+	}
+	t.val = &b
+	return nil
+}
+
+func (t *tern) IsBoolFlag() bool { return true }
 
 func TestDaemon(t *testing.T) {
 	exePath := filepath.Join(t.TempDir(), "worklog")
@@ -113,15 +141,17 @@ func TestDaemon(t *testing.T) {
 				var resp rpc.Message[string]
 
 				type options struct {
-					Web         *worklog.Web            `json:"web,omitempty"`
-					DatabaseDir string                  `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
-					Hostname    string                  `json:"hostname,omitempty"`
-					Heartbeat   *rpc.Duration           `json:"heartbeat,omitempty"`
-					Rules       map[string]worklog.Rule `json:"rules,omitempty"`
+					DynamicLocation *bool                   `json:"dynamic_location,omitempty"`
+					Web             *worklog.Web            `json:"web,omitempty"`
+					DatabaseDir     string                  `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
+					Hostname        string                  `json:"hostname,omitempty"`
+					Heartbeat       *rpc.Duration           `json:"heartbeat,omitempty"`
+					Rules           map[string]worklog.Rule `json:"rules,omitempty"`
 				}
 				err := conn.Call(ctx, "configure", rpc.NewMessage(uid, worklog.Config{
 					Options: options{
-						Heartbeat: beat,
+						DynamicLocation: timezone.val,
+						Heartbeat:       beat,
 						Rules: map[string]worklog.Rule{
 							"afk":    {Name: "afk-watcher", Type: "afkstatus", Src: `{"bucket":"afk","end":new.last_input}`},
 							"app":    {Name: "app-watcher", Type: "app", Src: `{"bucket":"app","end":new.time,"data":{"name":new.name}}`},
@@ -249,7 +279,7 @@ func mergeAfk() int {
 			Src:  string(src),
 		},
 	})
-	db := d.db.Load().(*store.DB)
+	db := d.db.Load()
 	defer db.Close()
 	d.configureDB(ctx, db)
 
@@ -418,7 +448,7 @@ func summaryData() int {
 		return 2
 	}
 
-	start, end, err := dateRangeQuery(flag.Arg(0))
+	start, end, err := dateRangeQuery(flag.Arg(0), time.Local)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to parse date range: %v\n", err)
 		return 2
@@ -511,7 +541,7 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
 		return nil, nil, nil, 1
 	}
-	db := d.db.Load().(*store.DB)
+	db := d.db.Load()
 	d.configureDB(ctx, db)
 
 	var buckets []worklog.BucketMetadata
@@ -533,15 +563,8 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 		return nil, nil, nil, 1
 	}
 	d.configureWebRule(ctx, rules)
+	webRules := d.dashboardRules.Load()
 
-	var webRules map[string]map[string]ruleDetail
-	switch rules := d.dashboardRules.Load().(type) {
-	case map[string]map[string]ruleDetail:
-		webRules = rules
-	default:
-		fmt.Fprintf(os.Stderr, "invalid web rule type: %T\n", rules)
-		return nil, nil, nil, 1
-	}
 	return d, db, webRules, 0
 }
 

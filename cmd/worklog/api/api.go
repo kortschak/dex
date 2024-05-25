@@ -23,11 +23,12 @@ type Config struct {
 	LogLevel  *slog.Level `json:"log_level,omitempty"`
 	AddSource *bool       `json:"log_add_source,omitempty"`
 	Options   struct {
-		Web         *Web            `json:"web,omitempty"`
-		DatabaseDir string          `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
-		Hostname    string          `json:"hostname,omitempty"`
-		Heartbeat   *rpc.Duration   `json:"heartbeat,omitempty"`
-		Rules       map[string]Rule `json:"rules,omitempty"`
+		DynamicLocation *bool           `json:"dynamic_location,omitempty"`
+		Web             *Web            `json:"web,omitempty"`
+		DatabaseDir     string          `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
+		Hostname        string          `json:"hostname,omitempty"`
+		Heartbeat       *rpc.Duration   `json:"heartbeat,omitempty"`
+		Rules           map[string]Rule `json:"rules,omitempty"`
 	} `json:"options,omitempty"`
 }
 
