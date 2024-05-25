@@ -127,16 +127,17 @@ func waitParent(fn func()) {
 }
 
 func newDaemon(ctx context.Context, uid string, log *slog.Logger, level *slog.LevelVar, addSource *atomic.Bool, cancel context.CancelFunc) *daemon {
-	return &daemon{
+	d := &daemon{
 		uid:       uid,
 		ctx:       ctx,
 		log:       log,
 		level:     level,
 		addSource: addSource,
-		timezone:  localtime.Static{},
-		detailer:  noDetails{},
 		cancel:    cancel,
 	}
+	d.timezone.Store(localtime.Static{})
+	d.detailer.Store(noDetails{})
+	return d
 }
 
 func (d *daemon) dial(ctx context.Context, network, addr string, dialer net.Dialer) error {
@@ -172,16 +173,42 @@ type daemon struct {
 	addSource *atomic.Bool
 	cancel    context.CancelFunc
 
-	pMu      sync.Mutex
-	polling  time.Duration
-	timezone current
-	detailer detailer
-	pStop    chan struct{}
-	rules    atomic.Value // map[string]cel.Program
+	pMu     sync.Mutex
+	polling time.Duration
+	pStop   chan struct{}
+	// pMu is only used for protecting configuration of the following fields.
+	timezone atomicIfaceValue[current]
+	detailer atomicIfaceValue[detailer]
+
+	rules atomicValue[map[string]cel.Program]
 
 	hMu       sync.Mutex
 	heartbeat time.Duration
 	hStop     chan struct{}
+}
+
+type atomicValue[T any] struct {
+	val atomic.Value
+}
+
+func (v *atomicValue[T]) Store(val T) {
+	v.val.Store(val)
+}
+
+func (v *atomicValue[T]) Load() T {
+	return v.val.Load().(T)
+}
+
+type atomicIfaceValue[T any] struct {
+	val atomic.Pointer[T]
+}
+
+func (v *atomicIfaceValue[T]) Store(val T) {
+	v.val.Store(&val)
+}
+
+func (v *atomicIfaceValue[T]) Load() T {
+	return *v.val.Load()
 }
 
 type detailer interface {
@@ -281,7 +308,7 @@ func (d *daemon) replaceTimezone(ctx context.Context, dynamic *bool) {
 	d.pMu.Lock()
 	defer d.pMu.Unlock()
 
-	if is[*localtime.Dynamic](d.timezone) == *dynamic {
+	if is[*localtime.Dynamic](d.timezone.Load()) == *dynamic {
 		return
 	}
 
@@ -314,7 +341,7 @@ func (d *daemon) replaceTimezone(ctx context.Context, dynamic *bool) {
 		d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.String("error", "unknown timezone strategy"))
 	}
 	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.String("timezone", strategy))
-	d.timezone = tz
+	d.timezone.Store(tz)
 }
 
 func is[T any](v any) bool {
@@ -326,7 +353,7 @@ func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 	d.pMu.Lock()
 	defer d.pMu.Unlock()
 
-	if d.detailer.strategy() == strategy {
+	if d.detailer.Load().strategy() == strategy {
 		return
 	}
 	det, err := newDetailer(strategy)
@@ -339,7 +366,7 @@ func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 		d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
 	}
 	d.log.LogAttrs(ctx, slog.LevelInfo, "configure", slog.String("strategy", det.strategy()))
-	d.detailer = det
+	d.detailer.Store(det)
 }
 
 func closeCloser(x any) error {
@@ -393,14 +420,12 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 					return
 				case t := <-ticker.C:
 					d.log.LogAttrs(ctx, slog.LevelDebug, "polling", slog.Any("tick", t))
-					d.pMu.Lock()
-					loc, err := d.timezone.Location()
+					loc, err := d.timezone.Load().Location()
 					if err != nil {
 						d.log.LogAttrs(ctx, slog.LevelWarn, "polling current location", slog.Any("error", err))
 					}
 					t = t.In(loc)
-					details, err := d.detailer.details()
-					d.pMu.Unlock()
+					details, err := d.detailer.Load().details()
 					if err != nil {
 						var warn warning
 						if errors.As(err, &warn) {
@@ -411,7 +436,7 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 					}
 					details.LastInput = details.LastInput.In(loc)
 					d.log.LogAttrs(ctx, slog.LevelDebug, "watcher details", slog.Any("details", details))
-					rules, _ := d.rules.Load().(map[string]cel.Program)
+					rules := d.rules.Load()
 					if rules == nil {
 						break
 					}
