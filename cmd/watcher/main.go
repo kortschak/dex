@@ -166,20 +166,18 @@ type daemon struct {
 	// conn is the connection to the kernel.
 	conn *jsonrpc2.Connection
 
-	detailer detailer
-
-	timezone current
-
 	ctx       context.Context
 	log       *slog.Logger
 	level     *slog.LevelVar
 	addSource *atomic.Bool
 	cancel    context.CancelFunc
 
-	pMu     sync.Mutex
-	polling time.Duration
-	pStop   chan struct{}
-	rules   atomic.Value // map[string]cel.Program
+	pMu      sync.Mutex
+	polling  time.Duration
+	timezone current
+	detailer detailer
+	pStop    chan struct{}
+	rules    atomic.Value // map[string]cel.Program
 
 	hMu       sync.Mutex
 	heartbeat time.Duration
