@@ -155,7 +155,7 @@ func (d *daemon) dial(ctx context.Context, network, addr string, dialer net.Dial
 }
 
 func (d *daemon) close() error {
-	servers, _ := d.servers.Load().(map[rpc.UID]serverDetail)
+	servers := d.servers.Load()
 	for _, srv := range servers {
 		if srv.serverCancel != nil {
 			srv.serverCancel()
@@ -177,11 +177,24 @@ type daemon struct {
 	ctx       context.Context // Global cancellation context.
 	cancel    context.CancelFunc
 
-	servers atomic.Value // map[rpc.UID]serverDetail
+	servers atomicValue[map[rpc.UID]serverDetail]
 
 	hMu       sync.Mutex
 	heartbeat time.Duration
 	hStop     chan struct{}
+}
+
+type atomicValue[T any] struct {
+	val atomic.Value
+}
+
+func (v *atomicValue[T]) Store(val T) {
+	v.val.Store(val)
+}
+
+func (v *atomicValue[T]) Load() T {
+	val, _ := v.val.Load().(T) // Zero value is usable.
+	return val
 }
 
 type serverDetail struct {
@@ -238,7 +251,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			}
 			active := *m.Body.Active
 
-			servers, _ := d.servers.Load().(map[rpc.UID]serverDetail)
+			servers := d.servers.Load()
 			newServers := maps.Clone(servers)
 			curr := servers[uid]
 			if !active {
@@ -278,7 +291,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				d.beat(ctx, m.Body.Options.Heartbeat.Duration)
 			}
 
-			servers, _ := d.servers.Load().(map[rpc.UID]serverDetail)
+			servers := d.servers.Load()
 			newServers := make(map[rpc.UID]serverDetail)
 			for uid, srv := range servers {
 				_, ok := m.Body.Options.Servers[uid.Service]
@@ -313,7 +326,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 
 	case rpc.Stop:
 		d.log.LogAttrs(ctx, slog.LevelInfo, "stop")
-		servers, _ := d.servers.Load().(map[rpc.UID]serverDetail)
+		servers := d.servers.Load()
 		for _, srv := range servers {
 			if srv.serverCancel != nil {
 				srv.serverCancel()
@@ -567,7 +580,7 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 		Addr:      addr,
 		TLSConfig: tlsConfig,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			servers, _ := d.servers.Load().(map[rpc.UID]serverDetail)
+			servers := d.servers.Load()
 			detail, ok := servers[uid]
 			if !ok || detail.reqPrg == nil {
 				w.WriteHeader(http.StatusInternalServerError)
