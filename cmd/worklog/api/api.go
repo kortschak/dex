@@ -193,9 +193,9 @@ func (d *WatcherDetails) DetailMap() map[string]any {
 	}
 }
 
-// MapDetails is a generic detailer. Type information is may not be present
-// so it is the CEL code's responsibility to ensure that values are converted
-// to appropriate types.
+// MapDetails is a generic detailer. Type information may not be present so
+// it is the CEL code's responsibility to ensure that values are converted to
+// appropriate types.
 type MapDetails map[string]any
 
 func (d MapDetails) DetailMap() map[string]any {
