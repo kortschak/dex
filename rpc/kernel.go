@@ -217,6 +217,7 @@ func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			k.log.LogAttrs(ctx, slog.LevelError, req.Method, slog.Any("error", err))
 			return nil, err
 		}
+		m.Body.Params.Time = m.Time
 		return k.call(ctx, req, m)
 
 	case Unregister:
