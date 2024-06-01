@@ -207,9 +207,9 @@ Modules have an additional setting, [`log_mode`](https://pkg.go.dev/github.com/k
 
 The `log_mode` option is static and set when the module is spawned.
 
-## Setting Up a Service (linux)
+## Setting Up a Service (Linux)
 
-On linux you can start `dex` as a service using systemd. Since `dex` handles a single user's interaction with the Stream Deck it should be a user service.
+On Linux you can start `dex` as a service using systemd. Since `dex` handles a single user's interaction with the Stream Deck it should be a user service.
 
 You can place the unit file below either in `~/.config/systemd/user` or in `/etc/systemd/user`, run `systemctl --user daemon-reload`, and then start the service; `systemctl --user start dex.service`.
 ```
@@ -244,11 +244,51 @@ Comment=Start dex Stream Deck controller
 
 The service can be stopped with `systemctl --user stop dex.service`.
 
+## Setting Up an Agent (Mac)
+
+On Mac you can start `dex` as an agent using launchd.
+
+Place the job definition property list file below in `~/Library/LaunchAgents` as `io.kortschak.dex.plist` (replacing `$PATH_TO_DEX_COMMANDS` with the directory in which the commands were installed — `go env GOBIN` will give this value), run `launchctl load -w ~/Library/LaunchAgents/io.kortschak.dex.plist`.
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key><string>io.kortschak.dex</string>
+        <key>ProgramArguments</key>
+            <array>
+                <string>$PATH_TO_DEX_COMMANDS/dex</string>
+                <!-- Any additional flags... e.g. start-up debug logging.
+                <string>-log=debug</string>
+                -->
+            </array>
+        <key>KeepAlive</key>
+            <dict>
+               <key>SuccessfulExit</key><false/>
+            </dict>
+        <key>ThrottleInterval</key><integer>1</integer>
+        <key>EnvironmentVariables</key>
+            <dict>
+                <key>PATH</key><string>$PATH_TO_DEX_COMMANDS:/bin:/usr/bin:/usr/local/bin</string>
+            </dict>
+        <key>StandardOutPath</key><string>/tmp/dex.stdout</string>
+        <key>StandardErrorPath</key><string>/tmp/dex.stderr</string>
+    </dict>
+</plist>
+```
+Allow `dex` to have accessibility permissions when requested by the operating system.
+
+The logging locations and environment variables can be altered to suit.
+
+The service can be stopped with `launchctl stop io.kortschak.dex` and restarted with `launchctl stop io.kortschak.dex`,  It can disabled permanently with `launchctl unload -w ~/Library/LaunchAgents/io.kortschak.dex.plist`.
+
+See https://launchd.info/ for details of launchd configuration.
+
 ## Non-Go Dependencies
 
 Interaction with Stream Deck devices depends on github.com/sstallion/go-hid. This package makes use of [non-Go dependencies](https://github.com/libusb/hidapi/blob/master/BUILD.md#prerequisites).
 
-The `watcher` module depends on Xlib, libXss and libXRes on linux (libx11-dev, libxss1/libxss-dev and libxres1/libxres-dev in deb-based distributions). Xlib headers are required during compilation, but the libraries may be absent with reduced or absent functionality. `watcher` may be built with a `no_xorg` build tag to avoid the need for any X11 dependencies; this build will not be able to make use of X11. Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
+The `watcher` module depends on Xlib, libXss and libXRes on Linux (libx11-dev, libxss1/libxss-dev and libxres1/libxres-dev in deb-based distributions). Xlib headers are required during compilation, but the libraries may be absent with reduced or absent functionality. `watcher` may be built with a `no_xorg` build tag to avoid the need for any X11 dependencies; this build will not be able to make use of X11. Testing the `watcher` module uses gioui.org, and so [its dependencies](https://gioui.org/doc/install) must be provided if testing the module.
 
 ## Linux udev rules
 
