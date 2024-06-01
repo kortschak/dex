@@ -207,6 +207,15 @@ Modules have an additional setting, [`log_mode`](https://pkg.go.dev/github.com/k
 
 The `log_mode` option is static and set when the module is spawned.
 
+## Installation
+
+`dex` can be installed from source using the [Go tool chain](https://go.dev/doc/install) with
+```
+go install github.com/kortschak/dex@latest github.com/kortschak/dex/cmd/...@latest
+```
+
+Some [dependencies](#Non-Go-Dependencies) will need to be installed before doing this.
+
 ## Setting Up a Service (Linux)
 
 On Linux you can start `dex` as a service using systemd. Since `dex` handles a single user's interaction with the Stream Deck it should be a user service.
