@@ -1,6 +1,6 @@
 module github.com/kortschak/dex
 
-go 1.22.0
+go 1.22.4
 
 require (
 	cuelang.org/go v0.8.1
