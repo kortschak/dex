@@ -56,14 +56,14 @@ jobs:
 
     - name: integration tests
       run: |
-        go test -v .
+        go test .
         go test -p=1 -run TestDaemon ./cmd/* -verbose_log
-        go test  -run TestDaemon ./cmd/watcher -dynamic_timezone=false -verbose_log
-        go test  -run TestDaemon ./cmd/watcher -dynamic_timezone=true -verbose_log
+        go test -run TestDaemon ./cmd/watcher -dynamic_timezone=false -verbose_log
+        go test -run TestDaemon ./cmd/watcher -dynamic_timezone=true -verbose_log
 
     - name: no xorg watcher
       if: matrix.platform == 'ubuntu-latest'
       run: |
         sudo apt-get remove -qq libxss-dev libxres-dev libx11-dev
         sudo apt-get autoremove -qq
-        go build -v -tags no_xorg ./cmd/watcher
+        go build -tags no_xorg ./cmd/watcher
