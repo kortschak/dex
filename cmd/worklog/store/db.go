@@ -14,7 +14,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -28,10 +30,11 @@ import (
 
 // DB is a persistent store.
 type DB struct {
-	name  string
-	host  string
-	mu    sync.Mutex
-	store *sql.DB
+	name    string
+	host    string
+	mu      sync.Mutex
+	store   *sql.DB
+	roStore *sql.DB
 
 	allow map[string]map[string]bool
 }
@@ -53,11 +56,32 @@ func txDone(tx *sql.Tx, err *error) {
 }
 
 // Open opens an existing DB. See https://pkg.go.dev/modernc.org/sqlite#Driver.Open
-// for name handling details. Open attempts to get the CNAME for the host, which
-// may wait indefinitely, so a timeout context can be provided to fall back to
-// the kernel-provided hostname.
+// for name handling details. Two connections to the database are created, one
+// with mode=rwc and one with mode=ro. Any mode in the provided name will be
+// ignored. Open attempts to get the CNAME for the host, which may wait
+// indefinitely, so a timeout context can be provided to fall back to the
+// kernel-provided hostname.
 func Open(ctx context.Context, name, host string) (*DB, error) {
-	db, err := sql.Open("sqlite", name)
+	u, err := url.Parse(name)
+	if err != nil {
+		return nil, err
+	}
+	q, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, err
+	}
+	u.Scheme = "file"
+	// URL URIs confuse SQLite. If the path is left in u.Path
+	// the relative path is interpreted by SQLite as an absolute
+	// path and will most likely end up being in a directory that
+	// cannot be read or written to. This results in an "SQL logic
+	// error: out of memory (1)".
+	u.Opaque = u.Path
+	u.Path = ""
+
+	q.Set("mode", "rwc")
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, err
 	}
@@ -68,10 +92,16 @@ func Open(ctx context.Context, name, host string) (*DB, error) {
 	if host == "" {
 		host, err = hostname(ctx)
 		if err != nil {
-			return nil, err
+			return nil, errors.Join(err, db.Close())
 		}
 	}
-	return &DB{name: name, host: host, store: db, allow: allow}, nil
+	q.Set("mode", "ro")
+	u.RawQuery = q.Encode()
+	dbRO, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	return &DB{name: u.Opaque, host: host, store: db, roStore: dbRO, allow: allow}, nil
 }
 
 // hostname returns the FQDN of the local host, falling back to the hostname
@@ -100,7 +130,7 @@ func (db *DB) Name() string {
 func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.store.Close()
+	return errors.Join(db.store.Close(), db.roStore.Close())
 }
 
 // Schema is the DB schema.
@@ -667,6 +697,51 @@ func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn fu
 		}
 	}
 	return rows.Close()
+}
+
+// Select allows running an SQLite SELECT query. The query is run on a read-only
+// connection to the database.
+func (db *DB) Select(query string) ([]map[string]any, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	rows, err := db.roStore.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+
+	var e []map[string]any
+	for rows.Next() {
+		cols := make([]any, len(types))
+		for i, t := range types {
+			typ := t.ScanType()
+			if typ == nil {
+				var v any
+				typ = reflect.TypeOf(&v).Elem()
+			}
+			cols[i] = reflect.New(reflect.PointerTo(typ)).Interface()
+		}
+		err = rows.Scan(cols...)
+		if err != nil {
+			return nil, err
+		}
+		result := make(map[string]any)
+		for i := range cols {
+			elem := reflect.ValueOf(cols[i]).Elem()
+			if elem.IsNil() {
+				result[types[i].Name()] = nil
+			} else {
+				result[types[i].Name()] = elem.Elem().Interface()
+			}
+		}
+		e = append(e, result)
+	}
+	return e, rows.Err()
 }
 
 const AmendEvents = `begin transaction;

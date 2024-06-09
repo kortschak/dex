@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -334,9 +333,9 @@ func TestDB(t *testing.T) {
 
 			t.Run("dynamic_query", func(t *testing.T) {
 				dynamicTests := []struct {
-					name  string
-					sql   string
-					query Query
+					name    string
+					sql     string
+					wantErr error
 				}{
 					{
 						name: "kitchen_or",
@@ -344,25 +343,6 @@ func TestDB(t *testing.T) {
 					where 
 						json_extract(datastr, "$.afk") = false or json_extract(datastr, "$.title") = "Terminal"
 					limit 2`,
-						query: Query{
-							Fields: []string{"starttime", "$.title", "$.afk"},
-							From:   "events",
-							Where: map[string]any{
-								"or": []any{
-									map[string]any{
-										"=": map[string]any{
-											"$.afk": false,
-										},
-									},
-									map[string]any{
-										"=": map[string]any{
-											"$.title": "Terminal",
-										},
-									},
-								},
-							},
-							Limit: ptr(2),
-						},
 					},
 					{
 						name: "kitchen_and",
@@ -370,64 +350,47 @@ func TestDB(t *testing.T) {
 					where 
 						json_extract(datastr, "$.afk") = false and json_extract(datastr, "$.title") = "Terminal"
 					limit 2`,
-						query: Query{
-							Fields: []string{"starttime", "$.title", "$.afk"},
-							From:   "events",
-							Where: map[string]any{
-								"and": []any{
-									map[string]any{
-										"=": map[string]any{
-											"$.afk": false,
-										},
-									},
-									map[string]any{
-										"=": map[string]any{
-											"$.title": "Terminal",
-										},
-									},
-								},
-							},
-							Limit: ptr(2),
-						},
 					},
 					{
 						name: "count",
 						sql:  `select count(*) from events`,
-						query: Query{
-							Fields: "count ( *)", // Intentionally ugly whitespace.
-							From:   "events",
-						},
 					},
 					{
-						name: "all_implicit",
+						name: "all",
 						sql:  `select * from events`,
-						query: Query{
-							From: "events",
-						},
-					},
-					{
-						name: "all_explicit",
-						sql:  `select * from events`,
-						query: Query{
-							Fields: "*",
-							From:   "events",
-						},
 					},
 					{
 						name: "non_null_afk",
 						sql:  `select * from events where json_extract(datastr, "$.app") notnull`,
-						query: Query{
-							Fields: "*",
-							From:   "events",
-							Where: map[string]any{
-								"notnull": "$.app",
-							},
-						},
+					},
+					{
+						name:    "drop_table",
+						sql:     `drop table events`,
+						wantErr: errors.New("attempt to write a readonly database (8)"),
+					},
+					{
+						name:    "sneaky_create_table",
+						sql:     "select count(*) from events; create table if not exists t(i)",
+						wantErr: errors.New("attempt to write a readonly database (8)"),
+					},
+					{
+						name:    "sneaky_drop_table",
+						sql:     "select count(*) from events; drop table events",
+						wantErr: errors.New("attempt to write a readonly database (8)"),
 					},
 				}
 
 				for _, test := range dynamicTests {
 					t.Run(test.name, func(t *testing.T) {
+						got, err := db.Select(test.sql)
+						if !sameError(err, test.wantErr) {
+							t.Errorf("unexpected error: got:%v want:%v", err, test.wantErr)
+							return
+						}
+						if err != nil {
+							return
+						}
+
 						db.mu.Lock()
 						rows, err := db.store.Query(test.sql)
 						db.mu.Unlock()
@@ -437,10 +400,6 @@ func TestDB(t *testing.T) {
 						names, err := rows.Columns()
 						if err != nil {
 							t.Fatalf("failed to get names: %v", err)
-						}
-						for i, n := range names {
-							n = strings.TrimPrefix(names[i], `json_extract(datastr, "`)
-							names[i] = strings.TrimSuffix(n, `")`)
 						}
 						var want []map[string]any
 						for rows.Next() {
@@ -460,11 +419,6 @@ func TestDB(t *testing.T) {
 							want = append(want, row)
 						}
 						rows.Close()
-
-						got, err := db.Dynamic(test.query)
-						if err != nil {
-							t.Fatal(err)
-						}
 
 						if !cmp.Equal(want, got) {
 							t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got))
@@ -610,4 +564,13 @@ func remarshalJSON(dst, src any) error {
 		return err
 	}
 	return json.Unmarshal(b, dst)
+}
+
+func sameError(a, b error) bool {
+	switch {
+	case a != nil && b != nil:
+		return a.Error() == b.Error()
+	default:
+		return a == b
+	}
 }

@@ -696,11 +696,13 @@ func (d *daemon) serve(addr, path string, canModify bool) (string, context.Cance
 	mux.HandleFunc("/dump/", d.dump(ctx))
 	mux.HandleFunc("/data/", d.dashboardData(ctx))
 	mux.HandleFunc("/summary/", d.summaryData(ctx))
-	mux.HandleFunc("/query", d.query(ctx))
-	mux.HandleFunc("/query/", d.query(ctx))
 	isLocalAddr, err := isLoopback(ctx, addr)
 	if err != nil {
 		return "", nil, err
+	}
+	if isLocalAddr {
+		mux.HandleFunc("/query", d.query(ctx))
+		mux.HandleFunc("/query/", d.query(ctx))
 	}
 	if canModify && isLocalAddr {
 		mux.HandleFunc("/amend/", d.amend(ctx))
@@ -996,32 +998,24 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("content-type", "application/json")
 
 		var body bytes.Buffer
 		io.Copy(&body, req.Body)
 		switch req.Header.Get("content-type") {
-		case "application/json":
-			dec := json.NewDecoder(bytes.NewReader(body.Bytes()))
-			var q store.Query
-			err := dec.Decode(&q)
-			if err != nil {
+		case "":
+			if req.Method != http.MethodGet {
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(queryError(dec, body.Bytes(), err))
 				return
 			}
-			tok, err := dec.Token()
-			if tok != nil || err != io.EOF {
-				w.WriteHeader(http.StatusBadRequest)
-				if err == nil {
-					err = fmt.Errorf("unexpected token after query '%s'", tok)
-				}
-				json.NewEncoder(w).Encode(queryError(dec, body.Bytes(), err))
-				return
-			}
-			resp, err := db.Dynamic(q)
+			body.Reset()
+			body.WriteString(req.URL.Query().Get("sql"))
+			fallthrough
+		case "application/sql":
+			resp, err := db.Select(body.String())
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintln(w, err)
+				json.NewEncoder(w).Encode(map[string]any{"err": err.Error()})
 				return
 			}
 			for _, row := range resp {
@@ -1104,51 +1098,21 @@ func (l dbLib) CompileOptions() []cel.EnvOption {
 	return []cel.EnvOption{
 		cel.Function("query",
 			cel.Overload(
-				"query_string_map",
+				"query_string",
 				[]*cel.Type{cel.StringType, mapStringDyn},
 				cel.DynType,
-				cel.BinaryBinding(l.query),
+				cel.UnaryBinding(l.query),
 			),
 		),
 	}
 }
 
-func (l dbLib) query(arg0, arg1 ref.Val) ref.Val {
-	table, ok := arg0.(types.String)
+func (l dbLib) query(arg ref.Val) ref.Val {
+	sql, ok := arg.(types.String)
 	if !ok {
-		return types.ValOrErr(table, "no such overload")
+		return types.ValOrErr(sql, "no such overload")
 	}
-	obj, err := arg1.ConvertToNative(reflect.TypeOf((*structpb.Struct)(nil)))
-	if err != nil {
-		return types.NewErr(err.Error())
-	}
-	query := obj.(*structpb.Struct).AsMap()
-	valid := map[string]bool{
-		"fields": true,
-		"where":  true,
-		"limit":  true,
-	}
-	for k := range query {
-		if !valid[k] {
-			return types.NewErr("invalid query field: %q", k)
-		}
-	}
-	where, _ := query["where"].(map[string]any)
-	q := store.Query{
-		Fields: query["fields"],
-		From:   string(table),
-		Where:  where,
-	}
-	if lim, ok := query["limit"]; ok {
-		switch lim := lim.(type) {
-		case int:
-			q.Limit = &lim
-		case int64:
-			l := int(lim)
-			q.Limit = &l
-		}
-	}
-	resp, err := l.db.Dynamic(q)
+	resp, err := l.db.Select(string(sql))
 	if err != nil {
 		return types.NewErr(err.Error())
 	}
