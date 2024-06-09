@@ -243,17 +243,21 @@ func TestDB(t *testing.T) {
 			db.host = "test_host"
 
 			bid := db.BucketID(bucket)
-			got, err := db.EventsRange(bid, now.Add(3*time.Second), now.Add(4*time.Second), -1)
-			if err != nil {
-				t.Errorf("failed to load data: %v", err)
-			}
-			for i := range got {
-				got[i].Bucket = bucket
-			}
+			for _, loc := range []*time.Location{time.Local, time.UTC} {
+				t.Run(loc.String(), func(t *testing.T) {
+					got, err := db.EventsRange(bid, now.Add(3*time.Second).In(loc), now.Add(4*time.Second).In(loc), -1)
+					if err != nil {
+						t.Errorf("failed to load data: %v", err)
+					}
+					for i := range got {
+						got[i].Bucket = bucket
+					}
 
-			want := data[0].Events[1:2]
-			if !cmp.Equal(want, got, ignoreID) {
-				t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got, ignoreID))
+					want := data[0].Events[1:2]
+					if !cmp.Equal(want, got, ignoreID) {
+						t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got, ignoreID))
+					}
+				})
 			}
 
 			err = db.Close()

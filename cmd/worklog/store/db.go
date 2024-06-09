@@ -314,8 +314,8 @@ func (db *DB) UpdateEvent(e *worklog.Event) (sql.Result, error) {
 
 const LastEvent = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?1
-) and endtime = (
-	select max(endtime) from events where bucketrow = (
+) and datetime(endtime) = (
+	select max(datetime(endtime)) from events where bucketrow = (
 		select rowid from buckets where id = ?1
 	) limit 1
 ) limit 1`
@@ -418,15 +418,15 @@ func (db *DB) DumpRange(start, end time.Time) ([]worklog.BucketMetadata, error) 
 const (
 	dumpEventsRange = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and endtime >= ? and starttime <= ? limit ?`
+) and datetime(endtime) >= datetime(?) and datetime(starttime) <= datetime(?) limit ?`
 
 	dumpEventsRangeUntil = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and starttime <= ? limit ?`
+) and datetime(starttime) <= datetime(?) limit ?`
 
 	dumpEventsRangeFrom = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and endtime >= ? limit ?`
+) and datetime(endtime) >= datetime(?) limit ?`
 
 	dumpEventsLimit = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
@@ -592,19 +592,19 @@ func (db *DB) events(bid string) ([]worklog.Event, error) {
 const (
 	EventsRange = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and endtime >= ? and starttime <= ? order by endtime desc limit ?`
+) and datetime(endtime) >= datetime(?) and datetime(starttime) <= datetime(?) order by datetime(endtime) desc limit ?`
 
 	EventsRangeUntil = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and starttime <= ? order by endtime desc limit ?`
+) and datetime(starttime) <= datetime(?) order by datetime(endtime) desc limit ?`
 
 	EventsRangeFrom = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and endtime >= ? order by endtime desc limit ?`
+) and datetime(endtime) >= datetime(?) order by datetime(endtime) desc limit ?`
 
 	EventsLimit = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) order by endtime desc limit ?`
+) order by datetime(endtime) desc limit ?`
 )
 
 // EventsRange returns the events in the bucket with the provided bucket ID
@@ -750,22 +750,32 @@ const AmendEvents = `begin transaction;
 	-- ensure we have an amend array.
 	update events set datastr = json_insert(datastr, '$.amend', json('[]'))
 	where
-		starttime < ?5 and endtime > ?4 and bucketrow = (
+		datetime(starttime) < datetime(?5) and datetime(endtime) > datetime(?4) and bucketrow = (
 			select rowid from buckets where id = ?1
 		);
 	update events set datastr = json_insert(datastr, '$.amend[#]', json_object('time', ?2, 'msg', ?3, 'replace', (
 		-- trim amendments down to original event bounds.
 		select json_group_array(json_replace(value,
-			'$.start', max(starttime, json_extract(value, '$.start')),
-			'$.end', min(endtime, json_extract(value, '$.end'))
+			'$.start', case
+				when datetime(starttime) > datetime(json_extract(value, '$.start')) then
+					starttime
+				else
+					json_extract(value, '$.start')
+				end,
+			'$.end', case
+				when datetime(endtime) < datetime(json_extract(value, '$.end')) then
+					endtime
+				else
+					json_extract(value, '$.end')
+				end
 		))
 		from
 			json_each(?6)
 		where
-			json_extract(value, '$.start') < endtime and json_extract(value, '$.end') > starttime
+			datetime(json_extract(value, '$.start')) < datetime(endtime) and datetime(json_extract(value, '$.end')) > datetime(starttime)
 	)))
 	where
-		starttime < ?5 and endtime > ?4 and bucketrow = (
+		datetime(starttime) < datetime(?5) and datetime(endtime) > datetime(?4) and bucketrow = (
 			select rowid from buckets where id = ?1
 		);
 commit;`
