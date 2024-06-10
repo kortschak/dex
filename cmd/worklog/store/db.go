@@ -76,8 +76,10 @@ func Open(ctx context.Context, name, host string) (*DB, error) {
 	// path and will most likely end up being in a directory that
 	// cannot be read or written to. This results in an "SQL logic
 	// error: out of memory (1)".
-	u.Opaque = u.Path
-	u.Path = ""
+	if u.Opaque == "" {
+		u.Opaque = u.Path
+		u.Path = ""
+	}
 
 	q.Set("mode", "rwc")
 	u.RawQuery = q.Encode()
