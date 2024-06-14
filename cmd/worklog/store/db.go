@@ -314,8 +314,8 @@ func (db *DB) UpdateEvent(e *worklog.Event) (sql.Result, error) {
 
 const LastEvent = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?1
-) and datetime(endtime) = (
-	select max(datetime(endtime)) from events where bucketrow = (
+) and datetime(endtime, 'subsec') = (
+	select max(datetime(endtime, 'subsec')) from events where bucketrow = (
 		select rowid from buckets where id = ?1
 	) limit 1
 ) limit 1`
@@ -418,15 +418,15 @@ func (db *DB) DumpRange(start, end time.Time) ([]worklog.BucketMetadata, error) 
 const (
 	dumpEventsRange = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and datetime(endtime) >= datetime(?) and datetime(starttime) <= datetime(?) limit ?`
+) and datetime(endtime, 'subsec') >= datetime(?, 'subsec') and datetime(starttime, 'subsec') <= datetime(?, 'subsec') limit ?`
 
 	dumpEventsRangeUntil = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and datetime(starttime) <= datetime(?) limit ?`
+) and datetime(starttime, 'subsec') <= datetime(?, 'subsec') limit ?`
 
 	dumpEventsRangeFrom = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and datetime(endtime) >= datetime(?) limit ?`
+) and datetime(endtime, 'subsec') >= datetime(?, 'subsec') limit ?`
 
 	dumpEventsLimit = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
@@ -592,19 +592,19 @@ func (db *DB) events(bid string) ([]worklog.Event, error) {
 const (
 	EventsRange = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and datetime(endtime) >= datetime(?) and datetime(starttime) <= datetime(?) order by datetime(endtime) desc limit ?`
+) and datetime(endtime, 'subsec') >= datetime(?, 'subsec') and datetime(starttime, 'subsec') <= datetime(?, 'subsec') order by datetime(endtime, 'subsec') desc limit ?`
 
 	EventsRangeUntil = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and datetime(starttime) <= datetime(?) order by datetime(endtime) desc limit ?`
+) and datetime(starttime, 'subsec') <= datetime(?, 'subsec') order by datetime(endtime, 'subsec') desc limit ?`
 
 	EventsRangeFrom = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) and datetime(endtime) >= datetime(?) order by datetime(endtime) desc limit ?`
+) and datetime(endtime, 'subsec') >= datetime(?, 'subsec') order by datetime(endtime, 'subsec') desc limit ?`
 
 	EventsLimit = `select id, starttime, endtime, datastr from events where bucketrow = (
 	select rowid from buckets where id = ?
-) order by datetime(endtime) desc limit ?`
+) order by datetime(endtime, 'subsec') desc limit ?`
 )
 
 // EventsRange returns the events in the bucket with the provided bucket ID
@@ -750,20 +750,22 @@ const AmendEvents = `begin transaction;
 	-- ensure we have an amend array.
 	update events set datastr = json_insert(datastr, '$.amend', json('[]'))
 	where
-		datetime(starttime) < datetime(?5) and datetime(endtime) > datetime(?4) and bucketrow = (
+		datetime(starttime, 'subsec') < datetime(?5, 'subsec') and
+		datetime(endtime, 'subsec') > datetime(?4, 'subsec') and
+		bucketrow = (
 			select rowid from buckets where id = ?1
 		);
 	update events set datastr = json_insert(datastr, '$.amend[#]', json_object('time', ?2, 'msg', ?3, 'replace', (
 		-- trim amendments down to original event bounds.
 		select json_group_array(json_replace(value,
 			'$.start', case
-				when datetime(starttime) > datetime(json_extract(value, '$.start')) then
+				when datetime(starttime, 'subsec') > datetime(json_extract(value, '$.start'), 'subsec') then
 					starttime
 				else
 					json_extract(value, '$.start')
 				end,
 			'$.end', case
-				when datetime(endtime) < datetime(json_extract(value, '$.end')) then
+				when datetime(endtime, 'subsec') < datetime(json_extract(value, '$.end'), 'subsec') then
 					endtime
 				else
 					json_extract(value, '$.end')
@@ -772,10 +774,13 @@ const AmendEvents = `begin transaction;
 		from
 			json_each(?6)
 		where
-			datetime(json_extract(value, '$.start')) < datetime(endtime) and datetime(json_extract(value, '$.end')) > datetime(starttime)
+			datetime(json_extract(value, '$.start'), 'subsec') < datetime(endtime, 'subsec') and
+			datetime(json_extract(value, '$.end'), 'subsec') > datetime(starttime, 'subsec')
 	)))
 	where
-		datetime(starttime) < datetime(?5) and datetime(endtime) > datetime(?4) and bucketrow = (
+		datetime(starttime, 'subsec') < datetime(?5, 'subsec') and
+		datetime(endtime, 'subsec') > datetime(?4, 'subsec') and
+		bucketrow = (
 			select rowid from buckets where id = ?1
 		);
 commit;`
