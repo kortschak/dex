@@ -94,21 +94,13 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 			Locked:    true,
 		}, errors.Join(errLocked, errWindow, errTime)
 	}
-	var det struct {
-		WindowID   int       `json:"wid"`
-		ProcessID  int       `json:"pid"`
-		Name       string    `json:"name"`
-		Class      string    `json:"class"`
-		WindowName string    `json:"window"`
-		LastInput  time.Time `json:"last_input,omitempty"`
-		Locked     bool      `json:"locked"`
-	}
+	var det watcher.Details
 	errWindow = json.Unmarshal([]byte(detMsg), &det)
 	if !det.LastInput.IsZero() {
 		d.last = det.LastInput
 	}
 	det.Locked = false
-	return watcher.Details(det), errors.Join(errLocked, errWindow)
+	return det, errors.Join(errLocked, errWindow)
 }
 
 func (d *mutterDetailer) mutterIdleMonitor() (time.Time, error) {
