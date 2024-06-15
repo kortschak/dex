@@ -59,7 +59,7 @@ func TestDB(t *testing.T) {
 					t.Fatalf("failed to clean dir: %v", err)
 				}
 
-				db, err := Open(context.Background(), path, "")
+				db, err := Open(context.Background(), path, "test_host")
 				if err != nil {
 					t.Fatalf("failed to create db: %v", err)
 				}
@@ -110,7 +110,7 @@ func TestDB(t *testing.T) {
 				)
 
 				t.Run("load_dump", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "")
+					db, err := Open(context.Background(), path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
@@ -184,11 +184,10 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("last_event", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "")
+					db, err := Open(context.Background(), path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
-					db.host = "test_host"
 
 					got, err := db.LastEvent(bucket)
 					if err != nil {
@@ -208,11 +207,10 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("update_last_event", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "")
+					db, err := Open(context.Background(), path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
-					db.host = "test_host"
 
 					e := data[0].Events[len(data[0].Events)-1]
 					e.End = e.End.Add(interval.duration)
@@ -246,11 +244,10 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("events_range", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "")
+					db, err := Open(context.Background(), path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
-					db.host = "test_host"
 
 					bid := db.BucketID(bucket)
 					for _, loc := range []*time.Location{time.Local, time.UTC} {
@@ -277,11 +274,10 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("update_last_event_coequal", func(t *testing.T) {
-					db, err := Open(context.Background(), filepath.Join(workDir, "coequal.db"), "")
+					db, err := Open(context.Background(), filepath.Join(workDir, "coequal.db"), "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
-					db.host = "test_host"
 
 					buckets := []string{
 						`{"id":"window","name":"window-watcher","type":"currentwindow","client":"worklog","hostname":"test_host","created":"2023-06-12T19:54:38.305691865+09:30"}`,
@@ -445,11 +441,10 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("amend", func(t *testing.T) {
-					db, err := Open(context.Background(), filepath.Join(workDir, "amend.db"), "")
+					db, err := Open(context.Background(), filepath.Join(workDir, "amend.db"), "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
-					db.host = "test_host"
 
 					buckets := []string{
 						`{"id":"window","name":"window-watcher","type":"currentwindow","client":"worklog","hostname":"test_host","created":"2023-06-12T19:54:38Z"}`,
