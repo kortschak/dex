@@ -155,8 +155,8 @@ func (d *daemon) close() error {
 	defer d.pMu.Unlock()
 	d.conn.Notify(context.Background(), rpc.Unregister, rpc.NewMessage(rpc.UID{Module: d.uid}, rpc.None{}))
 	return errors.Join(
-		closeCloser(d.detailer),
-		closeCloser(d.timezone),
+		closeCloser(d.detailer.Load()),
+		closeCloser(d.timezone.Load()),
 		d.conn.Close(),
 	)
 }
@@ -325,7 +325,7 @@ func (d *daemon) replaceTimezone(ctx context.Context, dynamic *bool) {
 	} else {
 		tz = localtime.Static{}
 	}
-	err = closeCloser(d.timezone)
+	err = closeCloser(d.timezone.Load())
 	if err != nil {
 		d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
 	}
@@ -361,7 +361,7 @@ func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 		d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
 		return
 	}
-	err = closeCloser(d.detailer)
+	err = closeCloser(d.detailer.Load())
 	if err != nil {
 		d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", err))
 	}
