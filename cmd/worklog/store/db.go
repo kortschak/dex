@@ -35,8 +35,6 @@ type DB struct {
 	mu      sync.Mutex
 	store   *sql.DB
 	roStore *sql.DB
-
-	allow map[string]map[string]bool
 }
 
 type execer interface {
@@ -103,7 +101,7 @@ func Open(ctx context.Context, name, host string) (*DB, error) {
 	if err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	return &DB{name: u.Opaque, host: host, store: db, roStore: dbRO, allow: allow}, nil
+	return &DB{name: u.Opaque, host: host, store: db, roStore: dbRO}, nil
 }
 
 // hostname returns the FQDN of the local host, falling back to the hostname
@@ -160,27 +158,6 @@ create index if not exists event_index_starttime ON events(bucketrow, starttime)
 create index if not exists event_index_endtime ON events(bucketrow, endtime);
 pragma journal_mode=WAL;
 `
-
-// allow is the set of names allowed in dynamic queries.
-var allow = map[string]map[string]bool{
-	"buckets": {
-		"rowid":    true,
-		"id":       true,
-		"name":     true,
-		"type":     true,
-		"client":   true,
-		"hostname": true,
-		"created":  true,
-		"datastr":  true,
-	},
-	"events": {
-		"id":        true,
-		"bucketrow": true,
-		"starttime": true,
-		"endtime":   true,
-		"datastr":   true,
-	},
-}
 
 // BucketID returns the internal bucket ID for the provided bucket uid.
 func (db *DB) BucketID(uid string) string {
