@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -35,6 +36,8 @@ type DB struct {
 	mu      sync.Mutex
 	store   *sql.DB
 	roStore *sql.DB
+
+	bkMu sync.Mutex
 }
 
 type execer interface {
@@ -124,6 +127,68 @@ func (db *DB) Name() string {
 		return ""
 	}
 	return db.name
+}
+
+// Backup creates a backup of the DB using the SQLite backup API, sleeping
+// between each step of n pages. n must fit into an int32, and if it is zero or
+// less, the full database will be backed up in a single step. It returns the
+// path of the backup.
+func (db *DB) Backup(ctx context.Context, n int, sleep time.Duration) (string, error) {
+	if n > math.MaxInt32 {
+		return "", fmt.Errorf("step size out of bounds: %d", n)
+	}
+	if n <= 0 {
+		n = -1
+	}
+
+	conn, err := db.store.Conn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	db.bkMu.Lock()
+	defer db.bkMu.Unlock()
+	dst := db.name + "_" + time.Now().In(time.UTC).Format("20060102150405")
+	err = conn.Raw(func(driverConn any) error {
+		type backupper interface {
+			NewBackup(dst string) (*sqlite.Backup, error)
+		}
+		conn, ok := driverConn.(backupper)
+		if !ok {
+			return fmt.Errorf("driver does not support backup: %T", driverConn)
+		}
+		bck, err := conn.NewBackup(dst)
+		if err != nil {
+			return err
+		}
+		more := true
+		for more {
+			db.mu.Lock()
+			more, err = bck.Step(int32(n))
+			db.mu.Unlock()
+			if err != nil {
+				return err
+			}
+			if sleep <= 0 {
+				continue
+			}
+			timer := time.NewTimer(sleep)
+			select {
+			case <-ctx.Done():
+				// TODO(kortschak): Remove this after go1.23 is the earliest supported version.
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+		return bck.Finish()
+	})
+	if err != nil {
+		return "", err
+	}
+	return dst, nil
 }
 
 // Close closes the database.
