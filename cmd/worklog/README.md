@@ -159,6 +159,7 @@ In addition to the dashboard endpoint provided by the `worklog` server, there ar
 
 - `GET` `/data/`: accepts `date` and `tz` query parameters.
 - `GET` `/dump/`: accepts `start` and `end` query parameters.
+- `GET` `/backup/`: accepts `pages_per_step` and `sleep` query parameters corresponding to the [SQLite backup API](https://www.sqlite.org/backup.html)'s [`sqlite3_backup_step` `N` parameter](https://www.sqlite.org/c3ref/backup_finish.html#sqlite3backupstep) and the time between successive `sqlite3_backup_step` calls. The backup endpoint is only available when the server address is a loop-back address.
 - `GET`/`POST` `/query`: takes an SQLite SELECT statement (content-type:application/sql or URL parameter, sql) or a CEL program (content-type:application/cel) that may use a built-in `query(<sql select statement>)` function. The query endpoint is only available when the server address is a loop-back address.
 
 A potentially useful configuration for debugging rules is

@@ -703,6 +703,8 @@ func (d *daemon) serve(addr, path string, canModify bool) (string, context.Cance
 	if isLocalAddr {
 		mux.HandleFunc("/query", d.query(ctx))
 		mux.HandleFunc("/query/", d.query(ctx))
+		mux.HandleFunc("/backup", d.backup(ctx))
+		mux.HandleFunc("/backup/", d.backup(ctx))
 	}
 	if canModify && isLocalAddr {
 		mux.HandleFunc("/amend/", d.amend(ctx))
@@ -918,6 +920,62 @@ func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 			return
 		}
 		http.ServeContent(w, req, "dump.json", time.Now(), bytes.NewReader(b))
+	}
+}
+
+func (d *daemon) backup(ctx context.Context) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		db, ok := d.db.Load().(*store.DB)
+		if !ok {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		var n int
+		if req.URL.Query().Has("pages_per_step") {
+			var err error
+			n, err = strconv.Atoi(req.URL.Query().Get("pages_per_step"))
+			if err != nil {
+				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, `{"error":%q}`, err)
+				return
+			}
+		}
+		var sleep time.Duration
+		if req.URL.Query().Has("sleep") {
+			var err error
+			n, err = strconv.Atoi(req.URL.Query().Get("sleep"))
+			if err != nil {
+				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, `{"error":%q}`, err)
+				return
+			}
+		}
+
+		path, err := db.Backup(ctx, n, sleep)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		now := time.Now()
+		b, err := json.Marshal(struct {
+			Path string    `json:"path"`
+			Time time.Time `json:"time"`
+		}{path, now})
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.ServeContent(w, req, "backup.json", now, bytes.NewReader(b))
 	}
 }
 
