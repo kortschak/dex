@@ -75,3 +75,50 @@ jobs:
         sudo apt-get remove -qq libxss-dev libxres-dev libx11-dev
         sudo apt-get autoremove -qq
         go build -tags no_xorg ./cmd/watcher
+
+  postgres-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        options: >-
+          --name postgres
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432 
+      PGUSER: test_user
+      PGPASSWORD: password
+
+    steps:
+    - name: install Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: unit tests postgres
+      run: |
+        psql --host $PGHOST \
+             --username="postgres" \
+             --dbname="postgres" \
+             --command="CREATE USER $PGUSER PASSWORD '$PGPASSWORD'" \
+             --command="ALTER USER $PGUSER CREATEDB" \
+             --command="CREATE USER ${PGUSER}_ro PASSWORD '$PGPASSWORD'" \
+             --command="\du"
+
+        go test ./cmd/worklog/pgstore

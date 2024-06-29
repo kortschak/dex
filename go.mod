@@ -12,6 +12,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/google/cel-go v0.20.1
 	github.com/google/go-cmp v0.6.0
+	github.com/jackc/pgx/v5 v5.6.0
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
 	github.com/kortschak/goroutine v1.1.2
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
@@ -41,6 +42,8 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
@@ -49,6 +52,7 @@ require (
 	github.com/tdewolff/font v0.0.0-20240417221047-e5855237f87b // indirect
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
 	github.com/tdewolff/parse/v2 v2.7.3 // indirect
+	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
