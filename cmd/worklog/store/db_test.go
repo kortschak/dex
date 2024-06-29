@@ -114,6 +114,12 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
 
 					err = db.Load(data, false)
 					if err != nil {
@@ -176,11 +182,6 @@ func TestDB(t *testing.T) {
 					if !cmp.Equal(wantRangeAll, gotRangeAll, ignoreID) {
 						t.Errorf("unexpected dump range result:\n--- want:\n+++ got:\n%s", cmp.Diff(wantRangeAll, gotRangeAll, ignoreID))
 					}
-
-					err = db.Close()
-					if err != nil {
-						t.Errorf("failed to close db: %v", err)
-					}
 				})
 
 				t.Run("last_event", func(t *testing.T) {
@@ -188,6 +189,12 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
 
 					got, err := db.LastEvent(bucket)
 					if err != nil {
@@ -199,11 +206,6 @@ func TestDB(t *testing.T) {
 					if !cmp.Equal(want, got, ignoreID) {
 						t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got, ignoreID))
 					}
-
-					err = db.Close()
-					if err != nil {
-						t.Errorf("failed to close db: %v", err)
-					}
 				})
 
 				t.Run("update_last_event", func(t *testing.T) {
@@ -211,6 +213,12 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
 
 					e := data[0].Events[len(data[0].Events)-1]
 					e.End = e.End.Add(interval.duration)
@@ -236,11 +244,6 @@ func TestDB(t *testing.T) {
 					if !cmp.Equal(want, got, ignoreID) {
 						t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got, ignoreID))
 					}
-
-					err = db.Close()
-					if err != nil {
-						t.Errorf("failed to close db: %v", err)
-					}
 				})
 
 				t.Run("events_range", func(t *testing.T) {
@@ -248,6 +251,12 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
 
 					bid := db.BucketID(bucket)
 					for _, loc := range []*time.Location{time.Local, time.UTC} {
@@ -266,11 +275,6 @@ func TestDB(t *testing.T) {
 							}
 						})
 					}
-
-					err = db.Close()
-					if err != nil {
-						t.Errorf("failed to close db: %v", err)
-					}
 				})
 
 				t.Run("update_last_event_coequal", func(t *testing.T) {
@@ -278,6 +282,12 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
 
 					buckets := []string{
 						`{"id":"window","name":"window-watcher","type":"currentwindow","client":"worklog","hostname":"test_host","created":"2023-06-12T19:54:38.305691865+09:30"}`,
@@ -340,104 +350,6 @@ func TestDB(t *testing.T) {
 							}
 						}
 					}
-
-					t.Run("dynamic_query", func(t *testing.T) {
-						dynamicTests := []struct {
-							name    string
-							sql     string
-							wantErr error
-						}{
-							{
-								name: "kitchen_or",
-								sql: `select json_extract(datastr, "$.title"), starttime, json_extract(datastr, "$.afk") from events
-					where 
-						json_extract(datastr, "$.afk") = false or json_extract(datastr, "$.title") = "Terminal"
-					limit 2`,
-							},
-							{
-								name: "kitchen_and",
-								sql: `select json_extract(datastr, "$.title"), starttime, json_extract(datastr, "$.afk") from events
-					where 
-						json_extract(datastr, "$.afk") = false and json_extract(datastr, "$.title") = "Terminal"
-					limit 2`,
-							},
-							{
-								name: "count",
-								sql:  `select count(*) from events`,
-							},
-							{
-								name: "all",
-								sql:  `select * from events`,
-							},
-							{
-								name: "non_null_afk",
-								sql:  `select * from events where json_extract(datastr, "$.app") notnull`,
-							},
-							{
-								name:    "drop_table",
-								sql:     `drop table events`,
-								wantErr: errors.New("attempt to write a readonly database (8)"),
-							},
-							{
-								name:    "sneaky_create_table",
-								sql:     "select count(*) from events; create table if not exists t(i)",
-								wantErr: errors.New("attempt to write a readonly database (8)"),
-							},
-							{
-								name:    "sneaky_drop_table",
-								sql:     "select count(*) from events; drop table events",
-								wantErr: errors.New("attempt to write a readonly database (8)"),
-							},
-						}
-
-						for _, test := range dynamicTests {
-							t.Run(test.name, func(t *testing.T) {
-								got, err := db.Select(test.sql)
-								if !sameError(err, test.wantErr) {
-									t.Errorf("unexpected error: got:%v want:%v", err, test.wantErr)
-									return
-								}
-								if err != nil {
-									return
-								}
-
-								db.mu.Lock()
-								rows, err := db.store.Query(test.sql)
-								db.mu.Unlock()
-								if err != nil {
-									t.Fatalf("unexpected error for query: %v", err)
-								}
-								names, err := rows.Columns()
-								if err != nil {
-									t.Fatalf("failed to get names: %v", err)
-								}
-								var want []map[string]any
-								for rows.Next() {
-									args := make([]any, len(names))
-									for i := range args {
-										var a any
-										args[i] = &a
-									}
-									err = rows.Scan(args...)
-									if err != nil {
-										t.Fatal(err)
-									}
-									row := make(map[string]any)
-									for i, a := range args {
-										row[names[i]] = *(a.(*any))
-									}
-									want = append(want, row)
-								}
-								rows.Close()
-
-								if !cmp.Equal(want, got) {
-									t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got))
-								}
-							})
-						}
-					})
-
-					db.Close()
 				})
 
 				t.Run("amend", func(t *testing.T) {
@@ -445,6 +357,12 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
 
 					buckets := []string{
 						`{"id":"window","name":"window-watcher","type":"currentwindow","client":"worklog","hostname":"test_host","created":"2023-06-12T19:54:38Z"}`,
@@ -547,8 +465,113 @@ func TestDB(t *testing.T) {
 							}
 						}
 					}
+				})
 
-					db.Close()
+				t.Run("dynamic_query", func(t *testing.T) {
+					db, err := Open(context.Background(), path, "test_host")
+					if err != nil {
+						t.Fatalf("failed to create db: %v", err)
+					}
+					defer func() {
+						err = db.Close()
+						if err != nil {
+							t.Errorf("failed to close db: %v", err)
+						}
+					}()
+
+					dynamicTests := []struct {
+						name    string
+						sql     string
+						wantErr error
+					}{
+						{
+							name: "kitchen_or",
+							sql: `select json_extract(datastr, "$.title"), starttime, json_extract(datastr, "$.afk") from events
+					where 
+						json_extract(datastr, "$.afk") = false or json_extract(datastr, "$.title") = "Terminal"
+					limit 2`,
+						},
+						{
+							name: "kitchen_and",
+							sql: `select json_extract(datastr, "$.title"), starttime, json_extract(datastr, "$.afk") from events
+					where 
+						json_extract(datastr, "$.afk") = false and json_extract(datastr, "$.title") = "Terminal"
+					limit 2`,
+						},
+						{
+							name: "count",
+							sql:  `select count(*) from events`,
+						},
+						{
+							name: "all",
+							sql:  `select * from events`,
+						},
+						{
+							name: "non_null_afk",
+							sql:  `select * from events where json_extract(datastr, "$.app") notnull`,
+						},
+						{
+							name:    "drop_table",
+							sql:     `drop table events`,
+							wantErr: errors.New("attempt to write a readonly database (8)"),
+						},
+						{
+							name:    "sneaky_create_table",
+							sql:     "select count(*) from events; create table if not exists t(i)",
+							wantErr: errors.New("attempt to write a readonly database (8)"),
+						},
+						{
+							name:    "sneaky_drop_table",
+							sql:     "select count(*) from events; drop table events",
+							wantErr: errors.New("attempt to write a readonly database (8)"),
+						},
+					}
+
+					for _, test := range dynamicTests {
+						t.Run(test.name, func(t *testing.T) {
+							got, err := db.Select(test.sql)
+							if !sameError(err, test.wantErr) {
+								t.Errorf("unexpected error: got:%v want:%v", err, test.wantErr)
+								return
+							}
+							if err != nil {
+								return
+							}
+
+							db.mu.Lock()
+							rows, err := db.store.Query(test.sql)
+							db.mu.Unlock()
+							if err != nil {
+								t.Fatalf("unexpected error for query: %v", err)
+							}
+							names, err := rows.Columns()
+							if err != nil {
+								t.Fatalf("failed to get names: %v", err)
+							}
+							var want []map[string]any
+							for rows.Next() {
+								args := make([]any, len(names))
+								for i := range args {
+									var a any
+									args[i] = &a
+								}
+								err = rows.Scan(args...)
+								if err != nil {
+									t.Fatal(err)
+								}
+								row := make(map[string]any)
+								for i, a := range args {
+									row[names[i]] = *(a.(*any))
+								}
+								want = append(want, row)
+							}
+							rows.Close()
+
+							if !cmp.Equal(want, got) {
+								t.Errorf("unexpected result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got))
+							}
+						})
+					}
 				})
 			})
 		})
