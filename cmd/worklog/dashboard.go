@@ -105,7 +105,7 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 	dayMinutes := make(map[string]float64)
 	var dayTotalHours float64
-	for _, a := range mergeIntervals(atKeyboard) {
+	for _, a := range mergeIntervals(atKeyboard, 0) {
 		dayTotalHours += a.End.Sub(a.Start).Hours()
 		const binSize = time.Hour
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.Add(binSize) {
@@ -116,7 +116,7 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	for app, events := range windowEvents {
 		appHours := make(map[string]float64)
 		const binSize = time.Hour
-		for _, a := range mergeIntervals(events) {
+		for _, a := range mergeIntervals(events, 0) {
 			for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.Add(binSize) {
 				appHours[h.Format(time.DateTime)] += part(h, h.Add(binSize), a.Start, a.End).Hours()
 			}
@@ -156,7 +156,7 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 	weekHours := make(map[string]float64)
 	var weekTotalHours float64
-	for _, a := range mergeIntervals(weekAtKeyboard) {
+	for _, a := range mergeIntervals(weekAtKeyboard, 0) {
 		weekTotalHours += a.End.Sub(a.Start).Hours()
 		const binSize = time.Hour
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.Add(binSize) {
@@ -175,7 +175,7 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	}
 	yearHours := make(map[string]float64)
 	var yearTotalHours float64
-	for _, a := range mergeIntervals(yearAtKeyboard) {
+	for _, a := range mergeIntervals(yearAtKeyboard, 0) {
 		yearTotalHours += a.End.Sub(a.Start).Hours()
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
 			yearHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
@@ -199,7 +199,7 @@ func (d *daemon) rawEventData(ctx context.Context, db *store.DB, rules map[strin
 		return events, err
 	}
 	for app, events := range windowEvents {
-		windowEvents[app] = mergeIntervals(events)
+		windowEvents[app] = mergeIntervals(events, 0)
 	}
 	events["day"] = map[string]any{
 		"events":      dayEvents,
@@ -215,7 +215,7 @@ func (d *daemon) rawEventData(ctx context.Context, db *store.DB, rules map[strin
 	if err != nil {
 		return events, err
 	}
-	events["at_keyboard"] = mergeIntervals(yearAtKeyboard)
+	events["at_keyboard"] = mergeIntervals(yearAtKeyboard, 0)
 
 	return events, nil
 }
@@ -407,6 +407,7 @@ type summary struct {
 		Hours      map[string]float64 `json:"hours,omitempty"`
 		TotalHours float64            `json:"total_hours,omitempty"`
 	} `json:"period"`
+	Cooldown string   `json:"cooldown,omitempty"`
 	Warnings []string `json:"warn,omitempty"`
 }
 
@@ -420,8 +421,19 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 		return events, err
 	}
 	if raw {
-		events.Period.AtKeyboard = mergeIntervals(atKeyboard)
+		events.Period.AtKeyboard = mergeIntervals(atKeyboard, 0)
 		return events, nil
+	}
+	var cooldown time.Duration
+	if req != nil && req.Query().Has("cooldown") {
+		cooldown, err = time.ParseDuration(req.Query().Get("cooldown"))
+		if err != nil {
+			events.Warnings = append(events.Warnings, fmt.Sprintf("%s: %v", req, err))
+			return events, fmt.Errorf("invalid cooldown: %w", err)
+		}
+		if cooldown != 0 {
+			events.Cooldown = fmt.Sprint(cooldown)
+		}
 	}
 	if req != nil && req.Query().Has("other") {
 		otherAtKeyboard, err := d.remoteRanges(ctx, req, start, end)
@@ -430,11 +442,11 @@ func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[strin
 			return events, err
 		}
 		events.Period.AtKeyboard = atKeyboard // Let the full merge handle this.
-		return mergeSummaries(append(otherAtKeyboard, events))
+		return mergeSummaries(append(otherAtKeyboard, events), cooldown)
 	}
 	periodHours := make(map[string]float64)
 	var periodTotalHours float64
-	for _, a := range mergeIntervals(atKeyboard) {
+	for _, a := range mergeIntervals(atKeyboard, cooldown) {
 		periodTotalHours += a.End.Sub(a.Start).Hours()
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
 			periodHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
@@ -532,7 +544,7 @@ func (d *daemon) remoteRanges(ctx context.Context, req *url.URL, start, end time
 	return summaries, nil
 }
 
-func mergeSummaries(summaries []summary) (summary, error) {
+func mergeSummaries(summaries []summary, cooldown time.Duration) (summary, error) {
 	// TODO: Use a merge strategy that doesn't rely on
 	// copying and sorting the entire set of summaries
 	// before merging the intervals.
@@ -545,6 +557,9 @@ func mergeSummaries(summaries []summary) (summary, error) {
 		Start:    summaries[0].Start,
 		End:      summaries[0].End,
 		Warnings: warnings[:len(warnings):len(warnings)],
+	}
+	if cooldown != 0 {
+		sum.Cooldown = fmt.Sprint(cooldown)
 	}
 	n := len(summaries[0].Period.AtKeyboard)
 	for _, s := range summaries[1:] {
@@ -563,7 +578,7 @@ func mergeSummaries(summaries []summary) (summary, error) {
 	}
 	periodHours := make(map[string]float64)
 	var periodTotalHours float64
-	for _, a := range mergeIntervals(sum.Period.AtKeyboard) {
+	for _, a := range mergeIntervals(sum.Period.AtKeyboard, cooldown) {
 		periodTotalHours += a.End.Sub(a.Start).Hours()
 		for h := tzRound(a.Start, time.Hour); h.Before(a.End); h = h.AddDate(0, 0, 1) {
 			periodHours[h.Format(time.DateOnly)] += part(h, h.AddDate(0, 0, 1), a.Start, a.End).Hours()
@@ -908,8 +923,8 @@ func (r replacement) overlapAll(o interval) bool {
 }
 
 // mergeIntervals returns the intervals in events sorted and merged so that
-// no pair of events overlap.
-func mergeIntervals(events []worklog.Event) []worklog.Event {
+// no pair of events overlaps within the cool-down duration.
+func mergeIntervals(events []worklog.Event, cooldown time.Duration) []worklog.Event {
 	if len(events) == 0 {
 		return nil
 	}
@@ -934,7 +949,7 @@ func mergeIntervals(events []worklog.Event) []worklog.Event {
 				Start: a.Start,
 				End:   a.End,
 			}
-		case a.Start.After(last.End):
+		case a.Start.After(last.End.Add(cooldown)):
 			merged = append(merged, last)
 			last = worklog.Event{
 				Start: a.Start,

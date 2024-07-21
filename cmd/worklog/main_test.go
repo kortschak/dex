@@ -505,7 +505,7 @@ func mergeSummaryData() int {
 		summaries = append(summaries, s)
 	}
 
-	events, err := mergeSummaries(summaries)
+	events, err := mergeSummaries(summaries, 0)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get event data: %v\n", err)
 		return 1
