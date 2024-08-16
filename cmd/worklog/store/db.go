@@ -207,17 +207,17 @@ create table if not exists buckets (
 	type     TEXT NOT NULL,
 	client   TEXT NOT NULL,
 	hostname TEXT NOT NULL,
-	created  TEXT NOT NULL, -- unix micro
-	datastr  TEXT NOT NULL  -- JSON text
-);
+	created  TEXT NOT NULL, -- RFC3339 nano
+	datastr  BLOB NOT NULL  -- JSON text
+) STRICT;
 create table if not exists events (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	bucketrow INTEGER NOT NULL,
-	starttime INTEGER NOT NULL, -- unix micro
-	endtime   INTEGER NOT NULL, -- unix micro
-	datastr   TEXT NOT NULL,    -- JSON text
+	starttime TEXT NOT NULL, -- RFC3339 nano
+	endtime   TEXT NOT NULL, -- RFC3339 nano
+	datastr   BLOB NOT NULL, -- JSON text
 	FOREIGN KEY (bucketrow) REFERENCES buckets(rowid)
-);
+) STRICT;
 create index if not exists event_index_id ON events(id);
 create index if not exists event_index_starttime ON events(bucketrow, starttime);
 create index if not exists event_index_endtime ON events(bucketrow, endtime);
@@ -790,14 +790,14 @@ func (db *DB) Select(query string) ([]map[string]any, error) {
 
 const AmendEvents = `begin transaction;
 	-- ensure we have an amend array.
-	update events set datastr = json_insert(datastr, '$.amend', json('[]'))
+	update events set datastr = cast(json_insert(datastr, '$.amend', json('[]')) as BLOB)
 	where
 		datetime(starttime, 'subsec') < datetime(?5, 'subsec') and
 		datetime(endtime, 'subsec') > datetime(?4, 'subsec') and
 		bucketrow = (
 			select rowid from buckets where id = ?1
 		);
-	update events set datastr = json_insert(datastr, '$.amend[#]', json_object('time', ?2, 'msg', ?3, 'replace', (
+	update events set datastr = cast(json_insert(datastr, '$.amend[#]', json_object('time', ?2, 'msg', ?3, 'replace', (
 		-- trim amendments down to original event bounds.
 		select json_group_array(json_replace(value,
 			'$.start', case
@@ -818,7 +818,7 @@ const AmendEvents = `begin transaction;
 		where
 			datetime(json_extract(value, '$.start'), 'subsec') < datetime(endtime, 'subsec') and
 			datetime(json_extract(value, '$.end'), 'subsec') > datetime(starttime, 'subsec')
-	)))
+	))) as BLOB)
 	where
 		datetime(starttime, 'subsec') < datetime(?5, 'subsec') and
 		datetime(endtime, 'subsec') > datetime(?4, 'subsec') and
