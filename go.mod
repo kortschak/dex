@@ -1,6 +1,6 @@
 module github.com/kortschak/dex
 
-go 1.22.4
+go 1.22.7
 
 require (
 	cuelang.org/go v0.8.1
@@ -19,6 +19,7 @@ require (
 	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/image v0.18.0
+	golang.org/x/net v0.25.0
 	golang.org/x/sys v0.20.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 	google.golang.org/protobuf v1.33.0
@@ -49,7 +50,6 @@ require (
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
 	github.com/tdewolff/parse/v2 v2.7.3 // indirect
 	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect
-	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
