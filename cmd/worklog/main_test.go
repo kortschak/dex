@@ -29,7 +29,6 @@ import (
 	"golang.org/x/sys/execabs"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
-	"github.com/kortschak/dex/cmd/worklog/store"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
@@ -522,7 +521,7 @@ func mergeSummaryData() int {
 	return 0
 }
 
-func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, dbName string, replace bool, data []byte, ruleBytes []byte) (*daemon, *store.DB, map[string]map[string]ruleDetail, int) {
+func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool, dbName string, replace bool, data []byte, ruleBytes []byte) (*daemon, storage, map[string]map[string]ruleDetail, int) {
 	var (
 		level     slog.LevelVar
 		addSource = slogext.NewAtomicBool(*lines)

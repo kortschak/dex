@@ -8,6 +8,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -185,7 +186,7 @@ type daemon struct {
 
 	rMu        sync.Mutex
 	lastEvents map[string]*worklog.Event
-	db         atomic.Pointer[store.DB]
+	db         atomicIfaceValue[storage]
 
 	lastReport map[rpc.UID]worklog.Report
 
@@ -221,12 +222,48 @@ type atomicIfaceValue[T any] struct {
 }
 
 func (v *atomicIfaceValue[T]) Store(val T) {
-	v.val.Store(&val)
+	// We need to be able to store a nil T, so work
+	// around T any not being comparable to nil.
+	switch any(val).(type) {
+	case nil:
+		v.val.Store((*T)(nil))
+	default:
+		v.val.Store(&val)
+	}
 }
 
 func (v *atomicIfaceValue[T]) Load() T {
-	return *v.val.Load()
+	p := v.val.Load()
+	if p == nil {
+		// Get our nil T.
+		var zero T
+		return zero
+	}
+	return *p
 }
+
+type storage interface {
+	AmendEvents(ts time.Time, note *worklog.Amendment) (sql.Result, error)
+	Backup(ctx context.Context, n int, sleep time.Duration) (string, error)
+	BucketID(uid string) string
+	BucketMetadata(bid string) (*worklog.BucketMetadata, error)
+	Buckets() ([]worklog.BucketMetadata, error)
+	Close() error
+	CreateBucket(uid, name, typ, client string, created time.Time, data map[string]any) (m *worklog.BucketMetadata, err error)
+	Dump() ([]worklog.BucketMetadata, error)
+	DumpRange(start, end time.Time) ([]worklog.BucketMetadata, error)
+	Events(bid string) ([]worklog.Event, error)
+	EventsRange(bid string, start, end time.Time, limit int) ([]worklog.Event, error)
+	EventsRangeFunc(bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error
+	InsertEvent(e *worklog.Event) (sql.Result, error)
+	LastEvent(uid string) (*worklog.Event, error)
+	Load(buckets []worklog.BucketMetadata, replace bool) (err error)
+	Name() string
+	Select(query string) ([]map[string]any, error)
+	UpdateEvent(e *worklog.Event) (sql.Result, error)
+}
+
+var _ storage = (*store.DB)(nil)
 
 type current interface {
 	Location() (*time.Location, error)
@@ -539,10 +576,10 @@ func (d *daemon) configureRules(ctx context.Context, rules map[string]worklog.Ru
 	d.rules.Store(ruleDetails)
 }
 
-func (d *daemon) openDB(ctx context.Context, db *store.DB, path, hostname string) error {
+func (d *daemon) openDB(ctx context.Context, db storage, path, hostname string) error {
 	if db != nil {
 		d.log.LogAttrs(ctx, slog.LevelInfo, "close database", slog.String("path", db.Name()))
-		d.db.Store((*store.DB)(nil))
+		d.db.Store((storage)(nil))
 		db.Close()
 	}
 	// store.Open may need to get the hostname, which may
@@ -562,7 +599,7 @@ func (d *daemon) openDB(ctx context.Context, db *store.DB, path, hostname string
 	return nil
 }
 
-func (d *daemon) configureDB(ctx context.Context, db *store.DB) {
+func (d *daemon) configureDB(ctx context.Context, db storage) {
 	rules := d.rules.Load()
 	for bucket, rule := range rules {
 		d.log.LogAttrs(ctx, slog.LevelDebug, "create bucket", slog.Any("bucket", bucket))
@@ -1278,7 +1315,7 @@ func queryError(dec *json.Decoder, body []byte, err error) any {
 }
 
 type dbLib struct {
-	db  *store.DB
+	db  storage
 	log *slog.Logger
 }
 

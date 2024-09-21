@@ -22,7 +22,6 @@ import (
 	"time"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
-	"github.com/kortschak/dex/cmd/worklog/store"
 )
 
 func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
@@ -91,7 +90,7 @@ func dateQuery(u *url.URL, loc *time.Location) (time.Time, error) {
 	return time.ParseInLocation(time.DateOnly, d, loc)
 }
 
-func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time, raw bool) (map[string]any, error) {
+func (d *daemon) eventData(ctx context.Context, db storage, rules map[string]map[string]ruleDetail, date time.Time, raw bool) (map[string]any, error) {
 	if raw {
 		return d.rawEventData(ctx, db, rules, date)
 	}
@@ -189,7 +188,7 @@ func (d *daemon) eventData(ctx context.Context, db *store.DB, rules map[string]m
 	return events, nil
 }
 
-func (d *daemon) rawEventData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, date time.Time) (map[string]any, error) {
+func (d *daemon) rawEventData(ctx context.Context, db storage, rules map[string]map[string]ruleDetail, date time.Time) (map[string]any, error) {
 	start, end := day(date)
 	events := map[string]any{
 		"date": zoneTranslatedTime(start, date.Location()),
@@ -220,7 +219,7 @@ func (d *daemon) rawEventData(ctx context.Context, db *store.DB, rules map[strin
 	return events, nil
 }
 
-func (d *daemon) dayData(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) (atKeyboard []worklog.Event, dayEvents, windowEvents map[string][]worklog.Event, transitions graph, err error) {
+func (d *daemon) dayData(ctx context.Context, db storage, rules map[string]map[string]ruleDetail, start, end time.Time) (atKeyboard []worklog.Event, dayEvents, windowEvents map[string][]worklog.Event, transitions graph, err error) {
 	dayEvents = make(map[string][]worklog.Event)
 	windowEvents = make(map[string][]worklog.Event)
 	transitions = newGraph(rng{min: 5, max: 30}, rng{min: 1, max: 5})
@@ -411,7 +410,7 @@ type summary struct {
 	Warnings []string `json:"warn,omitempty"`
 }
 
-func (d *daemon) rangeSummary(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool, req *url.URL) (summary, error) {
+func (d *daemon) rangeSummary(ctx context.Context, db storage, rules map[string]map[string]ruleDetail, start, end time.Time, raw bool, req *url.URL) (summary, error) {
 	events := summary{
 		Start: start,
 		End:   end,
@@ -590,7 +589,7 @@ func mergeSummaries(summaries []summary, cooldown time.Duration) (summary, error
 	return sum, nil
 }
 
-func (d *daemon) atKeyboard(ctx context.Context, db *store.DB, rules map[string]map[string]ruleDetail, start, end time.Time) ([]worklog.Event, error) {
+func (d *daemon) atKeyboard(ctx context.Context, db storage, rules map[string]map[string]ruleDetail, start, end time.Time) ([]worklog.Event, error) {
 	var atKeyboard []worklog.Event
 	for srcBucket, ruleSet := range rules {
 		for dstBucket, rule := range ruleSet {
