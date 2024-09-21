@@ -319,8 +319,20 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			}
 		}
 
-		if m.Body.Options.DatabaseDir != "" {
-			dir, err := xdg.State(m.Body.Options.DatabaseDir)
+		databaseDir, err := dbDir(m.Body)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.Any("error", err))
+			return nil, rpc.NewError(rpc.ErrCodeInvalidMessage,
+				err.Error(),
+				map[string]any{
+					"type":         rpc.ErrCodeParameters,
+					"database":     m.Body.Options.Database,
+					"database_dir": m.Body.Options.DatabaseDir,
+				},
+			)
+		}
+		if databaseDir != "" {
+			dir, err := xdg.State(databaseDir)
 			switch err {
 			case nil:
 			case syscall.ENOENT:
@@ -330,7 +342,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 					d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.String("error", "no XDG_STATE_HOME"))
 					return nil, err
 				}
-				dir = filepath.Join(dir, m.Body.Options.DatabaseDir)
+				dir = filepath.Join(dir, databaseDir)
 				err = os.Mkdir(dir, 0o750)
 				if err != nil {
 					err := err.(*os.PathError) // See godoc for os.Mkdir for why this is safe.
@@ -389,6 +401,34 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 
 	default:
 		return nil, jsonrpc2.ErrNotHandled
+	}
+}
+
+func dbDir(cfg worklog.Config) (string, error) {
+	opt := cfg.Options
+	if opt.Database == "" {
+		return opt.DatabaseDir, nil
+	}
+	u, err := url.Parse(opt.Database)
+	if err != nil {
+		return "", err
+	}
+	switch u.Scheme {
+	case "":
+		return "", errors.New("missing scheme in database configuration")
+	case "sqlite":
+		if opt.DatabaseDir != "" && u.Opaque != opt.DatabaseDir {
+			return "", fmt.Errorf("inconsistent database directory configuration: (%s:)%s != %s", u.Scheme, u.Opaque, opt.DatabaseDir)
+		}
+		if u.Opaque == "" {
+			return "", fmt.Errorf("sqlite configuration missing opaque data: %s", opt.Database)
+		}
+		return u.Opaque, nil
+	default:
+		if opt.DatabaseDir != "" {
+			return "", fmt.Errorf("inconsistent database configuration: both %s database and sqlite directory configured", u.Scheme)
+		}
+		return "", nil
 	}
 }
 

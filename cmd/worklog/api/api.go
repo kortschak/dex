@@ -23,12 +23,19 @@ type Config struct {
 	LogLevel  *slog.Level `json:"log_level,omitempty"`
 	AddSource *bool       `json:"log_add_source,omitempty"`
 	Options   struct {
-		DynamicLocation *bool           `json:"dynamic_location,omitempty"`
-		Web             *Web            `json:"web,omitempty"`
-		DatabaseDir     string          `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
-		Hostname        string          `json:"hostname,omitempty"`
-		Heartbeat       *rpc.Duration   `json:"heartbeat,omitempty"`
-		Rules           map[string]Rule `json:"rules,omitempty"`
+		DynamicLocation *bool `json:"dynamic_location,omitempty"`
+		Web             *Web  `json:"web,omitempty"`
+		// Database is the URL location of the worklog
+		// database. When the scheme is sqlite, the location
+		// is a directory relative to XDG_STATE_HOME as
+		// URL opaque data.
+		Database  string          `json:"database,omitempty"`
+		Hostname  string          `json:"hostname,omitempty"`
+		Heartbeat *rpc.Duration   `json:"heartbeat,omitempty"`
+		Rules     map[string]Rule `json:"rules,omitempty"`
+
+		// Deprecated: Use Database with sqlite scheme.
+		DatabaseDir string `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
 	} `json:"options,omitempty"`
 }
 

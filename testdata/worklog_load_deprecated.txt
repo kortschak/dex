@@ -23,12 +23,12 @@ cd ${WORK}
 dex -log debug -lines &dex&
 sleep 1s
 
-POST dump.json http://localhost:7979/load/?replace=true
+POST dump.json http://localhost:7978/load/?replace=true
 
-GET -json http://localhost:7979/dump/
+GET -json http://localhost:7978/dump/
 cmp stdout want.json
 
-GET http://localhost:7979/query?sql=select+count(*)+as+event_count+from+events
+GET http://localhost:7978/query?sql=select+count(*)+as+event_count+from+events
 cmp stdout want_event_count.json
 
 -- config.toml --
@@ -43,10 +43,10 @@ log_level = "debug"
 log_add_source = true
 
 [module.worklog.options]
-database = "sqlite:worklog"
+database_dir = "worklog"
 hostname = "localhost"
 [module.worklog.options.web]
-addr = "localhost:7979"
+addr = "localhost:7978"
 can_modify = true
 
 -- dump.json --

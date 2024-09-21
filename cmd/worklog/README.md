@@ -37,7 +37,7 @@ log_mode = "log"
 log_level = "info"
 
 [module.worklog.options]
-database_dir = "worklog"
+database = "sqlite:worklog"
 
 [module.worklog.options.rules.afk]
 name = "afk-watcher"
