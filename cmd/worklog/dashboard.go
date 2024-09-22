@@ -226,7 +226,7 @@ func (d *daemon) dayData(ctx context.Context, db storage, rules map[string]map[s
 	for srcBucket, ruleSet := range rules {
 		for dstBucket, rule := range ruleSet {
 			var nextApp worklog.Event // EventsRange is sorted descending.
-			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
+			err := db.EventsRangeFunc(ctx, db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
 				// canonicalise to the time zone that the event was
 				// recorded in for the purposes of the dashboard.
 				// See comment in atKeyboard.
@@ -593,7 +593,7 @@ func (d *daemon) atKeyboard(ctx context.Context, db storage, rules map[string]ma
 	var atKeyboard []worklog.Event
 	for srcBucket, ruleSet := range rules {
 		for dstBucket, rule := range ruleSet {
-			err := db.EventsRangeFunc(db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
+			err := db.EventsRangeFunc(ctx, db.BucketID(srcBucket), start, end, -1, func(m worklog.Event) error {
 				// atKeyboard is used for week and year intervals which
 				// may involve work spanning multiple time zones. We
 				// canonicalise to the time zone that the event was

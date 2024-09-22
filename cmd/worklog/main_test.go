@@ -280,7 +280,7 @@ func mergeAfk() int {
 		},
 	})
 	db := d.db.Load()
-	defer db.Close()
+	defer db.Close(ctx)
 	d.configureDB(ctx, db)
 
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -298,7 +298,7 @@ func mergeAfk() int {
 		last = curr
 	}
 
-	dump, err := db.Dump()
+	dump, err := db.Dump(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to dump db: %v\n", err)
 		return 1
@@ -390,7 +390,7 @@ func dashboardData() int {
 	if status != 0 {
 		return status
 	}
-	defer db.Close()
+	defer db.Close(ctx)
 
 	events, err := d.eventData(ctx, db, rules, date, *raw)
 	if err != nil {
@@ -460,7 +460,7 @@ func summaryData() int {
 	if status != 0 {
 		return status
 	}
-	defer db.Close()
+	defer db.Close(ctx)
 
 	events, err := d.rangeSummary(ctx, db, rules, start, end, *raw, nil)
 	if err != nil {
@@ -550,7 +550,7 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 		fmt.Fprintf(os.Stderr, "failed to unmarshal db dump: %v\n", err)
 		return nil, nil, nil, 1
 	}
-	err = db.Load(buckets, replace)
+	err = db.Load(ctx, buckets, replace)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load db dump: %v\n", err)
 		return nil, nil, nil, 1

@@ -192,7 +192,7 @@ func (db *DB) Backup(ctx context.Context, n int, sleep time.Duration) (string, e
 }
 
 // Close closes the database.
-func (db *DB) Close() error {
+func (db *DB) Close(ctx context.Context) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return errors.Join(db.store.Close(), db.roStore.Close())
@@ -234,7 +234,7 @@ const CreateBucket = `insert into buckets(id, name, type, client, hostname, crea
 // CreateBucket creates a new entry in the bucket table. If the entry already
 // exists it will return an sqlite.Error with the code sqlite3.SQLITE_CONSTRAINT_UNIQUE.
 // The SQL command run is [CreateBucket].
-func (db *DB) CreateBucket(uid, name, typ, client string, created time.Time, data map[string]any) (m *worklog.BucketMetadata, err error) {
+func (db *DB) CreateBucket(ctx context.Context, uid, name, typ, client string, created time.Time, data map[string]any) (m *worklog.BucketMetadata, err error) {
 	bid := db.BucketID(uid)
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -277,7 +277,7 @@ const BucketMetadata = `select id, name, type, client, hostname, created, datast
 // BucketMetadata returns the metadata for the bucket with the provided internal
 // bucket ID.
 // The SQL command run is [BucketMetadata].
-func (db *DB) BucketMetadata(bid string) (*worklog.BucketMetadata, error) {
+func (db *DB) BucketMetadata(ctx context.Context, bid string) (*worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return bucketMetadata(db.store, bid)
@@ -321,7 +321,7 @@ const InsertEvent = `insert into events(bucketrow, starttime, endtime, datastr) 
 
 // InsertEvent inserts a new event into the events table.
 // The SQL command run is [InsertEvent].
-func (db *DB) InsertEvent(e *worklog.Event) (sql.Result, error) {
+func (db *DB) InsertEvent(ctx context.Context, e *worklog.Event) (sql.Result, error) {
 	bid := fmt.Sprintf("%s_%s", e.Bucket, db.host)
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -343,7 +343,7 @@ const UpdateEvent = `update events set starttime = ?, endtime = ?, datastr = ? w
 // UpdateEvent updates the event in the store corresponding to the provided
 // event.
 // The SQL command run is [UpdateEvent].
-func (db *DB) UpdateEvent(e *worklog.Event) (sql.Result, error) {
+func (db *DB) UpdateEvent(ctx context.Context, e *worklog.Event) (sql.Result, error) {
 	msg, err := json.Marshal(e.Data)
 	if err != nil {
 		return nil, err
@@ -364,7 +364,7 @@ const LastEvent = `select id, starttime, endtime, datastr from events where buck
 
 // LastEvent returns the last event in the named bucket.
 // The SQL command run is [LastEvent].
-func (db *DB) LastEvent(uid string) (*worklog.Event, error) {
+func (db *DB) LastEvent(ctx context.Context, uid string) (*worklog.Event, error) {
 	bid := db.BucketID(uid)
 	db.mu.Lock()
 	rows, err := db.store.Query(LastEvent, bid)
@@ -407,7 +407,7 @@ func (db *DB) LastEvent(uid string) (*worklog.Event, error) {
 }
 
 // Dump dumps the complete database into a slice of [worklog.BucketMetadata].
-func (db *DB) Dump() ([]worklog.BucketMetadata, error) {
+func (db *DB) Dump(ctx context.Context) ([]worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	m, err := db.buckets()
@@ -433,7 +433,7 @@ func (db *DB) Dump() ([]worklog.BucketMetadata, error) {
 
 // DumpRange dumps the database spanning the specified time range into a slice
 // of [worklog.BucketMetadata].
-func (db *DB) DumpRange(start, end time.Time) ([]worklog.BucketMetadata, error) {
+func (db *DB) DumpRange(ctx context.Context, start, end time.Time) ([]worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	m, err := db.buckets()
@@ -490,7 +490,7 @@ func (db *DB) dumpEventsRange(bid string, start, end time.Time, limit int) ([]wo
 // the bucket in the provided buckets slice, the existing events will be
 // deleted and replaced. If replace is false, the new events will be added to
 // the existing events in the store.
-func (db *DB) Load(buckets []worklog.BucketMetadata, replace bool) (err error) {
+func (db *DB) Load(ctx context.Context, buckets []worklog.BucketMetadata, replace bool) (err error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	tx, err := db.store.Begin()
@@ -539,7 +539,7 @@ const Buckets = `select id, name, type, client, hostname, created, datastr from 
 
 // Buckets returns the full set of bucket metadata.
 // The SQL command run is [Buckets].
-func (db *DB) Buckets() ([]worklog.BucketMetadata, error) {
+func (db *DB) Buckets(ctx context.Context) ([]worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.buckets()
@@ -588,7 +588,7 @@ const Events = `select id, starttime, endtime, datastr from events where bucketr
 // Buckets returns the full set of events in the bucket with the provided
 // internal bucket ID.
 // The SQL command run is [Events].
-func (db *DB) Events(bid string) ([]worklog.Event, error) {
+func (db *DB) Events(ctx context.Context, bid string) ([]worklog.Event, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.events(bid)
@@ -653,7 +653,7 @@ const (
 // within the specified time range, sorted descending by end time.
 // The SQL command run is [EventsRange], [EventsRangeUntil], [EventsRangeFrom]
 // or [EventsLimit] depending on whether start and end are zero.
-func (db *DB) EventsRange(bid string, start, end time.Time, limit int) ([]worklog.Event, error) {
+func (db *DB) EventsRange(ctx context.Context, bid string, start, end time.Time, limit int) ([]worklog.Event, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var e []worklog.Event
@@ -668,7 +668,7 @@ func (db *DB) EventsRange(bid string, start, end time.Time, limit int) ([]worklo
 // bucket ID within the specified time range, sorted descending by end time.
 // The SQL command run is [EventsRange], [EventsRangeUntil], [EventsRangeFrom]
 // or [EventsLimit] depending on whether start and end are zero.
-func (db *DB) EventsRangeFunc(bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error {
+func (db *DB) EventsRangeFunc(ctx context.Context, bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return db.eventsRangeFunc(bid, start, end, limit, fn, true)
@@ -745,7 +745,7 @@ func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn fu
 
 // Select allows running an SQLite SELECT query. The query is run on a read-only
 // connection to the database.
-func (db *DB) Select(query string) ([]map[string]any, error) {
+func (db *DB) Select(ctx context.Context, query string) ([]map[string]any, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	rows, err := db.roStore.Query(query)
@@ -831,7 +831,7 @@ commit;`
 // overlapping the note. On return the note.Replace slice will be sorted.
 //
 // The SQL command run is [AmendEvents].
-func (db *DB) AmendEvents(ts time.Time, note *worklog.Amendment) (sql.Result, error) {
+func (db *DB) AmendEvents(ctx context.Context, ts time.Time, note *worklog.Amendment) (sql.Result, error) {
 	if len(note.Replace) == 0 {
 		return driver.RowsAffected(0), nil
 	}

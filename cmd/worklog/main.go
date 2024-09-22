@@ -44,6 +44,7 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
+	"github.com/kortschak/dex/cmd/worklog/pgstore"
 	"github.com/kortschak/dex/cmd/worklog/store"
 	"github.com/kortschak/dex/internal/celext"
 	"github.com/kortschak/dex/internal/localtime"
@@ -243,27 +244,29 @@ func (v *atomicIfaceValue[T]) Load() T {
 }
 
 type storage interface {
-	AmendEvents(ts time.Time, note *worklog.Amendment) (sql.Result, error)
-	Backup(ctx context.Context, n int, sleep time.Duration) (string, error)
+	AmendEvents(ctx context.Context, ts time.Time, note *worklog.Amendment) (sql.Result, error)
 	BucketID(uid string) string
-	BucketMetadata(bid string) (*worklog.BucketMetadata, error)
-	Buckets() ([]worklog.BucketMetadata, error)
-	Close() error
-	CreateBucket(uid, name, typ, client string, created time.Time, data map[string]any) (m *worklog.BucketMetadata, err error)
-	Dump() ([]worklog.BucketMetadata, error)
-	DumpRange(start, end time.Time) ([]worklog.BucketMetadata, error)
-	Events(bid string) ([]worklog.Event, error)
-	EventsRange(bid string, start, end time.Time, limit int) ([]worklog.Event, error)
-	EventsRangeFunc(bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error
-	InsertEvent(e *worklog.Event) (sql.Result, error)
-	LastEvent(uid string) (*worklog.Event, error)
-	Load(buckets []worklog.BucketMetadata, replace bool) (err error)
+	BucketMetadata(ctx context.Context, bid string) (*worklog.BucketMetadata, error)
+	Buckets(ctx context.Context) ([]worklog.BucketMetadata, error)
+	Close(ctx context.Context) error
+	CreateBucket(ctx context.Context, uid, name, typ, client string, created time.Time, data map[string]any) (m *worklog.BucketMetadata, err error)
+	Dump(ctx context.Context) ([]worklog.BucketMetadata, error)
+	DumpRange(ctx context.Context, start, end time.Time) ([]worklog.BucketMetadata, error)
+	Events(ctx context.Context, bid string) ([]worklog.Event, error)
+	EventsRange(ctx context.Context, bid string, start, end time.Time, limit int) ([]worklog.Event, error)
+	EventsRangeFunc(ctx context.Context, bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error
+	InsertEvent(ctx context.Context, e *worklog.Event) (sql.Result, error)
+	LastEvent(ctx context.Context, uid string) (*worklog.Event, error)
+	Load(ctx context.Context, buckets []worklog.BucketMetadata, replace bool) (err error)
 	Name() string
-	Select(query string) ([]map[string]any, error)
-	UpdateEvent(e *worklog.Event) (sql.Result, error)
+	Select(ctx context.Context, query string) ([]map[string]any, error)
+	UpdateEvent(ctx context.Context, e *worklog.Event) (sql.Result, error)
 }
 
-var _ storage = (*store.DB)(nil)
+var (
+	_ storage = (*store.DB)(nil)
+	_ storage = (*pgstore.DB)(nil)
+)
 
 type current interface {
 	Location() (*time.Location, error)
@@ -580,7 +583,7 @@ func (d *daemon) openDB(ctx context.Context, db storage, path, hostname string) 
 	if db != nil {
 		d.log.LogAttrs(ctx, slog.LevelInfo, "close database", slog.String("path", db.Name()))
 		d.db.Store((storage)(nil))
-		db.Close()
+		db.Close(ctx)
 	}
 	// store.Open may need to get the hostname, which may
 	// wait indefinitely due to network unavailability.
@@ -603,7 +606,7 @@ func (d *daemon) configureDB(ctx context.Context, db storage) {
 	rules := d.rules.Load()
 	for bucket, rule := range rules {
 		d.log.LogAttrs(ctx, slog.LevelDebug, "create bucket", slog.Any("bucket", bucket))
-		m, err := db.CreateBucket(bucket, rule.name, rule.typ, d.uid, time.Now(), nil)
+		m, err := db.CreateBucket(ctx, bucket, rule.name, rule.typ, d.uid, time.Now(), nil)
 		var sqlErr *sqlite.Error
 		switch {
 		case err == nil:
@@ -650,7 +653,7 @@ func (d *daemon) record(ctx context.Context, src rpc.UID, curr, last worklog.Rep
 			d.log.LogAttrs(ctx, slog.LevelDebug, "last event in cache", slog.String("bucket", bucket), slog.Any("last", lastEvent))
 		} else {
 			var err error
-			lastEvent, err = db.LastEvent(bucket)
+			lastEvent, err = db.LastEvent(ctx, bucket)
 			if err == nil {
 				d.log.LogAttrs(ctx, slog.LevelDebug, "last event from store", slog.String("bucket", bucket), slog.Any("last", lastEvent))
 			} else {
@@ -697,13 +700,13 @@ func (d *daemon) record(ctx context.Context, src rpc.UID, curr, last worklog.Rep
 		var isNew bool
 		if lastEvent.ID != 0 && note.Continue != nil && *note.Continue {
 			note.ID = lastEvent.ID
-			_, err = db.UpdateEvent(note)
+			_, err = db.UpdateEvent(ctx, note)
 			if err != nil {
 				d.log.LogAttrs(ctx, slog.LevelError, "failed update event", slog.Any("error", err), slog.Any("note", note))
 				continue
 			}
 		} else {
-			res, err := db.InsertEvent(note)
+			res, err := db.InsertEvent(ctx, note)
 			if err != nil {
 				d.log.LogAttrs(ctx, slog.LevelError, "failed insert event", slog.Any("error", err), slog.Any("note", note))
 				continue
@@ -971,7 +974,7 @@ func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
 			http.ServeContent(w, req, "amended.json", time.Now(), strings.NewReader("[]"))
 			return
 		}
-		_, err = db.AmendEvents(now, &note)
+		_, err = db.AmendEvents(ctx, now, &note)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusBadRequest)
@@ -979,7 +982,7 @@ func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
 		}
 		var amended []worklog.Event
 		for _, r := range mergeReplacement(note.Replace) {
-			e, err := db.EventsRange(db.BucketID(note.Bucket), r.start, r.end, -1)
+			e, err := db.EventsRange(ctx, db.BucketID(note.Bucket), r.start, r.end, -1)
 			amended = append(amended, e...)
 			if err != nil {
 				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
@@ -1073,9 +1076,9 @@ func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 					return
 				}
 			}
-			dump, err = db.DumpRange(start, end)
+			dump, err = db.DumpRange(ctx, start, end)
 		} else {
-			dump, err = db.Dump()
+			dump, err = db.Dump(ctx)
 		}
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
@@ -1107,30 +1110,44 @@ func (d *daemon) backup(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		var n int
-		if req.URL.Query().Has("pages_per_step") {
-			var err error
-			n, err = strconv.Atoi(req.URL.Query().Get("pages_per_step"))
-			if err != nil {
-				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, `{"error":%q}`, err)
-				return
-			}
-		}
-		var sleep time.Duration
-		if req.URL.Query().Has("sleep") {
-			var err error
-			n, err = strconv.Atoi(req.URL.Query().Get("sleep"))
-			if err != nil {
-				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, `{"error":%q}`, err)
-				return
-			}
-		}
 
-		path, err := db.Backup(ctx, n, sleep)
+		var (
+			path string
+			err  error
+		)
+		switch db := db.(type) {
+		case *store.DB:
+			var n int
+			if req.URL.Query().Has("pages_per_step") {
+				n, err = strconv.Atoi(req.URL.Query().Get("pages_per_step"))
+				if err != nil {
+					d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintf(w, `{"error":%q}`, err)
+					return
+				}
+			}
+			var sleep time.Duration
+			if req.URL.Query().Has("sleep") {
+				n, err = strconv.Atoi(req.URL.Query().Get("sleep"))
+				if err != nil {
+					d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprintf(w, `{"error":%q}`, err)
+					return
+				}
+			}
+			path, err = db.Backup(ctx, n, sleep)
+		case *pgstore.DB:
+			dir := req.URL.Query().Get("directory")
+			if dir == "" {
+				d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "missing directory parameter"), slog.String("url", req.RequestURI))
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, `{"error":"missing directory parameter"}`)
+				return
+			}
+			path, err = db.Backup(ctx, dir)
+		}
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1197,7 +1214,7 @@ func (d *daemon) load(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		err = db.Load(dump.Buckets, replace)
+		err = db.Load(ctx, dump.Buckets, replace)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusBadRequest)
@@ -1241,7 +1258,7 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			body.WriteString(req.URL.Query().Get("sql"))
 			fallthrough
 		case "application/sql":
-			resp, err := db.Select(body.String())
+			resp, err := db.Select(ctx, body.String())
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				json.NewEncoder(w).Encode(map[string]any{"err": err.Error()})
@@ -1265,7 +1282,7 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			prg, err := compile(body.String(), []cel.EnvOption{
 				cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 				celext.Lib(d.log),
-				cel.Lib(dbLib{db: db, log: d.log}),
+				cel.Lib(dbLib{ctx: ctx, db: db, log: d.log}),
 			})
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -1315,6 +1332,7 @@ func queryError(dec *json.Decoder, body []byte, err error) any {
 }
 
 type dbLib struct {
+	ctx context.Context
 	db  storage
 	log *slog.Logger
 }
@@ -1341,7 +1359,7 @@ func (l dbLib) query(arg ref.Val) ref.Val {
 	if !ok {
 		return types.ValOrErr(sql, "no such overload")
 	}
-	resp, err := l.db.Select(string(sql))
+	resp, err := l.db.Select(l.ctx, string(sql))
 	if err != nil {
 		return types.NewErr(err.Error())
 	}

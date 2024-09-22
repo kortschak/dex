@@ -36,6 +36,7 @@ func TestDB(t *testing.T) {
 		})
 	}
 
+	ctx := context.Background()
 	for _, interval := range []struct {
 		name     string
 		duration time.Duration
@@ -63,7 +64,7 @@ func TestDB(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create db: %v", err)
 				}
-				err = db.Close()
+				err = db.Close(ctx)
 				if err != nil {
 					t.Fatalf("failed to close db: %v", err)
 				}
@@ -115,22 +116,22 @@ func TestDB(t *testing.T) {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
 					}()
 
-					err = db.Load(data, false)
+					err = db.Load(ctx, data, false)
 					if err != nil {
 						t.Errorf("failed to load data: %v", err)
 					}
-					err = db.Load(data, true)
+					err = db.Load(ctx, data, true)
 					if err != nil {
 						t.Errorf("failed to load data: %v", err)
 					}
 
-					got, err := db.Dump()
+					got, err := db.Dump(ctx)
 					if err != nil {
 						t.Errorf("failed to dump data: %v", err)
 					}
@@ -140,7 +141,7 @@ func TestDB(t *testing.T) {
 						t.Errorf("unexpected dump result:\n--- want:\n+++ got:\n%s", cmp.Diff(want, got, ignoreID))
 					}
 
-					gotRange, err := db.DumpRange(now.Add(3*interval.duration), now.Add(4*interval.duration))
+					gotRange, err := db.DumpRange(ctx, now.Add(3*interval.duration), now.Add(4*interval.duration))
 					if err != nil {
 						t.Errorf("failed to dump data: %v", err)
 					}
@@ -151,7 +152,7 @@ func TestDB(t *testing.T) {
 						t.Errorf("unexpected dump range result:\n--- want:\n+++ got:\n%s", cmp.Diff(wantRange, gotRange, ignoreID))
 					}
 
-					gotRangeFrom, err := db.DumpRange(now.Add(3*interval.duration), time.Time{})
+					gotRangeFrom, err := db.DumpRange(ctx, now.Add(3*interval.duration), time.Time{})
 					if err != nil {
 						t.Errorf("failed to dump data: %v", err)
 					}
@@ -162,7 +163,7 @@ func TestDB(t *testing.T) {
 						t.Errorf("unexpected dump range result:\n--- want:\n+++ got:\n%s", cmp.Diff(wantRangeFrom, gotRangeFrom, ignoreID))
 					}
 
-					gotRangeUntil, err := db.DumpRange(time.Time{}, now.Add(4*interval.duration))
+					gotRangeUntil, err := db.DumpRange(ctx, time.Time{}, now.Add(4*interval.duration))
 					if err != nil {
 						t.Errorf("failed to dump data: %v", err)
 					}
@@ -173,7 +174,7 @@ func TestDB(t *testing.T) {
 						t.Errorf("unexpected dump range result:\n--- want:\n+++ got:\n%s", cmp.Diff(wantRangeUntil, gotRangeUntil, ignoreID))
 					}
 
-					gotRangeAll, err := db.DumpRange(time.Time{}, time.Time{})
+					gotRangeAll, err := db.DumpRange(ctx, time.Time{}, time.Time{})
 					if err != nil {
 						t.Errorf("failed to dump data: %v", err)
 					}
@@ -185,18 +186,18 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("last_event", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "test_host")
+					db, err := Open(ctx, path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
 					}()
 
-					got, err := db.LastEvent(bucket)
+					got, err := db.LastEvent(ctx, bucket)
 					if err != nil {
 						t.Errorf("failed to get last event: %v", err)
 					}
@@ -209,12 +210,12 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("update_last_event", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "test_host")
+					db, err := Open(ctx, path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
@@ -222,19 +223,19 @@ func TestDB(t *testing.T) {
 
 					e := data[0].Events[len(data[0].Events)-1]
 					e.End = e.End.Add(interval.duration)
-					last, err := db.LastEvent(e.Bucket)
+					last, err := db.LastEvent(ctx, e.Bucket)
 					if err != nil {
 						t.Fatalf("failed to get last event: %v", err)
 					}
 					e.ID = last.ID
-					_, err = db.UpdateEvent(&e)
+					_, err = db.UpdateEvent(ctx, &e)
 					if err != nil {
 						t.Fatalf("failed to update event: %v", err)
 					}
 					if err != nil {
 						t.Errorf("failed to update event: %v", err)
 					}
-					got, err := db.LastEvent(bucket)
+					got, err := db.LastEvent(ctx, bucket)
 					if err != nil {
 						t.Errorf("failed to get last event: %v", err)
 					}
@@ -247,12 +248,12 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("events_range", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "test_host")
+					db, err := Open(ctx, path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
@@ -261,7 +262,7 @@ func TestDB(t *testing.T) {
 					bid := db.BucketID(bucket)
 					for _, loc := range []*time.Location{time.Local, time.UTC} {
 						t.Run(loc.String(), func(t *testing.T) {
-							got, err := db.EventsRange(bid, now.Add(3*interval.duration).In(loc), now.Add(4*interval.duration).In(loc), -1)
+							got, err := db.EventsRange(ctx, bid, now.Add(3*interval.duration).In(loc), now.Add(4*interval.duration).In(loc), -1)
 							if err != nil {
 								t.Errorf("failed to load data: %v", err)
 							}
@@ -278,12 +279,12 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("update_last_event_coequal", func(t *testing.T) {
-					db, err := Open(context.Background(), filepath.Join(workDir, "coequal.db"), "test_host")
+					db, err := Open(ctx, filepath.Join(workDir, "coequal.db"), "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
@@ -299,7 +300,7 @@ func TestDB(t *testing.T) {
 						if err != nil {
 							t.Fatalf("failed to unmarshal bucket message: %v", err)
 						}
-						_, err = db.CreateBucket(b.ID, b.Name, b.Type, b.Client, b.Created, b.Data)
+						_, err = db.CreateBucket(ctx, b.ID, b.Name, b.Type, b.Client, b.Created, b.Data)
 						if err != nil {
 							t.Fatalf("failed to create bucket: %v", err)
 						}
@@ -318,23 +319,23 @@ func TestDB(t *testing.T) {
 							t.Fatalf("failed to unmarshal event message: %v", err)
 						}
 						if note.Continue != nil && *note.Continue {
-							last, err := db.LastEvent(note.Bucket)
+							last, err := db.LastEvent(ctx, note.Bucket)
 							if err != nil {
 								t.Fatalf("failed to get last event: %v", err)
 							}
 							note.ID = last.ID
-							_, err = db.UpdateEvent(note)
+							_, err = db.UpdateEvent(ctx, note)
 							if err != nil {
 								t.Fatalf("failed to update event: %v", err)
 							}
 						} else {
-							_, err = db.InsertEvent(note)
+							_, err = db.InsertEvent(ctx, note)
 							if err != nil {
 								t.Fatalf("failed to insert event: %v", err)
 							}
 						}
 
-						dump, err := db.Dump()
+						dump, err := db.Dump(ctx)
 						if err != nil {
 							t.Fatalf("failed to dump db after step %d: %v", i, err)
 						}
@@ -353,12 +354,12 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("amend", func(t *testing.T) {
-					db, err := Open(context.Background(), filepath.Join(workDir, "amend.db"), "test_host")
+					db, err := Open(ctx, filepath.Join(workDir, "amend.db"), "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
@@ -374,7 +375,7 @@ func TestDB(t *testing.T) {
 						if err != nil {
 							t.Fatalf("failed to unmarshal bucket message: %v", err)
 						}
-						_, err = db.CreateBucket(b.ID, b.Name, b.Type, b.Client, b.Created, b.Data)
+						_, err = db.CreateBucket(ctx, b.ID, b.Name, b.Type, b.Client, b.Created, b.Data)
 						if err != nil {
 							t.Fatalf("failed to create bucket: %v", err)
 						}
@@ -396,7 +397,7 @@ func TestDB(t *testing.T) {
 						if err != nil {
 							t.Fatalf("failed to unmarshal event message: %v", err)
 						}
-						_, err = db.InsertEvent(note)
+						_, err = db.InsertEvent(ctx, note)
 						if err != nil {
 							t.Fatalf("failed to insert event: %v", err)
 						}
@@ -407,11 +408,11 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to unmarshal event message: %v", err)
 					}
-					_, err = db.AmendEvents(time.Time{}, amendment)
+					_, err = db.AmendEvents(ctx, time.Time{}, amendment)
 					if err != nil {
 						t.Errorf("unexpected error amending events: %v", err)
 					}
-					dump, err := db.Dump()
+					dump, err := db.Dump(ctx)
 					if err != nil {
 						t.Fatalf("failed to dump db: %v", err)
 					}
@@ -468,12 +469,12 @@ func TestDB(t *testing.T) {
 				})
 
 				t.Run("dynamic_query", func(t *testing.T) {
-					db, err := Open(context.Background(), path, "test_host")
+					db, err := Open(ctx, path, "test_host")
 					if err != nil {
 						t.Fatalf("failed to create db: %v", err)
 					}
 					defer func() {
-						err = db.Close()
+						err = db.Close(ctx)
 						if err != nil {
 							t.Errorf("failed to close db: %v", err)
 						}
@@ -529,7 +530,7 @@ func TestDB(t *testing.T) {
 
 					for _, test := range dynamicTests {
 						t.Run(test.name, func(t *testing.T) {
-							got, err := db.Select(test.sql)
+							got, err := db.Select(ctx, test.sql)
 							if !sameError(err, test.wantErr) {
 								t.Errorf("unexpected error: got:%v want:%v", err, test.wantErr)
 								return
