@@ -41,11 +41,11 @@ type DB struct {
 }
 
 type execer interface {
-	Exec(query string, args ...any) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 type querier interface {
-	Query(query string, args ...any) (*sql.Rows, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 func txDone(tx *sql.Tx, err *error) {
@@ -88,7 +88,7 @@ func Open(ctx context.Context, name, host string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = db.Exec(Schema)
+	_, err = db.ExecContext(ctx, Schema)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (db *DB) Backup(ctx context.Context, n int, sleep time.Duration) (string, e
 }
 
 // Close closes the database.
-func (db *DB) Close(ctx context.Context) error {
+func (db *DB) Close(_ context.Context) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return errors.Join(db.store.Close(), db.roStore.Close())
@@ -238,15 +238,15 @@ func (db *DB) CreateBucket(ctx context.Context, uid, name, typ, client string, c
 	bid := db.BucketID(uid)
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	tx, err := db.store.Begin()
+	tx, err := db.store.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer txDone(tx, &err)
-	return createBucket(tx, bid, name, typ, client, db.host, created, data)
+	return createBucket(ctx, tx, bid, name, typ, client, db.host, created, data)
 }
 
-func createBucket(tx *sql.Tx, bid, name, typ, client, host string, created time.Time, data map[string]any) (*worklog.BucketMetadata, error) {
+func createBucket(ctx context.Context, tx *sql.Tx, bid, name, typ, client, host string, created time.Time, data map[string]any) (*worklog.BucketMetadata, error) {
 	var (
 		msg = []byte{} // datastr has a NOT NULL constraint.
 		err error
@@ -257,12 +257,12 @@ func createBucket(tx *sql.Tx, bid, name, typ, client, host string, created time.
 			return nil, err
 		}
 	}
-	_, err = tx.Exec(CreateBucket, bid, name, typ, client, host, created.Format(time.RFC3339Nano), msg)
+	_, err = tx.ExecContext(ctx, CreateBucket, bid, name, typ, client, host, created.Format(time.RFC3339Nano), msg)
 	var sqlErr *sqlite.Error
 	if errors.As(err, &sqlErr) && sqlErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 		return nil, err
 	}
-	m, err := bucketMetadata(tx, bid)
+	m, err := bucketMetadata(ctx, tx, bid)
 	if err != nil {
 		return nil, err
 	}
@@ -280,11 +280,11 @@ const BucketMetadata = `select id, name, type, client, hostname, created, datast
 func (db *DB) BucketMetadata(ctx context.Context, bid string) (*worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return bucketMetadata(db.store, bid)
+	return bucketMetadata(ctx, db.store, bid)
 }
 
-func bucketMetadata(db querier, bid string) (*worklog.BucketMetadata, error) {
-	rows, err := db.Query(BucketMetadata, bid)
+func bucketMetadata(ctx context.Context, db querier, bid string) (*worklog.BucketMetadata, error) {
+	rows, err := db.QueryContext(ctx, BucketMetadata, bid)
 	if err != nil {
 		return nil, err
 	}
@@ -325,15 +325,15 @@ func (db *DB) InsertEvent(ctx context.Context, e *worklog.Event) (sql.Result, er
 	bid := fmt.Sprintf("%s_%s", e.Bucket, db.host)
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return insertEvent(db.store, bid, e)
+	return insertEvent(ctx, db.store, bid, e)
 }
 
-func insertEvent(db execer, bid string, e *worklog.Event) (sql.Result, error) {
+func insertEvent(ctx context.Context, db execer, bid string, e *worklog.Event) (sql.Result, error) {
 	msg, err := json.Marshal(e.Data)
 	if err != nil {
 		return nil, err
 	}
-	return db.Exec(InsertEvent, bid, e.Start.Format(time.RFC3339Nano), e.End.Format(time.RFC3339Nano), msg)
+	return db.ExecContext(ctx, InsertEvent, bid, e.Start.Format(time.RFC3339Nano), e.End.Format(time.RFC3339Nano), msg)
 }
 
 const UpdateEvent = `update events set starttime = ?, endtime = ?, datastr = ? where id = ? and bucketrow = (
@@ -351,7 +351,7 @@ func (db *DB) UpdateEvent(ctx context.Context, e *worklog.Event) (sql.Result, er
 	bid := fmt.Sprintf("%s_%s", e.Bucket, db.host)
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.store.Exec(UpdateEvent, e.Start.Format(time.RFC3339Nano), e.End.Format(time.RFC3339Nano), msg, e.ID, bid)
+	return db.store.ExecContext(ctx, UpdateEvent, e.Start.Format(time.RFC3339Nano), e.End.Format(time.RFC3339Nano), msg, e.ID, bid)
 }
 
 const LastEvent = `select id, starttime, endtime, datastr from events where bucketrow = (
@@ -367,7 +367,7 @@ const LastEvent = `select id, starttime, endtime, datastr from events where buck
 func (db *DB) LastEvent(ctx context.Context, uid string) (*worklog.Event, error) {
 	bid := db.BucketID(uid)
 	db.mu.Lock()
-	rows, err := db.store.Query(LastEvent, bid)
+	rows, err := db.store.QueryContext(ctx, LastEvent, bid)
 	db.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -410,7 +410,7 @@ func (db *DB) LastEvent(ctx context.Context, uid string) (*worklog.Event, error)
 func (db *DB) Dump(ctx context.Context) ([]worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	m, err := db.buckets()
+	m, err := db.buckets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +419,7 @@ func (db *DB) Dump(ctx context.Context) ([]worklog.BucketMetadata, error) {
 		if !ok {
 			return m, fmt.Errorf("invalid bucket ID at %d: %s", i, b.ID)
 		}
-		e, err := db.events(b.ID)
+		e, err := db.events(ctx, b.ID)
 		if err != nil {
 			return m, err
 		}
@@ -436,7 +436,7 @@ func (db *DB) Dump(ctx context.Context) ([]worklog.BucketMetadata, error) {
 func (db *DB) DumpRange(ctx context.Context, start, end time.Time) ([]worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	m, err := db.buckets()
+	m, err := db.buckets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +445,7 @@ func (db *DB) DumpRange(ctx context.Context, start, end time.Time) ([]worklog.Bu
 		if !ok {
 			return m, fmt.Errorf("invalid bucket ID at %d: %s", i, b.ID)
 		}
-		e, err := db.dumpEventsRange(b.ID, start, end, -1)
+		e, err := db.dumpEventsRange(ctx, b.ID, start, end, -1)
 		if err != nil {
 			return m, err
 		}
@@ -475,9 +475,9 @@ const (
 ) limit ?`
 )
 
-func (db *DB) dumpEventsRange(bid string, start, end time.Time, limit int) ([]worklog.Event, error) {
+func (db *DB) dumpEventsRange(ctx context.Context, bid string, start, end time.Time, limit int) ([]worklog.Event, error) {
 	var e []worklog.Event
-	err := db.eventsRangeFunc(bid, start, end, limit, func(m worklog.Event) error {
+	err := db.eventsRangeFunc(ctx, bid, start, end, limit, func(m worklog.Event) error {
 		e = append(e, m)
 		return nil
 	}, false)
@@ -493,14 +493,14 @@ func (db *DB) dumpEventsRange(bid string, start, end time.Time, limit int) ([]wo
 func (db *DB) Load(ctx context.Context, buckets []worklog.BucketMetadata, replace bool) (err error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	tx, err := db.store.Begin()
+	tx, err := db.store.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer txDone(tx, &err)
 	for _, m := range buckets {
 		var b *worklog.BucketMetadata
-		b, err = createBucket(tx, m.ID, m.Name, m.Type, m.Client, m.Hostname, m.Created, m.Data)
+		b, err = createBucket(ctx, tx, m.ID, m.Name, m.Type, m.Client, m.Hostname, m.Created, m.Data)
 		if err != nil {
 			var sqlErr *sqlite.Error
 			if errors.As(err, &sqlErr) && sqlErr.Code() != sqlite3.SQLITE_CONSTRAINT_UNIQUE {
@@ -510,7 +510,7 @@ func (db *DB) Load(ctx context.Context, buckets []worklog.BucketMetadata, replac
 				return err
 			}
 			if replace {
-				_, err = tx.Exec(DeleteBucketEvents, m.ID)
+				_, err = tx.ExecContext(ctx, DeleteBucketEvents, m.ID)
 				if err != nil {
 					return err
 				}
@@ -518,7 +518,7 @@ func (db *DB) Load(ctx context.Context, buckets []worklog.BucketMetadata, replac
 		}
 		for i, e := range m.Events {
 			bid := fmt.Sprintf("%s_%s", e.Bucket, m.Hostname)
-			_, err = insertEvent(tx, bid, &m.Events[i])
+			_, err = insertEvent(ctx, tx, bid, &m.Events[i])
 			if err != nil {
 				return err
 			}
@@ -542,11 +542,11 @@ const Buckets = `select id, name, type, client, hostname, created, datastr from 
 func (db *DB) Buckets(ctx context.Context) ([]worklog.BucketMetadata, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.buckets()
+	return db.buckets(ctx)
 }
 
-func (db *DB) buckets() ([]worklog.BucketMetadata, error) {
-	rows, err := db.store.Query(Buckets)
+func (db *DB) buckets(ctx context.Context) ([]worklog.BucketMetadata, error) {
+	rows, err := db.store.QueryContext(ctx, Buckets)
 	if err != nil {
 		return nil, err
 	}
@@ -591,11 +591,11 @@ const Events = `select id, starttime, endtime, datastr from events where bucketr
 func (db *DB) Events(ctx context.Context, bid string) ([]worklog.Event, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.events(bid)
+	return db.events(ctx, bid)
 }
 
-func (db *DB) events(bid string) ([]worklog.Event, error) {
-	rows, err := db.store.Query(Events, bid)
+func (db *DB) events(ctx context.Context, bid string) ([]worklog.Event, error) {
+	rows, err := db.store.QueryContext(ctx, Events, bid)
 	if err != nil {
 		return nil, err
 	}
@@ -657,7 +657,7 @@ func (db *DB) EventsRange(ctx context.Context, bid string, start, end time.Time,
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var e []worklog.Event
-	err := db.eventsRangeFunc(bid, start, end, limit, func(m worklog.Event) error {
+	err := db.eventsRangeFunc(ctx, bid, start, end, limit, func(m worklog.Event) error {
 		e = append(e, m)
 		return nil
 	}, true)
@@ -671,10 +671,10 @@ func (db *DB) EventsRange(ctx context.Context, bid string, start, end time.Time,
 func (db *DB) EventsRangeFunc(ctx context.Context, bid string, start, end time.Time, limit int, fn func(worklog.Event) error) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.eventsRangeFunc(bid, start, end, limit, fn, true)
+	return db.eventsRangeFunc(ctx, bid, start, end, limit, fn, true)
 }
 
-func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn func(worklog.Event) error, order bool) error {
+func (db *DB) eventsRangeFunc(ctx context.Context, bid string, start, end time.Time, limit int, fn func(worklog.Event) error, order bool) error {
 	var (
 		query string
 		rows  *sql.Rows
@@ -686,25 +686,25 @@ func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn fu
 		if !order {
 			query = dumpEventsRange
 		}
-		rows, err = db.store.Query(query, bid, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), limit)
+		rows, err = db.store.QueryContext(ctx, query, bid, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), limit)
 	case !start.IsZero():
 		query = EventsRangeFrom
 		if !order {
 			query = dumpEventsRangeFrom
 		}
-		rows, err = db.store.Query(query, bid, start.Format(time.RFC3339Nano), limit)
+		rows, err = db.store.QueryContext(ctx, query, bid, start.Format(time.RFC3339Nano), limit)
 	case !end.IsZero():
 		query = EventsRangeUntil
 		if !order {
 			query = dumpEventsRangeUntil
 		}
-		rows, err = db.store.Query(query, bid, end.Format(time.RFC3339Nano), limit)
+		rows, err = db.store.QueryContext(ctx, query, bid, end.Format(time.RFC3339Nano), limit)
 	default:
 		query = EventsLimit
 		if !order {
 			query = dumpEventsLimit
 		}
-		rows, err = db.store.Query(query, bid, limit)
+		rows, err = db.store.QueryContext(ctx, query, bid, limit)
 	}
 	if err != nil {
 		return err
@@ -748,7 +748,7 @@ func (db *DB) eventsRangeFunc(bid string, start, end time.Time, limit int, fn fu
 func (db *DB) Select(ctx context.Context, query string) ([]map[string]any, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	rows, err := db.roStore.Query(query)
+	rows, err := db.roStore.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -855,7 +855,7 @@ func (db *DB) AmendEvents(ctx context.Context, ts time.Time, note *worklog.Amend
 	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.store.Exec(AmendEvents, db.BucketID(note.Bucket), ts.Format(time.RFC3339Nano), note.Message, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), replace)
+	return db.store.ExecContext(ctx, AmendEvents, db.BucketID(note.Bucket), ts.Format(time.RFC3339Nano), note.Message, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), replace)
 }
 
 const DeleteEvent = `delete from events where bucketrow = (
