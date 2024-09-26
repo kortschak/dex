@@ -1,0 +1,172 @@
+# Only run in a postgres-available environment.
+[!postgres] stop 'Skipping postgres test.'
+
+# The build of worklog takes a fair while due to the size of the dependency
+# tree, the size of some of the individual dependencies and the absence of
+# caching when building within a test script.
+[short] stop 'Skipping long test.'
+
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] expand config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] expand config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/worklog
+cd ${WORK}
+
+# Create the database...
+createdb postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB} test_database
+# and set up user details.
+expand pgpass ${HOME}/.pgpass
+chmod 600 ${HOME}/.pgpass
+
+# Start dex to load the data.
+dex -log debug -lines &dex&
+sleep 1s
+
+# Load the data...
+POST dump.json http://localhost:9797/load/?replace=true
+# and confirm.
+GET -json http://localhost:9797/dump/
+cmp stdout want.json
+
+# Show that the non-granted user cannot read.
+GET http://localhost:9797/query?sql=select+count(*)+as+event_count+from+events
+cp stdout got_event_count_no_grant.json
+grep_from_file want_event_count_no_grant.pattern got_event_count_no_grant.json
+
+# Grant the ro user read access...
+grant_read postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/test_database ${PGUSER}_ro
+
+# and confirm that they can read.
+GET http://localhost:9797/query?sql=select+count(*)+as+event_count+from+events
+cmp stdout want_event_count_grant.json
+
+# Terminate dex to allow the test database to be dropped.
+kill -INT dex
+wait dex
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[module.worklog]
+path = "worklog"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.worklog.options]
+database = "postgres://${PGUSER}@${PGHOST}:${PGPORT}/test_database"
+hostname = "localhost"
+[module.worklog.options.web]
+addr = "localhost:9797"
+can_modify = true
+
+-- pgpass --
+${PGHOST}:${PGPORT}:*:${PGUSER}:${PGPASSWORD}
+${PGHOST}:${PGPORT}:*:${PGUSER}_ro:${PGPASSWORD}_ro
+-- dump.json --
+{
+    "buckets": [
+        {
+            "id": "afk_localhost",
+            "name": "afk-watcher",
+            "type": "afkstatus",
+            "client": "worklog",
+            "hostname": "localhost",
+            "created": "2023-12-04T17:21:27.424207553+10:30",
+            "events": [
+                {
+                    "bucket": "afk",
+                    "id": 2,
+                    "start": "2023-12-04T17:21:28.270750821+10:30",
+                    "end": "2023-12-04T17:21:28.270750821+10:30",
+                    "data": {
+                        "afk": false,
+                        "locked": false
+                    }
+                }
+            ]
+        },
+        {
+            "id": "window_localhost",
+            "name": "window-watcher",
+            "type": "currentwindow",
+            "client": "worklog",
+            "hostname": "localhost",
+            "created": "2023-12-04T17:21:27.428793055+10:30",
+            "events": [
+                {
+                    "bucket": "window",
+                    "id": 1,
+                    "start": "2023-12-04T17:21:28.270750821+10:30",
+                    "end": "2023-12-04T17:21:28.270750821+10:30",
+                    "data": {
+                        "app": "Gnome-terminal",
+                        "title": "Terminal"
+                    }
+                }
+            ]
+        }
+    ]
+}
+-- want.json --
+{
+	"buckets": [
+		{
+			"id": "afk_localhost",
+			"name": "afk-watcher",
+			"type": "afkstatus",
+			"client": "worklog",
+			"hostname": "localhost",
+			"created": "2023-12-04T17:21:27.424207+10:30",
+			"events": [
+				{
+					"bucket": "afk",
+					"id": 1,
+					"start": "2023-12-04T17:21:28.27075+10:30",
+					"end": "2023-12-04T17:21:28.27075+10:30",
+					"data": {
+						"afk": false,
+						"locked": false
+					}
+				}
+			]
+		},
+		{
+			"id": "window_localhost",
+			"name": "window-watcher",
+			"type": "currentwindow",
+			"client": "worklog",
+			"hostname": "localhost",
+			"created": "2023-12-04T17:21:27.428793+10:30",
+			"events": [
+				{
+					"bucket": "window",
+					"id": 2,
+					"start": "2023-12-04T17:21:28.27075+10:30",
+					"end": "2023-12-04T17:21:28.27075+10:30",
+					"data": {
+						"app": "Gnome-terminal",
+						"title": "Terminal"
+					}
+				}
+			]
+		}
+	]
+}
+-- want_event_count_no_grant.pattern --
+{"err":"ERROR: permission denied for (?:relation|table) events \(SQLSTATE 42501\): ro user failed read capability checks"}
+-- want_event_count_grant.json --
+[{"event_count":2}]

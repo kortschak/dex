@@ -6,18 +6,22 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/rogpeppe/go-internal/gotooltest"
 	"github.com/rogpeppe/go-internal/testscript"
 )
@@ -25,6 +29,9 @@ import (
 var (
 	update = flag.Bool("update", false, "update tests")
 	keep   = flag.Bool("keep", false, "keep $WORK directory after tests")
+
+	// postgres indicates tests were invoked with -tags postgres.
+	postgres bool
 )
 
 func TestMain(m *testing.M) {
@@ -45,6 +52,9 @@ func TestScripts(t *testing.T) {
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"sleep":          sleep,
 			"grep_from_file": grep,
+			"expand":         expand,
+			"createdb":       createDB,
+			"grant_read":     grantReadAccess,
 		},
 		Setup: func(e *testscript.Env) error {
 			pwd, err := os.Getwd()
@@ -52,7 +62,24 @@ func TestScripts(t *testing.T) {
 				return err
 			}
 			e.Setenv("PKG_ROOT", pwd)
+			for _, k := range []string{
+				"PGUSER", "PGPASSWORD",
+				"PGHOST", "PGPORT",
+				"POSTGRES_DB",
+			} {
+				if v, ok := os.LookupEnv(k); ok {
+					e.Setenv(k, v)
+				}
+			}
 			return nil
+		},
+		Condition: func(cond string) (bool, error) {
+			switch cond {
+			case "postgres":
+				return postgres, nil
+			default:
+				return false, fmt.Errorf("unknown condition: %s", cond)
+			}
 		},
 	}
 	if err := gotooltest.Setup(&p); err != nil {
@@ -94,6 +121,107 @@ func grep(ts *testscript.TestScript, neg bool, args []string) {
 			ts.Logf("[grep_from_file]\n%s\n", data)
 			ts.Fatalf("no match for %#q found in grep_from_file", pattern)
 		}
+	}
+}
+
+func expand(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("unsupported: ! expand")
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: expand src dst")
+	}
+	src, err := os.ReadFile(ts.MkAbs(args[0]))
+	ts.Check(err)
+	src = []byte(os.Expand(string(src), func(key string) string {
+		return ts.Getenv(key)
+	}))
+	err = os.WriteFile(ts.MkAbs(args[1]), src, 0o644)
+	ts.Check(err)
+}
+
+func createDB(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("unsupported: ! createdb")
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: createdb postgres://user:password@host:port/server new_db")
+	}
+	u, err := url.Parse(args[0])
+	ts.Check(err)
+	createTestDB(ts, u, args[1])
+}
+
+func createTestDB(ts *testscript.TestScript, u *url.URL, dbname string) {
+	ctx := context.Background()
+	db, err := pgx.Connect(ctx, u.String())
+	if err != nil {
+		ts.Fatalf("failed to open admin database: %v", err)
+	}
+	_, err = db.Exec(ctx, "create database "+dbname)
+	if err != nil {
+		ts.Fatalf("failed to create test database: %v", err)
+	}
+	err = db.Close(ctx)
+	if err != nil {
+		ts.Fatalf("failed to close admin connection: %v", err)
+	}
+
+	ts.Defer(func() {
+		dropTestDB(ts, ctx, u, dbname)
+	})
+}
+
+func dropTestDB(ts *testscript.TestScript, ctx context.Context, u *url.URL, dbname string) {
+	db, err := pgx.Connect(ctx, u.String())
+	if err != nil {
+		ts.Logf("failed to open admin database: %v", err)
+		return
+	}
+	_, err = db.Exec(ctx, "drop database if exists "+dbname)
+	if err != nil {
+		ts.Logf("failed to drop test database: %v", err)
+		return
+	}
+	err = db.Close(ctx)
+	if err != nil {
+		ts.Logf("failed to close admin connection: %v", err)
+	}
+}
+
+func grantReadAccess(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("unsupported: ! grant_read")
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: grant_read postgres://user:password@host:port/dbname target_user")
+	}
+
+	u, err := url.Parse(args[0])
+	ts.Check(err)
+	ctx := context.Background()
+	db, err := pgx.Connect(ctx, u.String())
+	if err != nil {
+		ts.Fatalf("failed to open database: %v", err)
+	}
+
+	target := args[1]
+	statements := []string{
+		fmt.Sprintf("GRANT CONNECT ON DATABASE %s TO %s", strings.TrimLeft(u.Path, "/"), target),
+		fmt.Sprintf("GRANT USAGE ON SCHEMA public TO %s", target),
+		fmt.Sprintf("GRANT SELECT ON ALL TABLES IN SCHEMA public TO %s", target),
+	}
+	for _, s := range statements {
+		_, err = db.Exec(ctx, s)
+		if err != nil {
+			ts.Logf("failed to execute grant: %q %v", s, err)
+			break
+		}
+	}
+
+	err = db.Close(ctx)
+	if err != nil {
+		ts.Fatalf("failed to close connection: %v", err)
 	}
 }
 

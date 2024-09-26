@@ -1,6 +1,6 @@
 # `worklog`
 
-`worklog` is a module that records screen activity, screen-saver lock state and AFK status. It takes messages from the `watcher` module and records them in an SQLite database and serves a small dashboard page that shows work activity.
+`worklog` is a module that records screen activity, screen-saver lock state and AFK status. It takes messages from the `watcher` module and records them in an SQLite or PostgreSQL database and serves a small dashboard page that shows work activity.
 
 Example configuration fragment (requires a kernel configuration fragment):
 ```
@@ -187,3 +187,9 @@ The CEL environment enables the CEL [optional types library](https://pkg.go.dev/
 ## CEL extensions
 
 The CEL environment provides the [`Lib`](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#Lib) and [`StateLib`](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#StateLib) extensions from the celext package. `StateLib` is only available in `module.*.options.rules.*.src`.
+
+## PostgreSQL store
+
+When using PostgreSQL as a store, the `~/.pgpass` file MAY be used for password look-up for the primary connection to the database and MUST be used for the read-only connection.
+
+The read-only connection is made on start-up. Before connection, the read-only user, which is `${PGUSER}_ro` where `${PGUSER}` is the user for the primary connection, is checked for its ability to read the tables used by the store and for the ability to do any non-SELECT operations. If the user cannot read the tables, a warning is emitted, but the connection is made. If non-SELECT operations are allowed for the user, or the user can read other tables, no connection is made. Since this check is only made at start-up, there is a TOCTOU concern here, but exploiting this would require having user ALTER and GRANT grants at which point you have already lost the game.

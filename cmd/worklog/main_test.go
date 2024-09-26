@@ -29,6 +29,7 @@ import (
 	"golang.org/x/sys/execabs"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
+	"github.com/kortschak/dex/cmd/worklog/store"
 	"github.com/kortschak/dex/internal/slogext"
 	"github.com/kortschak/dex/rpc"
 )
@@ -267,7 +268,7 @@ func mergeAfk() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
-	err = d.openDB(ctx, nil, "db.sqlite3", "localhost")
+	err = d.openDB(ctx, nil, open, "db.sqlite3", "localhost")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
 		return 1
@@ -536,7 +537,7 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 	}))
 
 	d := newDaemon("worklog", log, &level, addSource, ctx, cancel)
-	err := d.openDB(ctx, nil, dbName, "localhost")
+	err := d.openDB(ctx, nil, open, dbName, "localhost")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create db: %v\n", err)
 		return nil, nil, nil, 1
@@ -566,6 +567,10 @@ func newTestDaemon(ctx context.Context, cancel context.CancelFunc, verbose bool,
 	webRules := d.dashboardRules.Load()
 
 	return d, db, webRules, 0
+}
+
+func open(ctx context.Context, addr, host string) (storage, error) {
+	return store.Open(ctx, addr, host)
 }
 
 func generateData(ts *testscript.TestScript, neg bool, args []string) {
@@ -1717,57 +1722,66 @@ func TestMergeReplacements(t *testing.T) {
 }
 
 var dbDirTests = []struct {
-	name    string
-	config  worklog.Config
-	want    string
-	wantErr error
+	name       string
+	config     worklog.Config
+	wantScheme string
+	wantDir    string
+	wantErr    error
 }{
 	{
 		name: "none",
 	},
 	{
-		name:   "deprecated",
-		config: mkDBDirOptions("database_directory", ""),
-		want:   "database_directory",
+		name:       "deprecated",
+		config:     mkDBDirOptions("database_directory", ""),
+		wantScheme: "sqlite",
+		wantDir:    "database_directory",
 	},
 	{
-		name:   "url_only_sqlite",
-		config: mkDBDirOptions("", "sqlite:database_directory"),
-		want:   "database_directory",
+		name:       "url_only_sqlite",
+		config:     mkDBDirOptions("", "sqlite:database_directory"),
+		wantScheme: "sqlite",
+		wantDir:    "database_directory",
 	},
 	{
-		name:   "url_only_postgres",
-		config: mkDBDirOptions("", "postgres://username:password@localhost:5432/database_name"),
-		want:   "",
+		name:       "url_only_postgres",
+		config:     mkDBDirOptions("", "postgres://username:password@localhost:5432/database_name"),
+		wantScheme: "postgres",
+		wantDir:    "",
 	},
 	{
-		name:   "both_consistent",
-		config: mkDBDirOptions("database_directory", "sqlite:database_directory"),
-		want:   "database_directory",
+		name:       "both_consistent",
+		config:     mkDBDirOptions("database_directory", "sqlite:database_directory"),
+		wantScheme: "sqlite",
+		wantDir:    "database_directory",
 	},
 	{
-		name:    "missing_scheme",
-		config:  mkDBDirOptions("database_dir", "database_directory"),
-		want:    "",
-		wantErr: errors.New("missing scheme in database configuration"),
+		name:       "missing_scheme",
+		config:     mkDBDirOptions("database_dir", "database_directory"),
+		wantScheme: "",
+		wantDir:    "",
+		wantErr:    errors.New("missing scheme in database configuration"),
 	},
 	{
-		name:    "both_inconsistent_sqlite",
-		config:  mkDBDirOptions("database_dir", "sqlite:database_directory"),
-		want:    "",
-		wantErr: errors.New("inconsistent database directory configuration: (sqlite:)database_directory != database_dir"),
+		name:       "both_inconsistent_sqlite",
+		config:     mkDBDirOptions("database_dir", "sqlite:database_directory"),
+		wantScheme: "",
+		wantDir:    "",
+		wantErr:    errors.New("inconsistent database directory configuration: (sqlite:)database_directory != database_dir"),
 	},
 	{
-		name:    "invalid_sqlite_url",
-		config:  mkDBDirOptions("", "sqlite:/database_directory"),
-		want:    "",
-		wantErr: errors.New("sqlite configuration missing opaque data: sqlite:/database_directory"),
+		name:       "invalid_sqlite_url",
+		config:     mkDBDirOptions("", "sqlite:/database_directory"),
+		wantScheme: "",
+		wantDir:    "",
+		wantErr:    errors.New("sqlite configuration missing opaque data: sqlite:/database_directory"),
 	},
 	{
-		name:    "both_inconsistent_postgres",
-		config:  mkDBDirOptions("database_dir", "postgres://username:password@localhost:5432/database_name"),
-		want:    "",
-		wantErr: errors.New("inconsistent database configuration: both postgres database and sqlite directory configured"),
+		name:       "both_inconsistent_postgres",
+		config:     mkDBDirOptions("database_dir", "postgres://username:password@localhost:5432/database_name"),
+		wantScheme: "",
+		wantDir:    "",
+		wantErr:    errors.New("inconsistent database configuration: both postgres database and sqlite directory configured"),
 	},
 }
 
@@ -1781,12 +1795,15 @@ func mkDBDirOptions(dir, url string) worklog.Config {
 func TestDBDir(t *testing.T) {
 	for _, test := range dbDirTests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := dbDir(test.config)
+			gotScheme, gotDir, err := dbDir(test.config)
 			if !sameError(err, test.wantErr) {
 				t.Errorf("unexpected error calling dbDir: got:%v want:%v", err, test.wantErr)
 			}
-			if got != test.want {
-				t.Errorf("unexpected result: got:%q want:%q", got, test.want)
+			if gotScheme != test.wantScheme {
+				t.Errorf("unexpected scheme result: got:%q want:%q", gotScheme, test.wantScheme)
+			}
+			if gotDir != test.wantDir {
+				t.Errorf("unexpected dir result: got:%q want:%q", gotDir, test.wantDir)
 			}
 		})
 	}

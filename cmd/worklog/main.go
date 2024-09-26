@@ -187,6 +187,7 @@ type daemon struct {
 
 	rMu        sync.Mutex
 	lastEvents map[string]*worklog.Event
+	dMu        sync.Mutex // tMu is only used for protecting configuration of db.
 	db         atomicIfaceValue[storage]
 
 	lastReport map[rpc.UID]worklog.Report
@@ -359,7 +360,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			}
 		}
 
-		databaseDir, err := dbDir(m.Body)
+		scheme, databaseDir, err := dbDir(m.Body)
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.Any("error", err))
 			return nil, rpc.NewError(rpc.ErrCodeInvalidMessage,
@@ -371,50 +372,86 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 				},
 			)
 		}
-		if databaseDir != "" {
-			dir, err := xdg.State(databaseDir)
-			switch err {
-			case nil:
-			case syscall.ENOENT:
-				var ok bool
-				dir, ok = xdg.StateHome()
-				if !ok {
-					d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.String("error", "no XDG_STATE_HOME"))
-					return nil, err
+		d.dMu.Lock()
+		defer d.dMu.Unlock()
+		switch {
+		default:
+			d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.String("error", "unknown scheme"), slog.String("url", m.Body.Options.Database))
+			return nil, rpc.NewError(rpc.ErrCodeInvalidMessage,
+				err.Error(),
+				map[string]any{
+					"type":     rpc.ErrCodeParameters,
+					"database": m.Body.Options.Database,
+				},
+			)
+		case scheme == "":
+			// Do nothing.
+		case scheme == "postgres", scheme == "sqlite":
+			var (
+				open opener
+				addr string
+			)
+			switch {
+			case scheme == "postgres":
+				addr = m.Body.Options.Database
+				open = func(ctx context.Context, addr, host string) (storage, error) {
+					db, err := pgstore.Open(ctx, addr, host)
+					if _, ok := err.(pgstore.Warning); ok {
+						d.log.LogAttrs(ctx, slog.LevelWarn, "configure database", slog.Any("error", err))
+						err = nil
+					}
+					return db, err
 				}
-				dir = filepath.Join(dir, databaseDir)
-				err = os.Mkdir(dir, 0o750)
-				if err != nil {
-					err := err.(*os.PathError) // See godoc for os.Mkdir for why this is safe.
-					d.log.LogAttrs(ctx, slog.LevelError, "create database dir", slog.Any("error", err))
-					return nil, rpc.NewError(rpc.ErrCodeInternal,
+
+			case scheme == "sqlite":
+				dir, err := xdg.State(databaseDir)
+				switch err {
+				case nil:
+				case syscall.ENOENT:
+					var ok bool
+					dir, ok = xdg.StateHome()
+					if !ok {
+						d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.String("error", "no XDG_STATE_HOME"))
+						return nil, err
+					}
+					dir = filepath.Join(dir, databaseDir)
+					err = os.Mkdir(dir, 0o750)
+					if err != nil {
+						err := err.(*os.PathError) // See godoc for os.Mkdir for why this is safe.
+						d.log.LogAttrs(ctx, slog.LevelError, "create database dir", slog.Any("error", err))
+						return nil, rpc.NewError(rpc.ErrCodeInternal,
+							err.Error(),
+							map[string]any{
+								"type": rpc.ErrCodePath,
+								"op":   err.Op,
+								"path": err.Path,
+								"err":  fmt.Sprint(err.Err),
+							},
+						)
+					}
+				default:
+					d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.Any("error", err))
+					return nil, jsonrpc2.NewError(
+						rpc.ErrCodeInternal,
 						err.Error(),
-						map[string]any{
-							"type": rpc.ErrCodePath,
-							"op":   err.Op,
-							"path": err.Path,
-							"err":  fmt.Sprint(err.Err),
-						},
 					)
 				}
-			default:
-				d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.Any("error", err))
-				return nil, jsonrpc2.NewError(
-					rpc.ErrCodeInternal,
-					err.Error(),
-				)
+
+				addr = filepath.Join(dir, "db.sqlite")
+				open = func(ctx context.Context, addr, host string) (storage, error) {
+					return store.Open(ctx, addr, host)
+				}
 			}
 
-			path := filepath.Join(dir, "db.sqlite")
-			if db := d.db.Load(); db == nil || path != db.Name() {
-				err = d.openDB(ctx, db, path, m.Body.Options.Hostname)
+			if db := d.db.Load(); !sameDB(db, addr) {
+				err = d.openDB(ctx, db, open, addr, m.Body.Options.Hostname)
 				if err != nil {
 					return nil, rpc.NewError(rpc.ErrCodeInternal,
 						err.Error(),
 						map[string]any{
 							"type": rpc.ErrCodeStoreErr,
 							"op":   "open",
-							"path": path,
+							"name": addr,
 						},
 					)
 				}
@@ -444,32 +481,39 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 	}
 }
 
-func dbDir(cfg worklog.Config) (string, error) {
+func dbDir(cfg worklog.Config) (scheme, dir string, err error) {
 	opt := cfg.Options
 	if opt.Database == "" {
-		return opt.DatabaseDir, nil
+		if opt.DatabaseDir != "" {
+			scheme = "sqlite"
+		}
+		return scheme, opt.DatabaseDir, nil
 	}
 	u, err := url.Parse(opt.Database)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	switch u.Scheme {
 	case "":
-		return "", errors.New("missing scheme in database configuration")
+		return "", "", errors.New("missing scheme in database configuration")
 	case "sqlite":
 		if opt.DatabaseDir != "" && u.Opaque != opt.DatabaseDir {
-			return "", fmt.Errorf("inconsistent database directory configuration: (%s:)%s != %s", u.Scheme, u.Opaque, opt.DatabaseDir)
+			return "", "", fmt.Errorf("inconsistent database directory configuration: (%s:)%s != %s", u.Scheme, u.Opaque, opt.DatabaseDir)
 		}
 		if u.Opaque == "" {
-			return "", fmt.Errorf("sqlite configuration missing opaque data: %s", opt.Database)
+			return "", "", fmt.Errorf("sqlite configuration missing opaque data: %s", opt.Database)
 		}
-		return u.Opaque, nil
+		return u.Scheme, u.Opaque, nil
 	default:
 		if opt.DatabaseDir != "" {
-			return "", fmt.Errorf("inconsistent database configuration: both %s database and sqlite directory configured", u.Scheme)
+			return "", "", fmt.Errorf("inconsistent database configuration: both %s database and sqlite directory configured", u.Scheme)
 		}
-		return "", nil
+		return u.Scheme, "", nil
 	}
+}
+
+func sameDB(db storage, name string) bool {
+	return db != nil && name == db.Name()
 }
 
 func (d *daemon) replaceTimezone(ctx context.Context, dynamic *bool) {
@@ -579,26 +623,28 @@ func (d *daemon) configureRules(ctx context.Context, rules map[string]worklog.Ru
 	d.rules.Store(ruleDetails)
 }
 
-func (d *daemon) openDB(ctx context.Context, db storage, path, hostname string) error {
+type opener = func(ctx context.Context, addr, hostname string) (storage, error)
+
+func (d *daemon) openDB(ctx context.Context, db storage, open opener, addr, hostname string) error {
 	if db != nil {
-		d.log.LogAttrs(ctx, slog.LevelInfo, "close database", slog.String("path", db.Name()))
+		d.log.LogAttrs(ctx, slog.LevelInfo, "close database", slog.String("name", db.Name()))
 		d.db.Store((storage)(nil))
 		db.Close(ctx)
 	}
-	// store.Open may need to get the hostname, which may
+	// An opener may need to get the hostname, which may
 	// wait indefinitely due to network unavailability.
 	// So make a timeout and allow the fallback to the
 	// kernel-provided hostname. This fallback is
 	// implemented by store.Open.
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	db, err := store.Open(ctx, path, hostname)
+	db, err := open(ctx, addr, hostname)
 	if err != nil {
 		d.log.LogAttrs(ctx, slog.LevelError, "open database", slog.Any("error", err))
 		return err
 	}
 	d.db.Store(db)
-	d.log.LogAttrs(ctx, slog.LevelInfo, "open database", slog.String("path", path))
+	d.log.LogAttrs(ctx, slog.LevelInfo, "open database", slog.String("name", addr))
 	return nil
 }
 

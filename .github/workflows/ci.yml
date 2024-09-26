@@ -99,6 +99,7 @@ jobs:
       PGPORT: 5432 
       PGUSER: test_user
       PGPASSWORD: password
+      POSTGRES_DB: postgres
 
     steps:
     - name: install Go
@@ -111,14 +112,32 @@ jobs:
       with:
         fetch-depth: 1
 
-    - name: unit tests postgres
+    - name: non-Go linux dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -qq libudev-dev
+
+    - name: set up postgres users
       run: |
         psql --host $PGHOST \
              --username="postgres" \
              --dbname="postgres" \
              --command="CREATE USER $PGUSER PASSWORD '$PGPASSWORD'" \
              --command="ALTER USER $PGUSER CREATEDB" \
-             --command="CREATE USER ${PGUSER}_ro PASSWORD '$PGPASSWORD'" \
+             --command="CREATE USER ${PGUSER}_ro PASSWORD '${PGPASSWORD}_ro'" \
              --command="\du"
+        echo ${PGHOST}:${PGPORT}:*:${PGUSER}:${PGPASSWORD} >> ~/.pgpass
+        echo ${PGHOST}:${PGPORT}:*:${PGUSER}_ro:${PGPASSWORD}_ro >> ~/.pgpass
+        chmod 600 ~/.pgpass
 
+    - name: unit tests postgres
+      run: |
         go test ./cmd/worklog/pgstore
+
+    - name: integration tests postgres
+      uses: nick-fields/retry@v3
+      with:
+        timeout_minutes: 10
+        max_attempts: 3
+        command: |
+          go test -tags postgres -run TestScripts/worklog_load_postgres
