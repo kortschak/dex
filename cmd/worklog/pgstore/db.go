@@ -51,7 +51,7 @@ type result struct {
 }
 
 func (r result) RowsAffected() (int64, error) {
-	return r.lastID, nil
+	return r.n, nil
 }
 
 func (r result) LastInsertId() (int64, error) {
@@ -995,7 +995,6 @@ func (db *DB) AmendEvents(ctx context.Context, ts time.Time, note *worklog.Amend
 			return fmt.Errorf("add amendments: %w", err)
 		}
 		defer rows.Close()
-		var res result
 		for rows.Next() {
 			res.n++
 			err = rows.Scan(&res.lastID)

@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -306,6 +307,7 @@ func TestDB(t *testing.T) {
 						}
 					}
 
+					insertedIDs := make(map[int64]bool)
 					events := []string{
 						`{"bucket":"window","start":"2023-06-12T19:54:39.248859996+09:30","end":"2023-06-12T19:54:39.248859996+09:30","data":{"app":"Gnome-terminal","title":"Terminal"},"continue":false}`,
 						`{"bucket":"afk","start":"2023-06-12T19:54:39.248859996+09:30","end":"2023-06-12T19:54:39.248859996+09:30","data":{"afk":false,"locked":false},"continue":false}`,
@@ -324,15 +326,23 @@ func TestDB(t *testing.T) {
 								t.Fatalf("failed to get last event: %v", err)
 							}
 							note.ID = last.ID
-							_, err = db.UpdateEvent(ctx, note)
+							res, err := db.UpdateEvent(ctx, note)
 							if err != nil {
 								t.Fatalf("failed to update event: %v", err)
 							}
+							checkExecResult(t, res, 1, func(id int64) bool {
+								return id != 0 && insertedIDs[id]
+							})
 						} else {
-							_, err = db.InsertEvent(ctx, note)
+							res, err := db.InsertEvent(ctx, note)
 							if err != nil {
 								t.Fatalf("failed to insert event: %v", err)
 							}
+							checkExecResult(t, res, 1, func(id int64) bool {
+								seen := insertedIDs[id]
+								insertedIDs[id] = true
+								return id != 0 && !seen
+							})
 						}
 
 						dump, err := db.Dump(ctx)
@@ -391,16 +401,22 @@ func TestDB(t *testing.T) {
 						`{"bucket":"window","start":"2023-06-12T19:54:55Z","end":"2023-06-12T19:54:59Z","data":{"app":"Gnome-terminal","title":"Terminal"}}`,
 						`{"bucket":"afk","start":"2023-06-12T19:54:55Z","end":"2023-06-12T19:54:59Z","data":{"afk":true,"locked":true}}`,
 					}
+					insertedIDs := make(map[int64]bool)
 					for _, msg := range events {
 						var note *worklog.Event
 						err := json.Unmarshal([]byte(msg), &note)
 						if err != nil {
 							t.Fatalf("failed to unmarshal event message: %v", err)
 						}
-						_, err = db.InsertEvent(ctx, note)
+						res, err := db.InsertEvent(ctx, note)
 						if err != nil {
 							t.Fatalf("failed to insert event: %v", err)
 						}
+						checkExecResult(t, res, 1, func(id int64) bool {
+							seen := insertedIDs[id]
+							insertedIDs[id] = true
+							return id != 0 && !seen
+						})
 					}
 					msg := `{"bucket":"afk","msg":"testing","replace":[{"start":"2023-06-12T19:54:39Z","end":"2023-06-12T19:54:51Z","data":{"afk":true,"locked":true}}]}`
 					var amendment *worklog.Amendment
@@ -408,10 +424,17 @@ func TestDB(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to unmarshal event message: %v", err)
 					}
-					_, err = db.AmendEvents(ctx, time.Time{}, amendment)
+					res, err := db.AmendEvents(ctx, time.Time{}, amendment)
 					if err != nil {
 						t.Errorf("unexpected error amending events: %v", err)
 					}
+					const (
+						wantAmendedEventCount = 3
+						wantLastID            = 8
+					)
+					checkExecResult(t, res, wantAmendedEventCount, func(id int64) bool {
+						return id == wantLastID
+					})
 					dump, err := db.Dump(ctx)
 					if err != nil {
 						t.Fatalf("failed to dump db: %v", err)
@@ -593,12 +616,32 @@ func findOverlap(n worklog.Replacement, h []worklog.Replacement) (worklog.Replac
 func overlaps(as, ae, bs, be time.Time) bool {
 	return ae.After(bs) && as.Before(be)
 }
+
 func remarshalJSON(dst, src any) error {
 	b, err := json.Marshal(src)
 	if err != nil {
 		return err
 	}
 	return json.Unmarshal(b, dst)
+}
+
+func checkExecResult(t *testing.T, res sql.Result, wantRows int64, idFn func(int64) bool) {
+	t.Helper()
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		t.Errorf("failed to get number of rows affected: %v", err)
+	}
+	if n != wantRows {
+		t.Errorf("unexpected number of rows affected: got:%d want:%d", n, wantRows)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Errorf("failed to get last ID: %v", err)
+	}
+	if idFn != nil && !idFn(id) {
+		t.Errorf("unexpected last ID: got:%d", id)
+	}
 }
 
 func sameError(a, b error) bool {
