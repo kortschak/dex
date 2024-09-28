@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/sys/execabs"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
@@ -42,24 +41,21 @@ type DB struct {
 	roWarn error
 }
 
-type execer interface {
-	Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error)
+type querier interface {
+	Query(ctx context.Context, query string, args ...any) (pgx.Rows, error)
 }
 
 type result struct {
-	pgconn.CommandTag
+	n      int64
+	lastID int64
 }
 
 func (r result) RowsAffected() (int64, error) {
-	return r.CommandTag.RowsAffected(), nil
+	return r.lastID, nil
 }
 
 func (r result) LastInsertId() (int64, error) {
-	return 0, nil
-}
-
-type querier interface {
-	Query(ctx context.Context, query string, args ...any) (pgx.Rows, error)
+	return r.lastID, nil
 }
 
 func txDone(ctx context.Context, tx pgx.Tx, err *error) {
@@ -472,7 +468,7 @@ func bucketMetadata(ctx context.Context, db querier, bid string) (*worklog.Bucke
 	return &m, nil
 }
 
-const InsertEvent = `insert into events(bucketrow, starttime, endtime, timezone, datastr) values ((select rowid from buckets where id = $1), $2, $3, $4, $5)`
+const InsertEvent = `insert into events(bucketrow, starttime, endtime, timezone, datastr) values ((select rowid from buckets where id = $1), $2, $3, $4, $5) returning id`
 
 // InsertEvent inserts a new event into the events table.
 // The SQL command run is [InsertEvent].
@@ -481,22 +477,46 @@ func (db *DB) InsertEvent(ctx context.Context, e *worklog.Event) (sql.Result, er
 	return insertEvent(ctx, db.store, bid, e)
 }
 
-func insertEvent(ctx context.Context, db execer, bid string, e *worklog.Event) (sql.Result, error) {
-	res, err := db.Exec(ctx, InsertEvent, bid, e.Start, e.End, e.Start.Format(tzFormat), e.Data)
-	return result{res}, err
+func insertEvent(ctx context.Context, db querier, bid string, e *worklog.Event) (sql.Result, error) {
+	rows, err := db.Query(ctx, InsertEvent, bid, e.Start, e.End, e.Start.Format(tzFormat), e.Data)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res result
+	for rows.Next() {
+		res.n++
+		err = rows.Scan(&res.lastID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 const UpdateEvent = `update events set starttime = $1, endtime = $2, datastr = $3 where id = $4 and bucketrow = (
 	select rowid from buckets where id = $5
-)`
+) returning id`
 
 // UpdateEvent updates the event in the store corresponding to the provided
 // event.
 // The SQL command run is [UpdateEvent].
 func (db *DB) UpdateEvent(ctx context.Context, e *worklog.Event) (sql.Result, error) {
 	bid := fmt.Sprintf("%s_%s", e.Bucket, db.host)
-	res, err := db.store.Exec(ctx, UpdateEvent, e.Start, e.End, e.Data, e.ID, bid)
-	return result{res}, err
+	rows, err := db.store.Query(ctx, UpdateEvent, e.Start, e.End, e.Data, e.ID, bid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var res result
+	for rows.Next() {
+		res.n++
+		err = rows.Scan(&res.lastID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 const LastEvent = `select id, starttime, endtime, timezone, datastr from events where bucketrow = (
@@ -892,7 +912,7 @@ const AmendEventsPrepare = `update events set datastr = jsonb_set(datastr, '{ame
 		not datastr::jsonb ? 'amend' and
 		bucketrow = (
 			select rowid from buckets where id = $1
-		);`
+		)`
 const AmendEventsUpdate = `update events set datastr = jsonb_set(
 		datastr,
 		'{amend}',
@@ -933,7 +953,8 @@ const AmendEventsUpdate = `update events set datastr = jsonb_set(
 		endtime > $4 and
 		bucketrow = (
 			select rowid from buckets where id = $1
-		);`
+		)
+	returning id`
 
 // AmendEvents adds amendment notes to the data for events in the store
 // overlapping the note. On return the note.Replace slice will be sorted.
@@ -962,22 +983,32 @@ func (db *DB) AmendEvents(ctx context.Context, ts time.Time, note *worklog.Amend
 	if err != nil {
 		return nil, err
 	}
-	var res pgconn.CommandTag
+	var res result
 	err = pgx.BeginFunc(ctx, db.store, func(tx pgx.Tx) error {
 		_, err = tx.Exec(ctx, AmendEventsPrepare, db.BucketID(note.Bucket), start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano))
 		if err != nil {
 			return fmt.Errorf("prepare amendment list: %w", err)
 		}
-		res, err = tx.Exec(ctx, AmendEventsUpdate, db.BucketID(note.Bucket), ts.Format(time.RFC3339Nano), note.Message, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), replace)
+		var rows pgx.Rows
+		rows, err = tx.Query(ctx, AmendEventsUpdate, db.BucketID(note.Bucket), ts.Format(time.RFC3339Nano), note.Message, start.Format(time.RFC3339Nano), end.Format(time.RFC3339Nano), replace)
 		if err != nil {
 			return fmt.Errorf("add amendments: %w", err)
+		}
+		defer rows.Close()
+		var res result
+		for rows.Next() {
+			res.n++
+			err = rows.Scan(&res.lastID)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return result{res}, err
+	return res, err
 }
 
 const DeleteEvent = `delete from events where bucketrow = (
