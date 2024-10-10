@@ -16,13 +16,13 @@ require (
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
 	github.com/kortschak/goroutine v1.1.2
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
-	github.com/rogpeppe/go-internal v1.12.1-0.20240415095825-2af95f28b640
+	github.com/rogpeppe/go-internal v1.13.1
 	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/image v0.18.0
-	golang.org/x/net v0.25.0
-	golang.org/x/sys v0.20.0
-	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
+	golang.org/x/net v0.26.0
+	golang.org/x/sys v0.21.0
+	golang.org/x/tools v0.22.0
 	google.golang.org/protobuf v1.33.0
 	modernc.org/sqlite v1.30.0
 )
@@ -52,7 +52,7 @@ require (
 	github.com/tdewolff/font v0.0.0-20240417221047-e5855237f87b // indirect
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
 	github.com/tdewolff/parse/v2 v2.7.3 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/crypto v0.24.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
