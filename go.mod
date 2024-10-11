@@ -20,8 +20,8 @@ require (
 	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/image v0.18.0
-	golang.org/x/net v0.28.0
-	golang.org/x/sys v0.23.0
+	golang.org/x/net v0.30.0
+	golang.org/x/sys v0.26.0
 	golang.org/x/tools v0.24.0
 	google.golang.org/protobuf v1.33.0
 	modernc.org/sqlite v1.33.1
@@ -52,10 +52,10 @@ require (
 	github.com/tdewolff/font v0.0.0-20240417221047-e5855237f87b // indirect
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
 	github.com/tdewolff/parse/v2 v2.7.3 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
+	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.20.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
