@@ -19,7 +19,7 @@ require (
 	github.com/rogpeppe/go-internal v1.13.1
 	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
-	golang.org/x/image v0.18.0
+	golang.org/x/image v0.21.0
 	golang.org/x/net v0.30.0
 	golang.org/x/sys v0.26.0
 	golang.org/x/tools v0.24.0
