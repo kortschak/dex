@@ -9,7 +9,7 @@ require (
 	github.com/bbrks/wrap/v2 v2.5.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/godbus/dbus/v5 v5.1.0
-	github.com/gofrs/flock v0.8.1
+	github.com/gofrs/flock v0.12.1
 	github.com/google/cel-go v0.20.1
 	github.com/google/go-cmp v0.6.0
 	github.com/jackc/pgx/v5 v5.6.0
