@@ -17,7 +17,7 @@ require (
 	github.com/kortschak/goroutine v1.1.2
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.13.1
-	github.com/tdewolff/canvas v0.0.0-20240512164826-1cb71758b3b2
+	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/image v0.21.0
 	golang.org/x/net v0.30.0
@@ -49,9 +49,9 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sstallion/go-hid v0.14.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
-	github.com/tdewolff/font v0.0.0-20240417221047-e5855237f87b // indirect
+	github.com/tdewolff/font v0.0.0-20240728193914-9dc6e3441d03 // indirect
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
-	github.com/tdewolff/parse/v2 v2.7.3 // indirect
+	github.com/tdewolff/parse/v2 v2.7.15 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.20.0 // indirect
