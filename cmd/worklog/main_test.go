@@ -147,7 +147,6 @@ func TestDaemon(t *testing.T) {
 					Hostname        string                  `json:"hostname,omitempty"`
 					Heartbeat       *rpc.Duration           `json:"heartbeat,omitempty"`
 					Rules           map[string]worklog.Rule `json:"rules,omitempty"`
-					DatabaseDir     string                  `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
 				}
 				err := conn.Call(ctx, "configure", rpc.NewMessage(uid, worklog.Config{
 					Options: options{
@@ -1732,62 +1731,28 @@ var dbDirTests = []struct {
 		name: "none",
 	},
 	{
-		name:       "deprecated",
-		config:     mkDBDirOptions("database_directory", ""),
+		name:       "sqlite",
+		config:     mkDBDirOptions("sqlite:database_directory"),
 		wantScheme: "sqlite",
 		wantDir:    "database_directory",
 	},
 	{
-		name:       "url_only_sqlite",
-		config:     mkDBDirOptions("", "sqlite:database_directory"),
-		wantScheme: "sqlite",
-		wantDir:    "database_directory",
-	},
-	{
-		name:       "url_only_postgres",
-		config:     mkDBDirOptions("", "postgres://username:password@localhost:5432/database_name"),
+		name:       "postgres",
+		config:     mkDBDirOptions("postgres://username:password@localhost:5432/database_name"),
 		wantScheme: "postgres",
 		wantDir:    "",
 	},
 	{
-		name:       "both_consistent",
-		config:     mkDBDirOptions("database_directory", "sqlite:database_directory"),
-		wantScheme: "sqlite",
-		wantDir:    "database_directory",
-	},
-	{
-		name:       "missing_scheme",
-		config:     mkDBDirOptions("database_dir", "database_directory"),
-		wantScheme: "",
-		wantDir:    "",
-		wantErr:    errors.New("missing scheme in database configuration"),
-	},
-	{
-		name:       "both_inconsistent_sqlite",
-		config:     mkDBDirOptions("database_dir", "sqlite:database_directory"),
-		wantScheme: "",
-		wantDir:    "",
-		wantErr:    errors.New("inconsistent database directory configuration: (sqlite:)database_directory != database_dir"),
-	},
-	{
 		name:       "invalid_sqlite_url",
-		config:     mkDBDirOptions("", "sqlite:/database_directory"),
+		config:     mkDBDirOptions("sqlite:/database_directory"),
 		wantScheme: "",
 		wantDir:    "",
 		wantErr:    errors.New("sqlite configuration missing opaque data: sqlite:/database_directory"),
 	},
-	{
-		name:       "both_inconsistent_postgres",
-		config:     mkDBDirOptions("database_dir", "postgres://username:password@localhost:5432/database_name"),
-		wantScheme: "",
-		wantDir:    "",
-		wantErr:    errors.New("inconsistent database configuration: both postgres database and sqlite directory configured"),
-	},
 }
 
-func mkDBDirOptions(dir, url string) worklog.Config {
+func mkDBDirOptions(url string) worklog.Config {
 	var cfg worklog.Config
-	cfg.Options.DatabaseDir = dir
 	cfg.Options.Database = url
 	return cfg
 }

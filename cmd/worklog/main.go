@@ -366,9 +366,8 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			return nil, rpc.NewError(rpc.ErrCodeInvalidMessage,
 				err.Error(),
 				map[string]any{
-					"type":         rpc.ErrCodeParameters,
-					"database":     m.Body.Options.Database,
-					"database_dir": m.Body.Options.DatabaseDir,
+					"type":     rpc.ErrCodeParameters,
+					"database": m.Body.Options.Database,
 				},
 			)
 		}
@@ -484,10 +483,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 func dbDir(cfg worklog.Config) (scheme, dir string, err error) {
 	opt := cfg.Options
 	if opt.Database == "" {
-		if opt.DatabaseDir != "" {
-			scheme = "sqlite"
-		}
-		return scheme, opt.DatabaseDir, nil
+		return "", "", nil
 	}
 	u, err := url.Parse(opt.Database)
 	if err != nil {
@@ -497,17 +493,11 @@ func dbDir(cfg worklog.Config) (scheme, dir string, err error) {
 	case "":
 		return "", "", errors.New("missing scheme in database configuration")
 	case "sqlite":
-		if opt.DatabaseDir != "" && u.Opaque != opt.DatabaseDir {
-			return "", "", fmt.Errorf("inconsistent database directory configuration: (%s:)%s != %s", u.Scheme, u.Opaque, opt.DatabaseDir)
-		}
 		if u.Opaque == "" {
 			return "", "", fmt.Errorf("sqlite configuration missing opaque data: %s", opt.Database)
 		}
 		return u.Scheme, u.Opaque, nil
 	default:
-		if opt.DatabaseDir != "" {
-			return "", "", fmt.Errorf("inconsistent database configuration: both %s database and sqlite directory configured", u.Scheme)
-		}
 		return u.Scheme, "", nil
 	}
 }

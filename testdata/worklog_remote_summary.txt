@@ -39,7 +39,7 @@ log_level = "debug"
 log_add_source = true
 
 [module.worklog1.options]
-database_dir = "worklog1"
+database = "sqlite:worklog1"
 hostname = "localhost1"
 [module.worklog1.options.web]
 addr = "localhost:7171"
@@ -70,7 +70,7 @@ log_level = "debug"
 log_add_source = true
 
 [module.worklog2.options]
-database_dir = "worklog2"
+database = "sqlite:worklog2"
 hostname = "localhost2"
 [module.worklog2.options.web]
 addr = "localhost:7272"

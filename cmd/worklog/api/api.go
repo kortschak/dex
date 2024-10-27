@@ -33,9 +33,6 @@ type Config struct {
 		Hostname  string          `json:"hostname,omitempty"`
 		Heartbeat *rpc.Duration   `json:"heartbeat,omitempty"`
 		Rules     map[string]Rule `json:"rules,omitempty"`
-
-		// Deprecated: Use Database with sqlite scheme.
-		DatabaseDir string `json:"database_dir,omitempty"` // Relative to XDG_STATE_HOME.
 	} `json:"options,omitempty"`
 }
 
