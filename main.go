@@ -186,7 +186,7 @@ func Main() int {
 	w, err := config.NewWatcher(ctx, cfgdir, changes, -1, log)
 	if err != nil {
 		mlog.LogAttrs(ctx, slog.LevelError, err.Error())
-		os.Exit(internalError)
+		return internalError
 	}
 	go w.Watch(ctx)
 
