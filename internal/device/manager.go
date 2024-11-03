@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	_ sys.NewDevice[*rpc.Kernel, *Manager, *Button] = NewManager[*rpc.Kernel]
+	_ sys.NewDevice[*rpc.Kernel, *Manager, *Button] = NewManager
 
 	_ sys.Device[*Button] = (*Manager)(nil)
 	_ sys.Page[*Button]   = Page{}
@@ -45,7 +45,7 @@ var kernelUID = rpc.UID{Module: "kernel", Service: "dev"}
 
 // NewManager returns a new device manager controlling the physical device
 // specified by pid and serial and communicating via the provided RPC kernel.
-func NewManager[K sys.Kernel](ctx context.Context, pid ardilla.PID, serial string, kernel K, log *slog.Logger) (*Manager, error) {
+func NewManager(ctx context.Context, pid ardilla.PID, serial string, kernel *rpc.Kernel, log *slog.Logger) (*Manager, error) {
 	c, err := NewController(ctx, kernel, pid, serial, log)
 	if err != nil {
 		return nil, err

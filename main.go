@@ -162,7 +162,7 @@ func Main() int {
 	defer store.Close()
 
 	sysman, err := sys.NewManager(
-		rpc.NewKernel, device.NewManager[*rpc.Kernel],
+		rpc.NewKernel, device.NewManager,
 		store, datadir, log, &level, addSource)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start manager: %v\n", err)
