@@ -85,7 +85,7 @@ func Main() int {
 	}
 	defer store.Close()
 
-	for dev, pages := range plugins.Devices {
+	for dev, pages := range plugins.Actions {
 		var pid ardilla.PID
 		for _, id := range pids {
 			if dev.Model == id.String() {

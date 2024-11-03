@@ -7,8 +7,8 @@ package plugins
 
 import "time"
 
-// Devices is the device configuration used by minidex.
-var Devices = map[Device]map[Page]map[Button]Action{
+// Actions is the device configuration used by minidex.
+var Actions = map[Device]map[Page]map[Button]Action{
 	{Model: "", Serial: ""}: {
 		"default": {
 			{Row: 0, Col: 0}: &gopher{},
