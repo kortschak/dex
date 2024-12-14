@@ -73,7 +73,9 @@ func TestDaemon(t *testing.T) {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}
 	testerPath := filepath.Join(tmp, "tester")
-	out, err = execabs.Command("go", "build", "-o", testerPath, "./tester").CombinedOutput()
+	build := execabs.Command("go", "build", "-o", testerPath)
+	build.Dir = "./tester"
+	out, err = build.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build tester: %v\n%s", err, out)
 	}

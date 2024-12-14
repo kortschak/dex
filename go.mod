@@ -4,7 +4,6 @@ go 1.22.7
 
 require (
 	cuelang.org/go v0.10.0
-	gioui.org v0.3.1
 	github.com/BurntSushi/toml v1.3.2
 	github.com/bbrks/wrap/v2 v2.5.0
 	github.com/fsnotify/fsnotify v1.7.0
@@ -28,8 +27,6 @@ require (
 )
 
 require (
-	gioui.org/cpu v0.0.0-20220412190645-f1e9e8c3b1f7 // indirect
-	gioui.org/shader v1.0.8 // indirect
 	github.com/ByteArena/poly2tri-go v0.0.0-20170716161910-d102ad91854f // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
@@ -53,7 +50,6 @@ require (
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
 	github.com/tdewolff/parse/v2 v2.7.15 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
-	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect

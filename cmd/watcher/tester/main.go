@@ -10,7 +10,6 @@ import (
 	"os"
 
 	"gioui.org/app"
-	"gioui.org/io/system"
 )
 
 func main() {
@@ -18,11 +17,11 @@ func main() {
 	flag.Parse()
 
 	go func() {
-		w := app.NewWindow(app.Title(*title), app.Size(200, 100))
+		var w app.Window
+		w.Option(app.Title(*title), app.Size(200, 100))
 		for {
-			e := <-w.Events()
-			switch e := e.(type) {
-			case system.DestroyEvent:
+			switch e := w.Event().(type) {
+			case app.DestroyEvent:
 				if e.Err != nil {
 					log.Fatal(e.Err)
 				}

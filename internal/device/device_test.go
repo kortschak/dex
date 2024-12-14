@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 var (
@@ -28,6 +29,9 @@ func TestPauser(t *testing.T) {
 		atomic.Bool{},
 		sync.Mutex{},
 	)
+	comparable := cmpopts.EquateComparable(
+		sync.Mutex{},
+	)
 	ignore := cmp.FilterValues(
 		func(_, _ chan struct{}) bool { return true },
 		cmp.Ignore(),
@@ -39,8 +43,8 @@ func TestPauser(t *testing.T) {
 		p2.pause()
 		p2.pause()
 
-		if !cmp.Equal(&p1, &p2, allow, ignore) {
-			t.Errorf("pause is not idempotent:\n--- p1:\n+++ p2:\n%s", cmp.Diff(&p1, &p2, allow, ignore))
+		if !cmp.Equal(&p1, &p2, allow, ignore, comparable) {
+			t.Errorf("pause is not idempotent:\n--- p1:\n+++ p2:\n%s", cmp.Diff(&p1, &p2, allow, ignore, comparable))
 		}
 	})
 	t.Run("unpause_no_panic", func(t *testing.T) {
@@ -63,8 +67,8 @@ func TestPauser(t *testing.T) {
 		p2.unpause()
 		p2.unpause()
 
-		if !cmp.Equal(&p1, &p2, allow, ignore) {
-			t.Errorf("unpause is not idempotent:\n--- p1:\n+++ p2:\n%s", cmp.Diff(&p1, &p2, allow, ignore))
+		if !cmp.Equal(&p1, &p2, allow, ignore, comparable) {
+			t.Errorf("unpause is not idempotent:\n--- p1:\n+++ p2:\n%s", cmp.Diff(&p1, &p2, allow, ignore, comparable))
 		}
 	})
 	t.Run("pause_pauses", func(t *testing.T) {
