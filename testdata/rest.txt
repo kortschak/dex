@@ -91,7 +91,7 @@ response.body
 			"command": ".*/bin/rest -log_stdout -uid rest -network tcp -addr 127\.0\.0\.1:.*",
 			"has_drop": false,
 			"uid": "rest",
-			"version": "(?:\(devel\) )?[^ ]+(?: \(modified\))?"
+			"version": "(?:(?:\(devel\)|v[0-9]\.[0-9]\.[0-9]-[0-9]{14}-[0-9a-f]{12}(?:\+dirty))? )?[0-9a-f]+(?: \(modified\))?"
 		}
 	},
 	"funcs": \[
