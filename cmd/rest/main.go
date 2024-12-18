@@ -560,7 +560,7 @@ func (extLib) decode(arg ref.Val) ref.Val {
 	var val any
 	err := json.Unmarshal(msg, &val)
 	if err != nil {
-		return types.NewErr(err.Error())
+		return types.NewErr("%s", err.Error())
 	}
 	return types.DefaultTypeAdapter.NativeToValue(val)
 }
