@@ -911,9 +911,7 @@ func (d *daemon) serve(addr, path string, canModify bool) (string, context.Cance
 		return "", nil, err
 	}
 	if isLocalAddr {
-		mux.HandleFunc("/query", d.query(ctx))
 		mux.HandleFunc("/query/", d.query(ctx))
-		mux.HandleFunc("/backup", d.backup(ctx))
 		mux.HandleFunc("/backup/", d.backup(ctx))
 	}
 	if canModify && isLocalAddr {
