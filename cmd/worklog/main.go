@@ -903,20 +903,20 @@ func (d *daemon) serve(addr, path string, canModify bool) (string, context.Cance
 		ui = os.DirFS(path)
 	}
 	mux.Handle("/", http.FileServer(http.FS(ui)))
-	mux.HandleFunc("/dump/", d.dump(ctx))
-	mux.HandleFunc("/data/", d.dashboardData(ctx))
-	mux.HandleFunc("/summary/", d.summaryData(ctx))
+	mux.HandleFunc("GET /dump/", d.dump(ctx))
+	mux.HandleFunc("GET /data/", d.dashboardData(ctx))
+	mux.HandleFunc("GET /summary/", d.summaryData(ctx))
 	isLocalAddr, err := isLoopback(ctx, addr)
 	if err != nil {
 		return "", nil, err
 	}
 	if isLocalAddr {
 		mux.HandleFunc("/query/", d.query(ctx))
-		mux.HandleFunc("/backup/", d.backup(ctx))
+		mux.HandleFunc("GET /backup/", d.backup(ctx))
 	}
 	if canModify && isLocalAddr {
-		mux.HandleFunc("/amend/", d.amend(ctx))
-		mux.HandleFunc("/load/", d.load(ctx))
+		mux.HandleFunc("POST /amend/", d.amend(ctx))
+		mux.HandleFunc("POST /load/", d.load(ctx))
 	}
 	srv := &http.Server{
 		Addr:     addr,
@@ -971,10 +971,6 @@ func isLoopback(ctx context.Context, addr string) (bool, error) {
 
 func (d *daemon) amend(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodPost {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
 		now := time.Now()
 		var buf bytes.Buffer
 		_, err := io.Copy(&buf, req.Body)
@@ -1074,11 +1070,6 @@ func mergeReplacement(replace []worklog.Replacement) []timeRange {
 
 func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		db := d.db.Load()
 		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
@@ -1133,11 +1124,6 @@ func (d *daemon) dump(ctx context.Context) http.HandlerFunc {
 
 func (d *daemon) backup(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		db := d.db.Load()
 		if db == nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.String("error", "no database"), slog.String("url", req.RequestURI))
@@ -1203,10 +1189,6 @@ func (d *daemon) backup(ctx context.Context) http.HandlerFunc {
 
 func (d *daemon) load(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodPost {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
 		var replace bool
 		r := req.URL.Query().Get("replace")
 		if r != "" {

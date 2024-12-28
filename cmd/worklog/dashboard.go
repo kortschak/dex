@@ -26,11 +26,6 @@ import (
 
 func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		local, err := d.timezone.Load().Location()
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "polling current location", slog.Any("error", err))
@@ -293,11 +288,6 @@ func (d *daemon) dayData(ctx context.Context, db storage, rules map[string]map[s
 
 func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		local, err := d.timezone.Load().Location()
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "polling current location", slog.Any("error", err))
