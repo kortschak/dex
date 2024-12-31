@@ -1377,7 +1377,7 @@ func (l dbLib) query(arg ref.Val) ref.Val {
 	}
 	resp, err := l.db.Select(l.ctx, string(sql))
 	if err != nil {
-		return types.NewErr(err.Error())
+		return types.NewErr("%v", err)
 	}
 	for _, row := range resp {
 		b, ok := row["datastr"].([]byte)
@@ -1385,7 +1385,7 @@ func (l dbLib) query(arg ref.Val) ref.Val {
 			var d any
 			err := json.Unmarshal(b, &d)
 			if err != nil {
-				return types.NewErr(err.Error())
+				return types.NewErr("%v", err)
 			}
 			row["datastr"] = d
 		}

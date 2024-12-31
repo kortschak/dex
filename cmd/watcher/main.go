@@ -677,7 +677,7 @@ func (l devLib) sleepState(arg ref.Val) ref.Val {
 		},
 	).Await(l.ctx, &resp)
 	if err != nil {
-		return types.NewErr("%v", err)
+		return types.NewErr("%w", err)
 	}
 	return types.NewDynamicMap(types.DefaultTypeAdapter, map[string]any{
 		"state": resp.Body.State,
