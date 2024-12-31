@@ -227,14 +227,14 @@ func with(dst, src ref.Val) (res, other map[ref.Val]ref.Val, maybe ref.Val) {
 	new := make(map[ref.Val]ref.Val)
 	m, err := obj.ConvertToNative(refValMap)
 	if err != nil {
-		return nil, nil, types.NewErr("unable to convert dst to native: %v", err)
+		return nil, nil, types.NewErr("unable to convert dst to native: %w", err)
 	}
 	for k, v := range m.(map[ref.Val]ref.Val) {
 		new[k] = v
 	}
 	m, err = val.ConvertToNative(refValMap)
 	if err != nil {
-		return nil, nil, types.NewErr("unable to convert src to native: %v", err)
+		return nil, nil, types.NewErr("unable to convert src to native: %w", err)
 	}
 	return new, m.(map[ref.Val]ref.Val), nil
 }
