@@ -796,7 +796,7 @@ func reqToMap(req *http.Request) (map[string]any, error) {
 }
 
 func urlMap(u *url.URL) map[string]any {
-	um := map[string]interface{}{
+	um := map[string]any{
 		"Scheme":      u.Scheme,
 		"Opaque":      u.Opaque,
 		"Host":        u.Host,
@@ -809,7 +809,7 @@ func urlMap(u *url.URL) map[string]any {
 	}
 	if u.User != nil {
 		password, passwordSet := u.User.Password()
-		um["User"] = map[string]interface{}{
+		um["User"] = map[string]any{
 			"Username":    u.User.Username(),
 			"Password":    password,
 			"PasswordSet": passwordSet,
