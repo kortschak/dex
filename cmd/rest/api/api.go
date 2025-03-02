@@ -75,6 +75,10 @@ type Notification struct {
 	// Otherwise the sender is the service's
 	// UID.
 	From *rpc.UID `json:"from,omitempty"`
+	// StatusCode is the HTTP status code to return
+	// to the client. If not set, [http.StatusOK] is
+	// returned unless internal errors prevent it.
+	StatusCode int `json:"status,omitempty"`
 	// Header is the set of headers to include in
 	// the HTTP response. Setting a header will
 	// replace any existing headers in the response.

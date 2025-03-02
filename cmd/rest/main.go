@@ -599,8 +599,12 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 				w.Header()[textproto.CanonicalMIMEHeaderKey(k)] = v
 			}
 			d.log.LogAttrs(ctx, slog.LevelDebug, "note details", slog.String("name", name), slog.Any("note", note))
+			status := http.StatusOK
+			if note.StatusCode != 0 {
+				status = note.StatusCode
+			}
 			if note.Method == "" {
-				w.WriteHeader(http.StatusOK)
+				w.WriteHeader(status)
 				return
 			}
 			uid := detail.euid
@@ -640,6 +644,7 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
+				w.WriteHeader(status)
 				w.Write(b)
 			} else {
 				if note.UID.IsZero() {
