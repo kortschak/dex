@@ -227,9 +227,10 @@ func grantReadAccess(ts *testscript.TestScript, neg bool, args []string) {
 
 func get() int {
 	jsonData := flag.Bool("json", false, "data from GET is JSON")
+	headers := flag.String("header", "", "destination for headers")
 	flag.Parse()
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: GET [-json] <url>")
+		fmt.Fprintln(os.Stderr, "usage: GET [-json] [-header <out-file>] <url>")
 		return 2
 	}
 	cli := http.Client{
@@ -255,6 +256,15 @@ func get() int {
 		fmt.Fprintf(os.Stderr, "failed body close: %v\n", err)
 		return 1
 	}
+	if *headers != "" {
+		var buf bytes.Buffer
+		resp.Header.WriteSubset(&buf, map[string]bool{"Date": true})
+		err = os.WriteFile(*headers, buf.Bytes(), 0o600)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed writing response headers: %v\n", err)
+			return 1
+		}
+	}
 	if *jsonData {
 		var dst bytes.Buffer
 		err = json.Indent(&dst, buf.Bytes(), "", "\t")
@@ -273,10 +283,11 @@ func get() int {
 
 func post() int {
 	jsonData := flag.Bool("json", false, "response data from POST is JSON")
+	headers := flag.String("header", "", "destination for headers")
 	content := flag.String("content", "", "data content-type")
 	flag.Parse()
 	if flag.NArg() != 2 {
-		fmt.Fprintln(os.Stderr, "usage: POST [-json] [-content <content-type>] <body-path> <url>")
+		fmt.Fprintln(os.Stderr, "usage: POST [-json] [-header <out-file>] [-content <content-type>] <body-path> <url>")
 		return 2
 	}
 	f, err := os.Open(flag.Arg(0))
@@ -307,6 +318,15 @@ func post() int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed response body close: %v\n", err)
 		return 1
+	}
+	if *headers != "" {
+		var buf bytes.Buffer
+		resp.Header.WriteSubset(&buf, map[string]bool{"Date": true})
+		err = os.WriteFile(*headers, buf.Bytes(), 0o600)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed writing response headers: %v\n", err)
+			return 1
+		}
 	}
 	if *jsonData {
 		var dst bytes.Buffer

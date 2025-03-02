@@ -7,6 +7,7 @@ package api
 
 import (
 	"log/slog"
+	"net/http"
 
 	"github.com/kortschak/dex/rpc"
 )
@@ -74,4 +75,8 @@ type Notification struct {
 	// Otherwise the sender is the service's
 	// UID.
 	From *rpc.UID `json:"from,omitempty"`
+	// Header is the set of headers to include in
+	// the HTTP response. Setting a header will
+	// replace any existing headers in the response.
+	Header http.Header `json:"header,omitempty"`
 }

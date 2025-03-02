@@ -20,6 +20,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"reflect"
@@ -594,11 +595,14 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			for k, v := range note.Header {
+				w.Header()[textproto.CanonicalMIMEHeaderKey(k)] = v
+			}
+			d.log.LogAttrs(ctx, slog.LevelDebug, "note details", slog.String("name", name), slog.Any("note", note))
 			if note.Method == "" {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-			d.log.LogAttrs(ctx, slog.LevelDebug, "note details", slog.String("name", name), slog.Any("note", note))
 			uid := detail.euid
 			if note.From != nil {
 				uid = *note.From

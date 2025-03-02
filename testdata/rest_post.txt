@@ -18,9 +18,10 @@ cd ${WORK}
 dex -log debug -lines &dex&
 sleep 1s
 
-POST -json body.txt http://localhost:7878/
+POST -json -header header.txt body.txt http://localhost:7878/
 cmp stdout want_response.json
 cmp got.txt body.txt
+cmp header.txt want_header.txt
 
 kill -INT dex
 wait dex
@@ -50,6 +51,9 @@ request = """
 		"path": "bash",
 		"args": ["-c", "echo -n "+debug("POST data", '"'+string(request.Body)+'"')+" > got.txt"],
 	},
+	"header": {
+		"other-header": ["value"],
+	},
 }
 """
 response = """
@@ -65,6 +69,10 @@ log_add_source = true
 [service.write_file]
 module = "runner"
 
+-- want_header.txt --
+Content-Length: 15
+Content-Type: text/plain; charset=utf-8
+Other-Header: value
 -- body.txt --
 Test data.
 -- want_response.json --
