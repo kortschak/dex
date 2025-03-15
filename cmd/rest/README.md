@@ -34,6 +34,57 @@ The response program may return the following CEL types:
 - duration (will be formatted as nanoseconds)
 - JSON object or array
 
+### ActivityWatch Web Watcher integration
+
+It is possible to make use of the [ActivityWatch Web Watcher](https://github.com/ActivityWatch/aw-watcher-web) browser plugin to send AW event to the [`worklog` module](../worklog).
+
+Assuming there is already a `rest` module configured, adding the following server definition will receive AW Web events and send them to `worklog`.
+```
+[module.rest.options.server.web_watcher]
+addr = "localhost:5600"
+request = """
+request.Method == "OPTIONS" ?
+	{
+		"header": {
+			"Access-Control-Allow-Origin": request.Header["Origin"], // or ["*"] or known origin.
+			"Access-Control-Allow-Method": ["POST"],
+			"Access-Control-Allow-Headers": ["content-type"],
+		},
+	}
+: (request.Method == "POST" && request.URL.Path == "/api/0/buckets/aw-watcher-web-firefox_localhost/heartbeat") ?
+	{
+		"uid":    {"module": "worklog"},
+		"from":   {"module": "web_watcher"},
+		"method": "record",
+		"params": {
+			"details": decode_json(request.Body),
+		},
+	}
+:
+	{
+		"status": 405,
+	}
+"""
+```
+Note that the OPTIONS method handler is only required for Firefox and is part of [Mozilla CORS handling](https://developer.mozilla.org/en-US/docs/Glossary/CORS). It is not currently required for Chromium.
+
+This message can then be recorded by `worklog` by adding the following configuration snippet.
+```
+[module.worklog.options.rules.browser]
+name = "web-watcher"
+type = "browserdetail"
+src = """
+data_src != {"module":"web_watcher"} ? {} :
+{
+	"bucket":   curr.?data.icognito.orValue(false) ? "" : bucket,
+	"start":    curr.time,
+	"end":      curr.time,
+	"data":     curr.data,
+	"continue": false,
+}
+"""
+```
+
 ## CEL optional types
 
 The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion).
