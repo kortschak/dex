@@ -693,7 +693,7 @@ func (d *daemon) record(ctx context.Context, src rpc.UID, curr, last worklog.Rep
 			if err == nil {
 				d.log.LogAttrs(ctx, slog.LevelDebug, "last event from store", slog.String("bucket", bucket), slog.Any("last", lastEvent))
 			} else {
-				d.log.LogAttrs(ctx, slog.LevelWarn, "no last event", slog.String("bucket", bucket), slog.Any("error", err))
+				d.log.LogAttrs(ctx, slog.LevelInfo, "no last event", slog.String("bucket", bucket), slog.Any("error", err))
 				lastEvent = &worklog.Event{
 					Bucket:   bucket,
 					Start:    curr.Time,
