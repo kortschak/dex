@@ -120,15 +120,9 @@ func (r *Report) UnmarshalJSON(data []byte) error {
 		Period  rpc.Duration    `json:"period"`
 		Details json.RawMessage `json:"details"`
 	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	err := dec.Decode(&report)
+	err := jsonUnmarshalNoUnknown(data, &report)
 	if err != nil {
 		return err
-	}
-	if dec.More() {
-		off := dec.InputOffset()
-		return fmt.Errorf("invalid character "+quoteChar(data[off])+" after top-level value at offset %d", off)
 	}
 	*r = Report{
 		Time:   report.Time,
@@ -140,7 +134,7 @@ func (r *Report) UnmarshalJSON(data []byte) error {
 		&WatcherDetails{},
 		&MapDetails{},
 	} {
-		err = json.Unmarshal(report.Details, m)
+		err = jsonUnmarshalNoUnknown(report.Details, m)
 		if err == nil {
 			r.Details = m
 			return nil
@@ -148,6 +142,22 @@ func (r *Report) UnmarshalJSON(data []byte) error {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// jsonUnmarshalNoUnknown is equivalent to json.Unmarshal except that it
+// rejects data mapping that contains fields not present in the target.
+func jsonUnmarshalNoUnknown(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	err := dec.Decode(v)
+	if err != nil {
+		return err
+	}
+	if dec.More() {
+		off := dec.InputOffset()
+		return fmt.Errorf("invalid character "+quoteChar(data[off])+" after top-level value at offset %d", off)
+	}
+	return nil
 }
 
 // quoteChar formats c as a quoted character literal.
