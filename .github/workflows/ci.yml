@@ -10,8 +10,8 @@ jobs:
       fail-fast: false
       matrix:
         go-version:
-        - 1.23.x
         - 1.24.x
+        - 1.25.x
         platform:
         - ubuntu-latest
         - macos-latest
