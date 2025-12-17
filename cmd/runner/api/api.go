@@ -66,8 +66,8 @@ type StateRequest struct {
 	// returned.
 	Service *rpc.UID `json:"uid,omitempty"`
 	// Buttons is a button filter. If it is not empty
-	// only jobs started with by specified buttons will
-	// be returned.
+	// only jobs started by specified buttons will be
+	// returned.
 	Buttons []rpc.Button `json:"buttons,omitempty"`
 }
 
