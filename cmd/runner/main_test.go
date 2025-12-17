@@ -166,6 +166,56 @@ func TestDaemon(t *testing.T) {
 				}
 			})
 
+			t.Run("run_notify_state", func(t *testing.T) {
+				sleep, err := execabs.LookPath("sleep")
+				if err == execabs.ErrNotFound {
+					t.Skip("no sleep command")
+				}
+				if err != nil {
+					t.Fatalf("unexpected error finding sleep command: %v", err)
+				}
+
+				msg := rpc.NewMessage(uid, runner.Params{
+					Path: "sleep",
+					Args: []string{"2s"},
+				})
+				msg.Button = &rpc.Button{
+					Row: 1, Col: 1, Page: "test",
+				}
+				err = conn.Notify(ctx, "run", msg)
+				if err != nil {
+					t.Errorf("failed run notify: %v", err)
+				}
+
+				for _, svc := range []*rpc.UID{
+					nil,
+					&uid,
+				} {
+					t.Run(strings.Trim(fmt.Sprint(svc), "<>"), func(t *testing.T) {
+						var res rpc.Message[runner.StateResponse]
+						err = conn.Call(ctx, "state", rpc.NewMessage(uid, runner.StateRequest{
+							Service: svc,
+						})).Await(ctx, &res)
+						if err != nil {
+							t.Errorf("failed run call: %v", err)
+						}
+						if len(res.Body) != 1 {
+							t.Fatalf("unexpected number of running jobs: got:%d want:1", len(res.Body))
+						}
+						if res.Body[0].Service != uid {
+							t.Errorf("unexpected service: got: %v want: %v", res.Body[0].Service, uid)
+						}
+						if res.Body[0].Button != *msg.Button {
+							t.Errorf("unexpected location: got: %#v want: %#v", res.Body[0].Button, *msg.Button)
+						}
+						wantCmd := fmt.Sprintf("%s 2s", sleep)
+						if res.Body[0].Command != wantCmd {
+							t.Errorf("unexpected location: got: %s want: %s", res.Body[0].Command, wantCmd)
+						}
+					})
+				}
+			})
+
 			time.Sleep(time.Second) // Let some heartbeats past.
 
 			t.Run("stop", func(t *testing.T) {

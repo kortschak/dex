@@ -13,6 +13,9 @@ import (
 	"github.com/kortschak/dex/rpc"
 )
 
+// Run is the method used to run a command.
+const Run = "run"
+
 // Params defines the RPC messages passed to start an executable by the runner
 // module. Fields correspond to fields in [os/execabs.Cmd].
 type Params struct {
@@ -51,4 +54,32 @@ type Service struct {
 	Active *bool           `json:"active,omitempty"`
 	Serial *string         `json:"serial,omitempty"`
 	Listen []config.Button `json:"listen,omitempty"`
+}
+
+// State is the method used to request running state information.
+const State = "state"
+
+// StateRequest is a filter for running state information requests.
+type StateRequest struct {
+	// Service is a service filter. If it is not nil,
+	// only jobs started with the Service UID will be
+	// returned.
+	Service *rpc.UID `json:"uid,omitempty"`
+	// Buttons is a button filter. If it is not empty
+	// only jobs started with by specified buttons will
+	// be returned.
+	Buttons []rpc.Button `json:"buttons,omitempty"`
+}
+
+// StateResponse is the set of running jobs identified by a state request
+// call.
+type StateResponse []Running
+
+// Running is a running job identified by a state request call.
+type Running struct {
+	Start   time.Time  `json:"start"`
+	Service rpc.UID    `json:"uid"`
+	Button  rpc.Button `json:"loc"`
+	Command string     `json:"cmd"`
+	PID     int        `json:"pid"`
 }

@@ -67,9 +67,10 @@ const (
 
 // Message is the message passing container.
 type Message[T any] struct {
-	Time time.Time `json:"time"`
-	UID  UID       `json:"uid,omitempty"`
-	Body T         `json:"body,omitempty"`
+	Time   time.Time `json:"time"`
+	UID    UID       `json:"uid,omitempty"`
+	Button *Button   `json:"button,omitempty"`
+	Body   T         `json:"body,omitempty"`
 }
 
 // UID is a component's UID.

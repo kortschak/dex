@@ -15,10 +15,12 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unique"
 
 	"github.com/kortschak/jsonrpc2"
 	"golang.org/x/sys/execabs"
@@ -125,6 +127,7 @@ func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *at
 		addSource: addSource,
 		cancel:    cancel,
 		waiting:   make(map[*execabs.Cmd]context.CancelFunc),
+		buttons:   make(buttons),
 	}
 }
 
@@ -156,10 +159,47 @@ type daemon struct {
 
 	wMu     sync.Mutex
 	waiting map[*execabs.Cmd]context.CancelFunc
+	buttons buttons
 
 	hMu       sync.Mutex
 	heartbeat time.Duration
 	hStop     chan struct{}
+}
+
+// buttons is the set of running jobs, stratified on the service,
+// the action that was invoked and from where, and their process IDs.
+type buttons map[rpc.UID]map[buttonAction]map[int]running
+
+type running struct {
+	Start time.Time `json:"start"`
+	cmd   *execabs.Cmd
+}
+
+func (b buttons) add(svc rpc.UID, action buttonAction, pid int, cmd *execabs.Cmd) {
+	r := running{Start: time.Now(), cmd: cmd}
+	if b[svc] == nil {
+		b[svc] = make(map[buttonAction]map[int]running)
+	}
+	if b[svc][action] == nil {
+		b[svc][action] = make(map[int]running)
+	}
+	b[svc][action][pid] = r
+}
+
+func (b buttons) delete(svc rpc.UID, action buttonAction, pid int) {
+	delete(b[svc][action], pid)
+	if len(b[svc][action]) == 0 {
+		delete(b[svc], action)
+	}
+	if len(b[svc]) == 0 {
+		delete(b, svc)
+	}
+}
+
+// buttonAction is a command action/location map key.
+type buttonAction struct {
+	loc unique.Handle[rpc.Button]
+	cmd string // cmd is the string representation of the command.
 }
 
 func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
@@ -181,7 +221,27 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		}
 		return rpc.NewMessage(rpc.UID{Module: d.uid}, version), nil
 
-	case "run":
+	case runner.State:
+		var m rpc.Message[runner.StateRequest]
+		err := rpc.UnmarshalMessage(req.Params, &m)
+		if err != nil {
+			d.log.LogAttrs(ctx, slog.LevelError, "state", slog.Any("error", err))
+			return nil, err
+		}
+		d.wMu.Lock()
+		var running runner.StateResponse
+		if m.Body.Service != nil {
+			running = collectRunning(*m.Body.Service, m.Body.Buttons, d.buttons[*m.Body.Service])
+		} else {
+			for svc, buttons := range d.buttons {
+				running = append(running, collectRunning(svc, m.Body.Buttons, buttons)...)
+			}
+		}
+		d.wMu.Unlock()
+		d.log.LogAttrs(ctx, slog.LevelDebug, "state", slog.Any("result", running))
+		return rpc.NewMessage(m.UID, running), nil
+
+	case runner.Run:
 		var m rpc.Message[runner.Params]
 		err := rpc.UnmarshalMessage(req.Params, &m)
 		if err != nil {
@@ -242,14 +302,26 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 					},
 				)
 			}
+			action := buttonAction{
+				cmd: cmd.String(),
+			}
+			if m.Button != nil {
+				action.loc = unique.Make(*m.Button)
+			}
+			pid := cmd.Process.Pid
 			go func() {
 				d.wMu.Lock()
 				d.waiting[cmd] = cancel
+				d.buttons.add(m.UID, action, pid, cmd)
 				d.wMu.Unlock()
+
 				cmd.Wait()
+
 				d.wMu.Lock()
 				delete(d.waiting, cmd)
+				d.buttons.delete(m.UID, action, pid)
 				d.wMu.Unlock()
+
 				cancel()
 			}()
 			return nil, nil
@@ -342,6 +414,26 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 	default:
 		return nil, jsonrpc2.ErrNotHandled
 	}
+}
+
+func collectRunning(svc rpc.UID, buttons []rpc.Button, state map[buttonAction]map[int]running) []runner.Running {
+	var running []runner.Running
+	for action, proc := range state {
+		loc := action.loc.Value()
+		if buttons != nil && !slices.Contains(buttons, loc) {
+			continue
+		}
+		for pid, r := range proc {
+			running = append(running, runner.Running{
+				Start:   r.Start,
+				Service: svc,
+				Button:  loc,
+				Command: action.cmd,
+				PID:     pid,
+			})
+		}
+	}
+	return running
 }
 
 func (d *daemon) beat(ctx context.Context, p time.Duration) {

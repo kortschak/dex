@@ -464,12 +464,21 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 							}))
 						}
 						if a.Do != nil && *a.Do != "" {
+							loc := &rpc.Button{
+								Row:  a.Row,
+								Col:  a.Col,
+								Page: a.Page,
+							}
 							if uid.IsKernel() {
 								// Button's service belongs to kernel, so
 								// this is a direct kernel call.
-								return p.doKernel(ctx, *a.Do, dev, rpc.NewMessage(uid, a.Args))
+								msg := rpc.NewMessage(uid, a.Args)
+								msg.Button = loc
+								return p.doKernel(ctx, *a.Do, dev, msg)
 							}
-							return conn.Notify(ctx, *a.Do, rpc.NewMessage(kernelUID, a.Args))
+							msg := rpc.NewMessage(kernelUID, a.Args)
+							msg.Button = loc
+							return conn.Notify(ctx, *a.Do, msg)
 						}
 						return nil
 					}
