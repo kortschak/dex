@@ -13,7 +13,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
-	github.com/kortschak/goroutine v1.1.2
+	github.com/kortschak/goroutine v1.1.3
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.13.1
 	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
