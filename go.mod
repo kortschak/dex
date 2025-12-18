@@ -4,7 +4,7 @@ go 1.24.6
 
 require (
 	cuelang.org/go v0.10.0
-	github.com/BurntSushi/toml v1.3.2
+	github.com/BurntSushi/toml v1.5.0
 	github.com/bbrks/wrap/v2 v2.5.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/godbus/dbus/v5 v5.1.0
