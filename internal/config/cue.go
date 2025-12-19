@@ -22,7 +22,7 @@ func Validate(schema string, cfg any) (paths [][]string, err error) {
 	ctx := cuecontext.New()
 
 	v := ctx.CompileString(schema)
-	codec := gocodec.New((*cue.Runtime)(ctx), nil)
+	codec := gocodec.New(ctx, nil)
 
 	w, err := codec.Decode(cfg)
 	if err != nil {

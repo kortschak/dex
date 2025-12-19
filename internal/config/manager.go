@@ -91,7 +91,7 @@ func (m *Manager) Unify(schema string) (cfg *System, val cue.Value, included, re
 	ctx := cuecontext.New()
 
 	u := ctx.CompileString(schema)
-	codec := gocodec.New((*cue.Runtime)(ctx), nil)
+	codec := gocodec.New(ctx, nil)
 
 	paths := make([]string, 0, len(m.fragments))
 	for p := range m.fragments {
