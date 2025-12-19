@@ -110,7 +110,7 @@ var changeStream = []struct {
 				"foo": {
 					Path: "q",
 					Options: map[string]any{
-						"len": 1,
+						"len": int64(1),
 					},
 					Sum: mustSum("9448119cd27cb5d28e6a9079862d1238f0c76292"),
 				},
@@ -124,7 +124,7 @@ var changeStream = []struct {
 					Module: ptr("foo"),
 					Serial: ptr("dev1"),
 					Options: map[string]any{
-						"len": 9,
+						"len": int64(9),
 					},
 					Sum: mustSum("c171c3521e5ab86695236550b5dc9bd54d4c6d30"),
 				},
@@ -218,7 +218,7 @@ var changeStream = []struct {
 				"foo": {
 					Path: "q",
 					Options: map[string]any{
-						"len": 1,
+						"len": int64(1),
 					},
 					Sum: mustSum("9448119cd27cb5d28e6a9079862d1238f0c76292"),
 				},
@@ -228,7 +228,7 @@ var changeStream = []struct {
 					Module: ptr("foo"),
 					Serial: ptr("dev1"),
 					Options: map[string]any{
-						"len": 9,
+						"len": int64(9),
 					},
 					Sum: mustSum("c171c3521e5ab86695236550b5dc9bd54d4c6d30"),
 				},
@@ -343,7 +343,7 @@ var changeStream = []struct {
 				"foo": {
 					Path: "q",
 					Options: map[string]any{
-						"len": 1,
+						"len": int64(1),
 					},
 					Sum: mustSum("9448119cd27cb5d28e6a9079862d1238f0c76292"),
 				},
@@ -353,7 +353,7 @@ var changeStream = []struct {
 					Module: ptr("foo"),
 					Serial: ptr("dev1"),
 					Options: map[string]any{
-						"len": 9,
+						"len": int64(9),
 					},
 					Sum: mustSum("c171c3521e5ab86695236550b5dc9bd54d4c6d30"),
 				},
@@ -393,7 +393,7 @@ var changeStream = []struct {
 						Module: ptr("foo"),
 						Serial: ptr("dev1"),
 						Listen: []Button{
-							{Row: 1, Col: 0, Page: "foo1", Change: ptr("press"), Do: ptr("notify"), Args: []any{1, "two"}},
+							{Row: 1, Col: 0, Page: "foo1", Change: ptr("press"), Do: ptr("notify"), Args: []any{int64(1), "two"}},
 							{Row: 2, Col: 4, Change: ptr("release"), Do: ptr("home")},
 						},
 						Options: map[string]any{
@@ -482,7 +482,7 @@ var changeStream = []struct {
 				"foo": {
 					Path: "q",
 					Options: map[string]any{
-						"len": 1,
+						"len": int64(1),
 					},
 					Sum: mustSum("9448119cd27cb5d28e6a9079862d1238f0c76292"),
 				},
@@ -492,11 +492,11 @@ var changeStream = []struct {
 					Module: ptr("foo"),
 					Serial: ptr("dev1"),
 					Listen: []Button{
-						{Row: 1, Col: 0, Page: "foo1", Change: ptr("press"), Do: ptr("notify"), Args: []any{1, "two"}},
+						{Row: 1, Col: 0, Page: "foo1", Change: ptr("press"), Do: ptr("notify"), Args: []any{int64(1), "two"}},
 						{Row: 2, Col: 4, Change: ptr("release"), Do: ptr("home")},
 					},
 					Options: map[string]any{
-						"len": 9,
+						"len": int64(9),
 					},
 					Sum: mustSum("7b7605cd4fc4dacd4897c709f8f466cbc082d814"),
 				},
@@ -612,7 +612,7 @@ var changeStream = []struct {
 				"foo": {
 					Path: "q",
 					Options: map[string]any{
-						"len": 1,
+						"len": int64(1),
 					},
 					Sum: mustSum("9448119cd27cb5d28e6a9079862d1238f0c76292"),
 				},
@@ -622,7 +622,7 @@ var changeStream = []struct {
 					Module: ptr("foo"),
 					Serial: ptr("dev1"),
 					Options: map[string]any{
-						"len": 9,
+						"len": int64(9),
 					},
 					Sum: mustSum("c171c3521e5ab86695236550b5dc9bd54d4c6d30"),
 				},
@@ -691,7 +691,7 @@ var changeStream = []struct {
 				"foo": {
 					Path: "q",
 					Options: map[string]any{
-						"len": 1,
+						"len": int64(1),
 					},
 					Sum: mustSum("9448119cd27cb5d28e6a9079862d1238f0c76292"),
 				},
@@ -701,7 +701,7 @@ var changeStream = []struct {
 					Module: ptr("foo"),
 					Serial: ptr("dev1"),
 					Options: map[string]any{
-						"len": 9,
+						"len": int64(9),
 					},
 					Sum: mustSum("c171c3521e5ab86695236550b5dc9bd54d4c6d30"),
 				},
