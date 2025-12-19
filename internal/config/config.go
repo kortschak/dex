@@ -51,12 +51,13 @@ _#device: {
 }
 
 _#module: {
-	path?:      string // !="" test done at unification.
-	args?:      [... string]
-	log_level?: _#log_level 
-	log_mode?:  _#log_mode 
-	options?:   {[string]: _}
-	schema?:    string
+	path?:           string // !="" test done at unification.
+	args?:           [... string]
+	log_level?:      _#log_level
+	log_mode?:       _#log_mode
+	log_add_source?: bool
+	options?:        {[string]: _}
+	schema?:         string
 }
 
 _#service: {
@@ -75,7 +76,7 @@ _#button: B={
 	args?:   _
 	if B.change == _|_ {
 		do?:  ""
-		args: null   
+		args: null
 	}
 	image?:  _#data_uri
 }

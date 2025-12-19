@@ -171,12 +171,13 @@ const Schema = `
 _#kernel: {
 	device:          *[{pid: 0, serial: ""}] | [... _#device]
 	network:         "tcp" | "unix"
-	log_level?:      _#log_level 
-	log_add_source?: bool 
+	log_level?:      _#log_level
+	log_add_source?: bool
 	options?:        {
 		repair:   bool
 		[string]: _
 	}
+	sum?: _
 }
 
 _#device: {
@@ -187,12 +188,14 @@ _#device: {
 }
 
 _#module: {
-	path:       !=""
-	args?:      [... string]
-	log_level?: _#log_level 
-	log_mode?:  _#log_mode 
-	options?:   {[string]: _}
-	schema?:    string
+	path:            !=""
+	args?:           [... string]
+	log_level?:      _#log_level
+	log_mode?:       _#log_mode
+	log_add_source?: bool
+	options?:        {[string]: _}
+	schema?:         string
+	sum?: _
 }
 
 _#service: {
@@ -200,6 +203,7 @@ _#service: {
 	serial?:  string
 	listen?:  [... _#button]
 	options?: {[string]: _}
+	sum?: _
 }
 
 _#button: B={
@@ -211,7 +215,7 @@ _#button: B={
 	args?:   _
 	if B.change == _|_ {
 		do?:  ""
-		args: null   
+		args: null
 	}
 	image?:  _#data_uri
 }
