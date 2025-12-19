@@ -3,7 +3,7 @@ module github.com/kortschak/dex
 go 1.24.6
 
 require (
-	cuelang.org/go v0.10.0
+	cuelang.org/go v0.12.0
 	github.com/BurntSushi/toml v1.5.0
 	github.com/bbrks/wrap/v2 v2.5.0
 	github.com/fsnotify/fsnotify v1.7.0
@@ -15,7 +15,7 @@ require (
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
 	github.com/kortschak/goroutine v1.1.3
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
-	github.com/rogpeppe/go-internal v1.13.1
+	github.com/rogpeppe/go-internal v1.13.2-0.20241226121412-a5dc8ff20d0a
 	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/image v0.34.0
@@ -44,6 +44,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sstallion/go-hid v0.15.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
