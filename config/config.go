@@ -177,7 +177,7 @@ _#kernel: {
 		repair:   bool
 		[string]: _
 	}
-	sum?: _
+	sum?:            _#sha1sum
 }
 
 _#device: {
@@ -195,7 +195,7 @@ _#module: {
 	log_add_source?: bool
 	options?:        {[string]: _}
 	schema?:         string
-	sum?: _
+	sum?:            _#sha1sum
 }
 
 _#service: {
@@ -203,7 +203,7 @@ _#service: {
 	serial?:  string
 	listen?:  [... _#button]
 	options?: {[string]: _}
-	sum?: _
+	sum?:     _#sha1sum
 }
 
 _#button: B={
@@ -219,6 +219,8 @@ _#button: B={
 	}
 	image?:  _#data_uri
 }
+
+_#sha1sum: =~"^[0-9a-fA-F]{40}$"
 
 _#data_uri: _#text | _#image | _#image_file | _#named_color | _#web_color
 _#text: =~"^data:text/plain(?:;[^;]+=[^;]*)*,.*$"
