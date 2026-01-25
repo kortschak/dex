@@ -2,36 +2,271 @@
 <html>
 	<head>
 		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>worklog</title>
+		<style>
+			:root {
+				--spacing: 1rem;
+				--chart-min-height: 250px;
+				--chart-medium-height: 400px;
+				--chart-large-height: 600px;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				padding: var(--spacing);
+				font-family: sans-serif;
+				overflow-x: auto;
+			}
+
+			.dashboard-container {
+				display: grid;
+				grid-template-columns: 1fr;
+				gap: var(--spacing);
+				max-width: 100%;
+				width: 100%;
+			}
+
+			.chart-row {
+				display: grid;
+				grid-template-columns: 1fr;
+				gap: var(--spacing);
+				min-width: 0;
+			}
+
+			.chart-container {
+				width: 100%;
+				height: var(--chart-min-height);
+				min-width: 0;
+				overflow: hidden;
+			}
+
+			.chart-container-medium {
+				height: var(--chart-medium-height);
+			}
+
+			.chart-container-large {
+				height: var(--chart-large-height);
+				width: 450px;
+			}
+
+			.chart-container-small {
+				height: 200px;
+			}
+
+			.chart-container-gauge {
+				width: 400px;
+				height: 400px;
+				max-width: 100%;
+				margin: 0 auto;
+				flex-shrink: 0;
+			}
+
+			@media (max-width: 500px) {
+				.chart-container-gauge {
+					width: 100%;
+					height: 0;
+					padding-bottom: 100%;
+					position: relative;
+				}
+
+				.chart-container-gauge > div {
+					position: absolute;
+					top: 0;
+					left: 0;
+					width: 100%;
+					height: 100%;
+				}
+			}
+
+			.chart-container-year {
+				height: 250px;
+				width: 100%;
+			}
+
+			.activity-flow-container {
+				display: flex;
+				flex-direction: column;
+				gap: var(--spacing);
+				height: var(--chart-large-height);
+			}
+
+			#activity, #flow {
+				width: 100%;
+			}
+
+			#activity {
+				height: 200px;
+				flex-shrink: 0;
+			}
+
+			#flow {
+				height: 400px;
+				flex: 1;
+			}
+
+			/* Tablet and up */
+			@media (min-width: 768px) {
+				.chart-row {
+					grid-template-columns: minmax(0, 1000px) minmax(auto, max-content);
+					min-width: 0;
+				}
+
+				.chart-row-with-gap {
+					grid-template-columns: minmax(0, 1000px) auto minmax(auto, max-content);
+					min-width: 0;
+				}
+
+				.activity-transition-container {
+					grid-template-columns: minmax(0, 1000px) minmax(auto, max-content);
+					min-width: 0;
+				}
+
+				/* Constrain left column containers. */
+				.chart-row > :first-child,
+				.activity-transition-container > :first-child {
+					max-width: 1000px;
+					min-width: 0;
+					overflow: hidden;
+				}
+
+				/* Constrain right column to not expand but allow shrinking. */
+				.chart-row > :last-child,
+				.activity-transition-container > :last-child {
+					max-width: 500px;
+					min-width: 0;
+					overflow: hidden;
+				}
+
+				#transition {
+					width: 450px;
+					min-width: 0;
+					max-width: 450px;
+				}
+			}
+
+			/* Desktop */
+			@media (min-width: 1024px) {
+				.dashboard-container {
+					max-width: min(1600px, 100%);
+					margin: 0;
+					padding: 0 var(--spacing);
+					width: 100%;
+					overflow-x: auto;
+				}
+
+				.chart-row {
+					grid-template-columns: minmax(0, 1000px) minmax(auto, max-content);
+					min-width: 0;
+				}
+
+				.chart-row-with-gap {
+					grid-template-columns: minmax(0, 1000px) 50px minmax(auto, max-content);
+					min-width: 0;
+				}
+
+				.activity-transition-container {
+					grid-template-columns: minmax(0, 1000px) minmax(auto, max-content);
+					min-width: 0;
+				}
+
+				/* Constrain left column containers; allow shrinking, but max at 1000px. */
+				.chart-row > :first-child,
+				.activity-transition-container > :first-child {
+					max-width: 1000px;
+					min-width: 0;
+					box-sizing: border-box;
+					overflow: hidden;
+				}
+
+				/* Ensure chart containers inside don't expand beyond parent. */
+				.chart-row > :first-child .chart-container,
+				.activity-transition-container > :first-child .chart-container,
+				.activity-flow-container .chart-container {
+					max-width: 100%;
+					box-sizing: border-box;
+				}
+
+				/* Constrain right column to not expand but allow shrinking. */
+				.chart-row > :last-child,
+				.activity-transition-container > :last-child {
+					max-width: 500px;
+					min-width: 0;
+					overflow: hidden;
+				}
+
+				#transition {
+					width: 450px;
+					min-width: 0;
+					max-width: 450px;
+				}
+			}
+
+			/* Mobile: stack everything vertically. */
+			@media (max-width: 767px) {
+				.chart-container-gauge {
+					width: min(100%, 400px);
+					height: min(100vw, 400px);
+				}
+
+				.chart-container {
+					height: auto;
+					min-height: var(--chart-min-height);
+				}
+
+				.chart-container-medium {
+					height: auto;
+					min-height: var(--chart-medium-height);
+				}
+
+				.chart-container-large {
+					height: auto;
+					min-height: var(--chart-large-height);
+				}
+
+				.activity-flow-container {
+					height: auto;
+					min-height: var(--chart-large-height);
+				}
+
+				#activity {
+					height: 200px;
+				}
+
+				#flow {
+					height: 300px;
+					min-height: 300px;
+				}
+			}
+		</style>
 		<script src="js/echarts-5.5.1.min.js"></script>
 		<script src="js/jquery-3.7.0.min.js"></script>
 	</head>
 	<body>
-		<div style="display: table;">
-				<div style="display: table-row">
-					<div id="day" style="width: 1000px;height:400px; display: table-cell;"></div>
-					<div style="display: table-cell;width: 50px;height:400px;"></div>
-					<div id="dayGauge" style="display: table-cell;width: 400px;height:400px;"></div>
+		<div class="dashboard-container">
+			<div class="chart-row chart-row-with-gap">
+				<div id="day" class="chart-container chart-container-medium"></div>
+				<div></div>
+				<div id="dayGauge" class="chart-container chart-container-gauge"></div>
+			</div>
+			<div class="chart-row activity-transition-container">
+				<div class="activity-flow-container">
+					<div id="activity" class="chart-container chart-container-small"></div>
+					<div id="flow" class="chart-container"></div>
 				</div>
+				<div id="transition" class="chart-container chart-container-large"></div>
+			</div>
+			<div class="chart-row chart-row-with-gap">
+				<div id="week" class="chart-container chart-container-medium"></div>
+				<div></div>
+				<div id="weekGauge" class="chart-container chart-container-gauge"></div>
+			</div>
+			<div id="year" class="chart-container chart-container-year"></div>
 		</div>
-		<div style="display: table;">
-				<div style="display: table-row">
-					<div style="width: 1000px;height:600px; display: table-cell;">
-						<div id="activity" style="align: center;width: 1000px;height:200px;"></div>
-						<div id="flow" style="align: center;width: 1000px;height:400px;"></div>
-					</div>
-					<div id="transition" style="display: table-cell;width: 450px;height:600px;"></div>
-				</div>
-		</div>
-		<div style="display: table;">
-				<div style="display: table-row">
-					<div id="week" style="width: 1000px;height:400px; display: table-cell;"></div>
-					<div style="display: table-cell;width: 50px;height:400px;"></div>
-					<div id="weekGauge" style="display: table-cell;width: 400px;height:400px;"></div>
-				</div>
-		</div>
-		</div>
-		<div id="year" style="align: center;width: 1450px;height:250px;"></div>
 		<script type="text/javascript">
 
 const second = 1000;
@@ -151,6 +386,38 @@ function formatDuration(hours) {
 
 const hours = ['12a', '1a', '2a', '3a', '4a', '5a', '6a', '7a', '8a', '9a', '10a', '11a', '12p', '1p', '2p', '3p', '4p', '5p', '6p', '7p', '8p', '9p', '10p', '11p'];
 const days = ['Saturday', 'Friday', 'Thursday', 'Wednesday', 'Tuesday', 'Monday', 'Sunday'];
+
+// Ensure chart containers have explicit dimensions for eCharts.
+function ensureChartDimensions() {
+	var containers = document.querySelectorAll('.chart-container, #activity, #flow');
+	containers.forEach(function(container) {
+		var computedStyle = window.getComputedStyle(container);
+		var width = computedStyle.width;
+		var height = computedStyle.height;
+
+		// For gauge containers, ensure square dimensions.
+		if (container.classList.contains('chart-container-gauge')) {
+			var size = Math.min(parseFloat(width) || 400, parseFloat(height) || 400, 500);
+			container.style.width = size + 'px';
+			container.style.height = size + 'px';
+		} else {
+			// For other containers, use computed dimensions.
+			if (width && width !== 'auto' && width !== '0px') {
+				container.style.width = width;
+			}
+			if (height && height !== 'auto' && height !== '0px') {
+				container.style.height = height;
+			}
+		}
+	});
+}
+
+// Wait for DOM and styles to be ready.
+if (document.readyState === 'loading') {
+	document.addEventListener('DOMContentLoaded', ensureChartDimensions);
+} else {
+	ensureChartDimensions();
+}
 
 var day = echarts.init(document.getElementById('day'), '');
 day.setOption({
@@ -316,7 +583,7 @@ flow.setOption({
 	]
 });
 
-var transition = echarts.init(document.getElementById('transition'), null, {width: 450, height: 550});
+var transition = echarts.init(document.getElementById('transition'));
 transition.setOption({
 	tooltip: {},
 	legend: [],
@@ -462,6 +729,93 @@ year.on('click', function(params) {
 var dayGauge = gauge('dayGauge', 8);
 var weekGauge = gauge('weekGauge', 40);
 
+// Store all chart instances for resize handling.
+var chartInstances = [day, activity, flow, transition, week, year, dayGauge, weekGauge];
+
+// Debounce function for resize events.
+function debounce(func, wait) {
+	var timeout;
+	return function() {
+		var context = this;
+		var args = arguments;
+		clearTimeout(timeout);
+		timeout = setTimeout(function() {
+			func.apply(context, args);
+		}, wait);
+	};
+}
+
+// Handle window resize events.
+var handleResize = debounce(function() {
+	// Force layout recalculation by reading layout properties.
+	document.body.offsetHeight;
+
+	// Update gauge container dimensions first.
+	var gaugeContainers = document.querySelectorAll('.chart-container-gauge');
+	gaugeContainers.forEach(function(container) {
+		var computedStyle = window.getComputedStyle(container);
+		var parentWidth = container.parentElement ? 
+			parseFloat(window.getComputedStyle(container.parentElement).width) : 400;
+		var maxSize = Math.min(parentWidth * 0.9, 500);
+		var size = Math.max(250, Math.min(maxSize, 400));
+		container.style.width = size + 'px';
+		container.style.height = size + 'px';
+	});
+
+	// Update left column parent containers to ensure they are
+	// properly sized.
+	var leftColumnContainers = document.querySelectorAll('.chart-row > :first-child, .activity-transition-container > :first-child');
+	leftColumnContainers.forEach(function(container) {
+		// Force re-flow by reading dimensions.
+		var width = container.offsetWidth;
+		var height = container.offsetHeight;
+		// Remove any inline width that might prevent resizing.
+		container.style.width = '';
+	});
+
+	// Force layout recalculation for all chart containers.
+	var allChartContainers = document.querySelectorAll('#day, #activity, #flow, #transition, #week, #year, #dayGauge, #weekGauge');
+	allChartContainers.forEach(function(container) {
+		// Force re-flow by reading layout properties.
+		var width = container.offsetWidth;
+		var height = container.offsetHeight;
+		// Remove any inline width that might prevent
+		// natural resizing.
+		container.style.width = '';
+	});
+
+	// Force a re-flow to ensure all dimensions are recalculated.
+	document.body.offsetHeight;
+
+	// Use requestAnimationFrame to ensure layout is complete
+	// before resizing charts.
+	requestAnimationFrame(function() {
+		// Double RAF to ensure layout is fully settled.
+		requestAnimationFrame(function() {
+			// Resize all charts. eCharts will read the
+			// current container dimensions.
+			chartInstances.forEach(function(chart) {
+				if (chart && !chart.isDisposed()) {
+					try {
+						chart.resize();
+					} catch (e) {
+						console.warn('Error resizing chart:', e);
+					}
+				}
+			});
+		});
+	});
+}, 250);
+
+window.addEventListener('resize', handleResize);
+
+// Also trigger resize after a short delay to ensure containers
+// are sized.
+setTimeout(function() {
+	ensureChartDimensions();
+	handleResize();
+}, 100);
+
 function gauge(id, hours) {
 	const animationDuration = second;
 	const animationDurationUpdate = second;
@@ -502,19 +856,45 @@ function gauge(id, hours) {
 	return gauge;
 }
 
-var _outerRadius = 200;
-var _innerRadius = 170;
-var _insidePanelRadius = 140;
 function renderItem(params, api) {
 	const panelImage = 'img/gauge_panel.png';
 
+	if (!params.coordSys || !params.coordSys.cx || !params.coordSys.cy) {
+		// Coordinate system not ready, return empty group.
+		return { type: 'group', children: [] };
+	}
+
 	var valOnRadian = api.value(1);
 	var coords = api.coord([api.value(0), valOnRadian]);
+	if (!coords || coords.length < 4) {
+		return { type: 'group', children: [] };
+	}
 	var polarEndRadian = coords[3];
+
+	// Calculate responsive radius based on coordinate system
+	// size, and use the smaller dimension to ensure the gauge fits.
+	var coordWidth = params.coordSys.width || 400;
+	var coordHeight = params.coordSys.height || 400;
+	var coordSize = Math.min(coordWidth, coordHeight);
+	var centerX = params.coordSys.cx || coordWidth / 2;
+	var centerY = params.coordSys.cy || coordHeight / 2;
+
+	// Use 50% of the smaller dimension, capped at 200px (original size).
+	var _outerRadius = Math.min(coordSize * 0.5, 200);
+	var _innerRadius = Math.min(coordSize * 0.425, 170);
+	var _insidePanelRadius = Math.min(coordSize * 0.35, 140);
+
+	// Ensure minimum sizes for visibility.
+	if (_outerRadius < 100) {
+		_outerRadius = 100;
+		_innerRadius = 85;
+		_insidePanelRadius = 70;
+	}
+
 	var imageStyle = {
 		image: panelImage,
-		x: params.coordSys.cx - _outerRadius,
-		y: params.coordSys.cy - _outerRadius,
+		x: centerX - _outerRadius,
+		y: centerY - _outerRadius,
 		width: _outerRadius * 2,
 		height: _outerRadius * 2
 	};
@@ -527,8 +907,8 @@ function renderItem(params, api) {
 				clipPath: {
 					type: 'sector',
 					shape: {
-						cx: params.coordSys.cx,
-						cy: params.coordSys.cy,
+						cx: centerX,
+						cy: centerY,
 						r: _outerRadius,
 						r0: _innerRadius,
 						startAngle: 0,
@@ -541,11 +921,11 @@ function renderItem(params, api) {
 			{
 				type: 'image',
 				style: imageStyle,
-				clipPath: {
-					type: 'polygon',
-					shape: {
-						points: makePointerPoints(params, polarEndRadian)
-					},
+					clipPath: {
+						type: 'polygon',
+						shape: {
+							points: makePointerPoints(centerX, centerY, polarEndRadian, _outerRadius)
+						},
 					extra: {
 						polarEndRadian: polarEndRadian,
 						transition: 'polarEndRadian',
@@ -554,7 +934,7 @@ function renderItem(params, api) {
 					during: function(apiDuring) {
 						apiDuring.setShape(
 							'points',
-							makePointerPoints(params, apiDuring.getExtra('polarEndRadian'))
+							makePointerPoints(centerX, centerY, apiDuring.getExtra('polarEndRadian'), _outerRadius)
 						);
 					}
 				}
@@ -562,8 +942,8 @@ function renderItem(params, api) {
 			{
 				type: 'circle',
 				shape: {
-					cx: params.coordSys.cx,
-					cy: params.coordSys.cy,
+					cx: centerX,
+					cy: centerY,
 					r: _insidePanelRadius
 				},
 				style: {
@@ -583,10 +963,10 @@ function renderItem(params, api) {
 				},
 				style: {
 					text: formatDuration(valOnRadian),
-					fontSize: 50,
+					fontSize: Math.max(24, Math.min(_outerRadius * 0.25, 50)),
 					fontWeight: 700,
-					x: params.coordSys.cx,
-					y: params.coordSys.cy,
+					x: centerX,
+					y: centerY,
 					fill: 'rgb(0,50,190)',
 					align: 'center',
 					verticalAlign: 'middle',
@@ -596,16 +976,16 @@ function renderItem(params, api) {
 		]
 	};
 }
-function makePointerPoints(offset, polarEndRadian) {
-	const pointerInnerRadius = 40;
+function makePointerPoints(centerX, centerY, polarEndRadian, outerRadius) {
+	const pointerInnerRadius = Math.min(outerRadius * 0.2, 40);
 	return [
-		convertToPolarPoint(offset, _outerRadius, polarEndRadian),
-		convertToPolarPoint(offset, _outerRadius, polarEndRadian + Math.PI * 0.03 ),
-		convertToPolarPoint(offset, pointerInnerRadius, polarEndRadian)
+		convertToPolarPoint(centerX, centerY, outerRadius, polarEndRadian),
+		convertToPolarPoint(centerX, centerY, outerRadius, polarEndRadian + Math.PI * 0.03 ),
+		convertToPolarPoint(centerX, centerY, pointerInnerRadius, polarEndRadian)
 	];
 }
-function convertToPolarPoint(offset, radius, radian) {
-	return [Math.cos(radian) * radius + offset.coordSys.cx, -Math.sin(radian) * radius + offset.coordSys.cy];
+function convertToPolarPoint(centerX, centerY, radius, radian) {
+	return [Math.cos(radian) * radius + centerX, -Math.sin(radian) * radius + centerY];
 }
 
 function render(data) {
@@ -619,6 +999,11 @@ function render(data) {
 			}
 		]
 	});
+
+	// Trigger resize after rendering to ensure charts fit containers.
+	setTimeout(function() {
+		handleResize();
+	}, 50);
 
 	var categories = activityCategories(data);
 	activity.setOption({
