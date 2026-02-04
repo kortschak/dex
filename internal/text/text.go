@@ -57,6 +57,7 @@ func Draw(dst draw.Image, text string, col color.Color, fnt *basicfont.Face, dx,
 		wrapper := wrap.NewWrapper()
 		wrapper.StripTrailingNewline = true
 		wrapper.CutLongWords = true
+		wrapper.MinimumRaggedness = true
 		lines = strings.Split(wrapper.Wrap(text, cols), "\n")
 		if len(lines) < 2 || lines[0] != "" {
 			for i, l := range lines {

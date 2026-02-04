@@ -41,6 +41,7 @@ func (t Text) GIF(bound image.Rectangle, pal color.Palette, fg, bg byte) (*GIF, 
 		wrapper := wrap.NewWrapper()
 		wrapper.StripTrailingNewline = true
 		wrapper.CutLongWords = true
+		wrapper.MinimumRaggedness = true
 		lines := strings.Split(wrapper.Wrap(s, cols), "\n")
 		for i, l := range lines {
 			lines[i] = strings.TrimSpace(l)
