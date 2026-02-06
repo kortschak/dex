@@ -41,12 +41,24 @@ var redactTests = []redactTest{
 				"private":    "secret",
 				"secret":     "1",
 				"not_secret": "2",
-			}},
+			},
+		},
 		want: map[string]any{
 			"inner": map[string]any{
 				"private":    "secret",
 				"not_secret": "2",
-			}},
+			},
+		},
+	},
+	{
+		name: "json_raw_message_string",
+		in:   json.RawMessage(`{"private":"secret","secret":"1","not_secret":"2"}`),
+		want: json.RawMessage(`{"not_secret":"2","private":"secret"}`), // json.Marshal canonicalised field order.
+	},
+	{
+		name: "json_raw_message_string_inner",
+		in:   json.RawMessage(`{"inner":{"private":"secret","secret":"1","not_secret":"2"}}`),
+		want: json.RawMessage(`{"inner":{"not_secret":"2","private":"secret"}}`), // json.Marshal canonicalised field order.
 	},
 	{
 		name: "map_slice",

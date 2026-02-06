@@ -6,6 +6,7 @@
 package private
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -31,6 +32,22 @@ var privateKey = reflect.ValueOf("private")
 // the comma-separated list of names with be used. The list may refer to its
 // own field.
 func Redact[T any](val T, tag string) (redacted T, err error) {
+	if val, ok := any(val).(json.RawMessage); ok {
+		// If we have a raw message, deserialise it so we
+		// can redact fields, then reserialise the result.
+		var v any
+		err := json.Unmarshal(val, &v)
+		if err != nil {
+			return redacted, err
+		}
+		r, err := Redact(v, tag)
+		if err != nil {
+			return redacted, err
+		}
+		msg, err := json.Marshal(r)
+		return any(json.RawMessage(msg)).(T), err
+	}
+
 	defer func() {
 		switch r := recover().(type) {
 		case nil:
