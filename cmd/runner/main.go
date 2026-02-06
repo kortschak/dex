@@ -211,7 +211,11 @@ func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.C
 }
 
 func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error) {
-	d.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.Request{Request: req}))
+	if d.log.Enabled(ctx, slog.LevelDebug-1) {
+		d.log.LogAttrs(ctx, slog.LevelDebug-1, "handle", slog.Any("req", slogext.Request{Request: req}))
+	} else {
+		d.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.RequestRedactPrivate{Request: req}))
+	}
 
 	switch req.Method {
 	case rpc.Who:
@@ -225,7 +229,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		var m rpc.Message[runner.StateRequest]
 		err := rpc.UnmarshalMessage(req.Params, &m)
 		if err != nil {
-			d.log.LogAttrs(ctx, slog.LevelError, "state", slog.Any("error", err))
+			d.log.LogAttrs(ctx, slog.LevelError, "state", slog.Any("req", slogext.RequestRedactPrivate{Request: req}), slog.Any("error", err))
 			return nil, err
 		}
 		d.wMu.Lock()
@@ -245,7 +249,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		var m rpc.Message[runner.Params]
 		err := rpc.UnmarshalMessage(req.Params, &m)
 		if err != nil {
-			d.log.LogAttrs(ctx, slog.LevelError, "run", slog.Any("error", err))
+			d.log.LogAttrs(ctx, slog.LevelError, "run", slog.Any("req", slogext.RequestRedactPrivate{Request: req}), slog.Any("error", err))
 			return nil, err
 		}
 		typ := "notify"
@@ -356,7 +360,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 	case rpc.Configure:
 		isService, err := config.IsService(req)
 		if err != nil {
-			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
+			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("req", slogext.RequestRedactPrivate{Request: req}), slog.Any("error", err))
 			return nil, err
 		}
 		var uid rpc.UID

@@ -287,7 +287,11 @@ func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.C
 }
 
 func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error) {
-	d.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.Request{Request: req}))
+	if d.log.Enabled(ctx, slog.LevelDebug-1) {
+		d.log.LogAttrs(ctx, slog.LevelDebug-1, "handle", slog.Any("req", slogext.Request{Request: req}))
+	} else {
+		d.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.RequestRedactPrivate{Request: req}))
+	}
 
 	switch req.Method {
 	case rpc.Who:
@@ -301,7 +305,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		var m rpc.Message[worklog.Report]
 		err := rpc.UnmarshalMessage(req.Params, &m)
 		if err != nil {
-			d.log.LogAttrs(ctx, slog.LevelError, "record", slog.Any("error", err))
+			d.log.LogAttrs(ctx, slog.LevelError, "record", slog.Any("req", slogext.RequestRedactPrivate{Request: req}), slog.Any("error", err))
 			return nil, err
 		}
 		m.Body.Time = m.Time
@@ -315,7 +319,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		var m rpc.Message[worklog.Config]
 		err := rpc.UnmarshalMessage(req.Params, &m)
 		if err != nil {
-			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
+			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("req", slogext.RequestRedactPrivate{Request: req}), slog.Any("error", err))
 			return nil, err
 		}
 
