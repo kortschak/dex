@@ -1,0 +1,113 @@
+# The build of worklog takes a fair while due to the size of the dependency
+# tree, the size of some of the individual dependencies and the absence of
+# caching when building within a test script.
+[short] stop 'Skipping long test.'
+
+env HOME=${WORK}
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/worklog
+cd ${WORK}
+
+unquote debug_log.snarf
+
+# Zulu-marked zero time.
+env ZEROTIME=0001-01-01T00:00:00Z
+expand debug_log.snarf debug_log_good.snarf
+exec worklog -log=DEBUG -debug debug_log_good.snarf
+cmp stdout want_good.text
+
+# UTC-marked zero time: invalid Go JSON via RFC3339.
+env ZEROTIME=0001-01-01T00:00:00+UTC
+expand debug_log.snarf debug_log_bad.snarf
+! exec worklog -log=DEBUG -debug debug_log_bad.snarf
+stderr 'failed eval: no such overload'
+
+# LMT zero time for somewhere: not zero time in CEL.
+env ZEROTIME=0001-01-01T09:14:20+09:14
+expand debug_log.snarf debug_log_bad.snarf
+! exec worklog -log=DEBUG -debug debug_log_bad.snarf
+stderr 'failed eval: integer overflow'
+
+-- want_good.text --
+{"bucket":"afk","start":"0001-01-01T00:00:00Z","end":"2026-02-04T10:42:51.870486845+10:30","data":{"afk":true,"locked":false},"continue":false}
+-- debug_log.snarf --
+>-- prg --
+>data_src != {"module":"watcher"} ? {} :
+>{
+>        "afk_timeout":   duration("3m"),
+>        "gap_tolerance": duration("0.1s"),
+>}.as(params, {
+>        "can_continue":  last_event.end.is_zero() ?
+>                             false
+>                         :
+>                             (curr.time-last_event.end)-period < params.gap_tolerance,
+>        "is_afk":        curr.last_input.is_zero() ?
+>                             true
+>                         :
+>                             curr.locked || curr.time-curr.last_input > params.afk_timeout,
+>        "was_afk":       has(last_event.data.afk) ?
+>                             last_event.data.afk
+>                         :
+>                             true,
+>}).as(cond, cond.with({
+>        "continue":      cond.can_continue &&
+>                         has(last.locked) && curr.locked == last.locked &&
+>                         cond.is_afk == cond.was_afk
+>})).as(cond, {
+>        "bucket":        bucket, // bucket or empty if no store is required.
+>        "start":         cond.continue ? last_event.start : last.time,
+>        "end":           curr.time,
+>        "data":          {
+>                             "afk":    cond.is_afk,
+>                             "locked": curr.locked,
+>                         },
+>        "continue":      cond.continue,
+>})
+>-- data --
+>{
+>	"time": "2026-02-14T11:10:42.109997519+10:30",
+>	"level": "ERROR",
+>	"source": {
+>		"function": "main.(*daemon).record",
+>		"file": ".../worklog/main.go",
+>		"line": 740
+>	},
+>	"msg": "activity evaluation",
+>	"component": "worklog",
+>	"bucket": "afk",
+>	"act": {
+>		"bucket": "afk",
+>		"curr": {
+>			"class": "",
+>			"last_input": "${ZEROTIME}",
+>			"locked": false,
+>			"name": "",
+>			"pid": 0,
+>			"time": "2026-02-04T10:42:51.870486845+10:30",
+>			"wid": 0,
+>			"window": ""
+>		},
+>		"data_src": {
+>			"module": "watcher"
+>		},
+>		"last": {
+>			"time": "0001-01-01T00:00:00Z"
+>		},
+>		"last_event": {
+>			"bucket": "",
+>			"continue": null,
+>			"data": {
+>				"afk": false,
+>				"locked": false
+>			},
+>			"end": "2026-02-04T06:56:45.66170124+10:30",
+>			"id": 2524,
+>			"start": "2026-02-04T06:00:12.661701734+10:30"
+>		},
+>		"period": 1000000000
+>	}
+>}
+>

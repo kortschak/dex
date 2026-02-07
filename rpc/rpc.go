@@ -284,11 +284,23 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Duration) UnmarshalJSON(data []byte) error {
-	var text string
-	err := json.Unmarshal(data, &text)
+	if len(data) == 0 {
+		return nil
+	}
+	if data[0] == '"' {
+		var text string
+		err := json.Unmarshal(data, &text)
+		if err != nil {
+			return err
+		}
+		d.Duration, err = time.ParseDuration(text)
+		return err
+	}
+	var number int64
+	err := json.Unmarshal(data, &number)
 	if err != nil {
 		return err
 	}
-	d.Duration, err = time.ParseDuration(text)
-	return err
+	d.Duration = time.Duration(number)
+	return nil
 }
