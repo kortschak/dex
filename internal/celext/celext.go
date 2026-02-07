@@ -327,3 +327,39 @@ func (l stateLib) getState(arg ref.Val) ref.Val {
 	}
 	return types.OptionalOf(types.Bytes(resp.Body.Value))
 }
+
+// StateLibNone returns a cel.EnvOption that registers the same CEL extensions
+// as StateLib, but does nothing except log calls.
+func StateLibNone(ctx context.Context, log *slog.Logger) cel.EnvOption {
+	return cel.Lib(stateLibNone{ctx: ctx, log: log})
+}
+
+type stateLibNone struct {
+	ctx context.Context
+	log *slog.Logger
+}
+
+func (l stateLibNone) CompileOptions() []cel.EnvOption {
+	return []cel.EnvOption{
+		cel.Function("get_state",
+			cel.Overload(
+				"get_state_string_bytes",
+				[]*cel.Type{cel.StringType},
+				cel.OptionalType(cel.BytesType),
+				cel.UnaryBinding(l.getState),
+				cel.OverloadIsNonStrict(),
+			),
+		),
+	}
+}
+
+func (stateLibNone) ProgramOptions() []cel.ProgramOption { return nil }
+
+func (l stateLibNone) getState(arg ref.Val) ref.Val {
+	key, ok := arg.(types.String)
+	if !ok {
+		return types.ValOrErr(key, "no such overload")
+	}
+	l.log.LogAttrs(l.ctx, slog.LevelDebug, "get_state", slog.String("key", string(key)))
+	return types.OptionalNone
+}

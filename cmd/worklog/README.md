@@ -188,6 +188,10 @@ The CEL environment enables the CEL [optional types library](https://pkg.go.dev/
 
 The CEL environment provides the [`Lib`](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#Lib) and [`StateLib`](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#StateLib) extensions from the celext package. `StateLib` is only available in `module.*.options.rules.*.src`.
 
+## CEL debugging
+
+The `worklog` module can be invoked with a `debug` option that is a path to a txtar file containing a prg file and a data file. The prg file is the CEL program to be run and the data file is the data that will be passed to the program. The structure of the data is JSON as emitted by `worklog` as a log message on CEL program evaluation failure. To manually construct data, the object passed to CEL is in the `act` field.
+
 ## PostgreSQL store
 
 When using PostgreSQL as a store, the `~/.pgpass` file MAY be used for password look-up for the primary connection to the database and MUST be used for the read-only connection.

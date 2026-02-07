@@ -34,6 +34,7 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/tools/txtar"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -63,8 +64,11 @@ func Main() int {
 	logging := flag.String("log", "info", "logging level (debug, info, warn or error)")
 	lines := flag.Bool("lines", false, "display source line details in logs")
 	logStdout := flag.Bool("log_stdout", false, "log to stdout instead of stderr")
+	debugReq := flag.String("debug_req", "", "path to txtar archive (prg, data) for request CEL debug (incompatible with debug_resp)")
+	debugResp := flag.String("debug_resp", "", "path to txtar archive (prg, data) for response CEL debug (incompatible with debug_req)")
 	v := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
 	if *v {
 		err := version.Print()
 		if err != nil {
@@ -72,6 +76,33 @@ func Main() int {
 			os.Exit(internalError)
 		}
 		os.Exit(success)
+	}
+
+	var level slog.LevelVar
+	err := level.UnmarshalText([]byte(*logging))
+	if err != nil {
+		flag.Usage()
+		return invocationError
+	}
+	addSource := slogext.NewAtomicBool(*lines)
+	logDst := os.Stderr
+	if *logStdout {
+		logDst = os.Stdout
+	}
+
+	if *debugReq != "" || *debugResp != "" {
+		if *debugReq != "" && *debugResp != "" {
+			flag.Usage()
+			return invocationError
+		}
+		log := slog.New(slogext.GoID{Handler: slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
+			Level:     &level,
+			AddSource: addSource,
+		})}).With(slog.String("component", "rest-debug"))
+		if *debugReq != "" {
+			return runDebugReq(*debugReq, log)
+		}
+		return runDebugResp(*debugResp, log)
 	}
 
 	switch *network {
@@ -88,17 +119,6 @@ func Main() int {
 	default:
 	}
 
-	var level slog.LevelVar
-	err := level.UnmarshalText([]byte(*logging))
-	if err != nil {
-		flag.Usage()
-		return invocationError
-	}
-	addSource := slogext.NewAtomicBool(*lines)
-	logDst := os.Stderr
-	if *logStdout {
-		logDst = os.Stdout
-	}
 	log := slog.New(slogext.GoID{Handler: slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
 		Level:     &level,
 		AddSource: addSource,
@@ -503,10 +523,16 @@ func mkTLSConfig(cfg rest.Server) (*tls.Config, error) {
 }
 
 func (d *daemon) compile(uid rpc.UID, src string, decls cel.EnvOption, log *slog.Logger) (cel.Program, error) {
+	var stateLibOpt cel.EnvOption
+	if d.conn == nil {
+		stateLibOpt = celext.StateLibNone(d.ctx, log)
+	} else {
+		stateLibOpt = celext.StateLib(d.ctx, uid, d.conn, log)
+	}
 	env, err := cel.NewEnv(
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(log),
-		celext.StateLib(d.ctx, uid, d.conn, log),
+		stateLibOpt,
 		cel.Lib(extLib{}),
 		decls,
 	)
@@ -593,9 +619,9 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 			}
 			name := detail.name
 			t := time.Now()
-			note, err := evalReq(detail.reqPrg, t, req)
+			note, rm, err := evalReq(detail.reqPrg, t, req)
 			if err != nil {
-				d.log.LogAttrs(ctx, slog.LevelError, "eval error", slog.Any("name", name), slog.Any("error", err))
+				d.log.LogAttrs(ctx, slog.LevelError, "eval error", slog.Any("name", name), slog.Any("req", rm), slog.Any("error", err))
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -644,7 +670,7 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 				}
 				b, err := evalResp(detail.respPrg, t, &resp)
 				if err != nil {
-					d.log.LogAttrs(ctx, slog.LevelError, "eval error", slog.Any("name", name), slog.Any("error", err))
+					d.log.LogAttrs(ctx, slog.LevelError, "eval error", slog.Any("name", name), slog.Any("resp", resp), slog.Any("error", err))
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
@@ -708,33 +734,37 @@ func (d *daemon) serve(addr string, uid rpc.UID, tlsConfig *tls.Config) (string,
 	return addr, cancel, nil
 }
 
-func evalReq(prg cel.Program, ts time.Time, req *http.Request) (*rest.Notification, error) {
+func evalReq(prg cel.Program, ts time.Time, req *http.Request) (*rest.Notification, map[string]any, error) {
 	rm, err := reqToMap(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed request conversion: %v", err)
+		return nil, rm, fmt.Errorf("failed request conversion: %v", err)
 	}
+	return evalReqMap(prg, ts, rm)
+}
+
+func evalReqMap(prg cel.Program, ts time.Time, rm map[string]any) (*rest.Notification, map[string]any, error) {
 	out, _, err := prg.Eval(map[string]any{
 		"time":    ts,
 		"request": rm,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed eval: %v", err)
+		return nil, rm, fmt.Errorf("failed eval: %v", err)
 	}
 
 	v, err := out.ConvertToNative(reflect.TypeOf((*structpb.Value)(nil)))
 	if err != nil {
-		return nil, fmt.Errorf("failed proto conversion: %v", err)
+		return nil, rm, fmt.Errorf("failed proto conversion: %v", err)
 	}
 	b, err := protojson.MarshalOptions{}.Marshal(v.(proto.Message))
 	if err != nil {
-		return nil, fmt.Errorf("failed native conversion: %v", err)
+		return nil, rm, fmt.Errorf("failed native conversion: %v", err)
 	}
 	var note rest.Notification
 	err = json.Unmarshal(b, &note)
 	if err != nil {
-		return nil, fmt.Errorf("%w: data: %q", err, errorContext(err, 10, b))
+		return nil, rm, fmt.Errorf("%w: data: %q", err, errorContext(err, 10, b))
 	}
-	return &note, nil
+	return &note, rm, nil
 }
 
 func errorContext(err error, window int, data []byte) []byte {
@@ -953,4 +983,125 @@ func (d *daemon) beat(ctx context.Context, p time.Duration) {
 	default:
 		d.log.LogAttrs(ctx, slog.LevelError, "update heartbeat", slog.Duration("invalid duration", p))
 	}
+}
+
+func runDebugReq(path string, log *slog.Logger) int {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	prg, msg, err := runDebug(ctx, cancel, path, "request", log)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+
+	var debug struct {
+		Time    time.Time       `json:"time"`
+		Request json.RawMessage `json:"req"`
+	}
+	err = json.Unmarshal(msg, &debug)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal data: %v\n", err)
+		return invocationError
+	}
+	var rm map[string]any
+	err = json.Unmarshal(debug.Request, &rm)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal request data: %v\n", err)
+		return invocationError
+	}
+	var body struct {
+		Data []byte `json:"Body"`
+	}
+	err = json.Unmarshal(debug.Request, &body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal request body data: %v\n", err)
+		return invocationError
+	}
+	rm["Body"] = body.Data
+
+	note, _, err := evalReqMap(prg, debug.Time, rm)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+	err = json.NewEncoder(os.Stdout).Encode(note)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal result: %v\n", err)
+		return internalError
+	}
+	return success
+}
+
+func runDebugResp(path string, log *slog.Logger) int {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	prg, msg, err := runDebug(ctx, cancel, path, "response", log)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+
+	var debug struct {
+		Time     time.Time         `json:"time"`
+		Response *rpc.Message[any] `json:"resp"`
+	}
+	err = json.Unmarshal(msg, &debug)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal data: %v\n", err)
+		return invocationError
+	}
+
+	res, err := evalResp(prg, debug.Time, debug.Response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "eval failed: %v\n", err)
+		return internalError
+	}
+	fmt.Printf("%s\n", res)
+	return success
+}
+
+func runDebug(ctx context.Context, cancel context.CancelFunc, path, typ string, log *slog.Logger) (cel.Program, []byte, error) {
+	src, msg, err := readDebugArchive(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read archive: %w", err)
+	}
+	var level slog.LevelVar
+	addSource := slogext.NewAtomicBool(false)
+	h := newDaemon("rest-debug", log, &level, addSource, ctx, cancel)
+	decls := cel.Declarations(
+		decls.NewVar("time", decls.Timestamp),
+		decls.NewVar(typ, decls.NewMapType(decls.String, decls.Dyn)),
+	)
+	prg, err := h.compile(rpc.UID{}, src, decls, log)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to compile program: %w", err)
+	}
+	return prg, msg, nil
+}
+
+func readDebugArchive(path string) (prg string, data []byte, err error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("read file: %w", err)
+	}
+	ar := txtar.Parse(raw)
+	for _, f := range ar.Files {
+		switch f.Name {
+		case "prg":
+			prg = string(f.Data)
+		case "data":
+			data = f.Data
+		default:
+			return "", nil, fmt.Errorf("unexpected file: %s", f.Name)
+		}
+	}
+	if prg == "" {
+		return "", nil, errors.New("archive missing prg file")
+	}
+	if len(data) == 0 {
+		return "", nil, errors.New("archive missing data file")
+	}
+	return prg, data, nil
 }

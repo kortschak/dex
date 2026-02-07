@@ -93,6 +93,10 @@ The CEL environment enables the CEL [optional types library](https://pkg.go.dev/
 
 The CEL environment provides the [`Lib`](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#Lib) and [`StateLib`](https://pkg.go.dev/github.com/kortschak/dex/internal/celext#StateLib) extensions from the celext package, a JSON decoder to convert `bytes` JSON messages to objects, `<bytes>.decode_json() -> <dyn>`/`decode_json(<bytes>) -> <dyn>` and a base64 encoder, `<bytes>.base64() -> <string>`.
 
+## CEL debugging
+
+The `rest` module can be invoked with a `debug_req` or `debug_resp` option that is a path to a txtar file containing a prg file and a data file. The prg file is the CEL program to be run and the data file is the data that will be passed to the program. The structure of the data is JSON as emitted by `rest` as a log message on CEL program evaluation failure. To manually construct data, the object passed to CEL is either in the `req` or `resp` field depending on the option used.
+
 ## Security
 
 `rest` is a sharp tool; it may be used to open the dex system to clients outside the local host. This has security implications since requests within the dex JSON RPC-2.0 message passing system are trusted and so any external client may be able to send messages that the system will act on. In some cases this may include execution of arbitrary code, for example if `rest` is configured to pass unvetted messages to the `runner` module. It is recommended to not expose `rest` servers to outside hosts. If external connection is necessary, make use of TLS and mTLS configurations; `rest` enforces the use of mTLS on non-loopback devices unless the server is configured with the "insecure" option.
