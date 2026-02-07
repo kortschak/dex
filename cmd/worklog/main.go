@@ -37,6 +37,7 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/interpreter"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/tools/txtar"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -70,8 +71,10 @@ func Main() int {
 	logging := flag.String("log", "info", "logging level (debug, info, warn or error)")
 	lines := flag.Bool("lines", false, "display source line details in logs")
 	logStdout := flag.Bool("log_stdout", false, "log to stdout instead of stderr")
+	debug := flag.String("debug", "", "path to txtar archive (prg, data) for CEL rule debug")
 	v := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
 	if *v {
 		err := version.Print()
 		if err != nil {
@@ -79,6 +82,26 @@ func Main() int {
 			os.Exit(internalError)
 		}
 		os.Exit(success)
+	}
+
+	var level slog.LevelVar
+	err := level.UnmarshalText([]byte(*logging))
+	if err != nil {
+		flag.Usage()
+		return invocationError
+	}
+	addSource := slogext.NewAtomicBool(*lines)
+	logDst := os.Stderr
+	if *logStdout {
+		logDst = os.Stdout
+	}
+
+	if *debug != "" {
+		log := slog.New(slogext.GoID{Handler: slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
+			Level:     &level,
+			AddSource: addSource,
+		})}).With(slog.String("component", "worklog-debug"))
+		return runDebug(*debug, log)
 	}
 
 	switch *network {
@@ -95,17 +118,6 @@ func Main() int {
 	default:
 	}
 
-	var level slog.LevelVar
-	err := level.UnmarshalText([]byte(*logging))
-	if err != nil {
-		flag.Usage()
-		return invocationError
-	}
-	addSource := slogext.NewAtomicBool(*lines)
-	logDst := os.Stderr
-	if *logStdout {
-		logDst = os.Stdout
-	}
 	log := slog.New(slogext.GoID{Handler: slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
 		Level:     &level,
 		AddSource: addSource,
@@ -592,19 +604,7 @@ func (d *daemon) configureWebRule(ctx context.Context, rules map[string]map[stri
 }
 
 func (d *daemon) configureRules(ctx context.Context, rules map[string]worklog.Rule) {
-	opts := []cel.EnvOption{
-		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
-		celext.Lib(d.log),
-		celext.StateLib(ctx, rpc.UID{Module: d.uid}, d.conn, d.log),
-		cel.Declarations(
-			decls.NewVar("bucket", decls.String),
-			decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
-			decls.NewVar("period", decls.Duration),
-			decls.NewVar("curr", decls.NewMapType(decls.String, decls.Dyn)),
-			decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
-			decls.NewVar("last_event", decls.NewMapType(decls.String, decls.Dyn)),
-		),
-	}
+	opts := d.ruleOpts(ctx)
 	ruleDetails := make(map[string]ruleDetail)
 	for bucket, rule := range rules {
 		prg, err := compile(rule.Src, opts)
@@ -615,6 +615,28 @@ func (d *daemon) configureRules(ctx context.Context, rules map[string]worklog.Ru
 		}
 	}
 	d.rules.Store(ruleDetails)
+}
+
+func (d *daemon) ruleOpts(ctx context.Context) []cel.EnvOption {
+	var stateLibOpt cel.EnvOption
+	if d.conn == nil {
+		stateLibOpt = celext.StateLibNone(ctx, d.log)
+	} else {
+		stateLibOpt = celext.StateLib(ctx, rpc.UID{Module: d.uid}, d.conn, d.log)
+	}
+	return []cel.EnvOption{
+		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+		celext.Lib(d.log),
+		stateLibOpt,
+		cel.Declarations(
+			decls.NewVar("bucket", decls.String),
+			decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
+			decls.NewVar("period", decls.Duration),
+			decls.NewVar("curr", decls.NewMapType(decls.String, decls.Dyn)),
+			decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
+			decls.NewVar("last_event", decls.NewMapType(decls.String, decls.Dyn)),
+		),
+	}
 }
 
 type opener = func(ctx context.Context, addr, hostname string) (storage, error)
@@ -1395,4 +1417,123 @@ func (l dbLib) query(arg ref.Val) ref.Val {
 		}
 	}
 	return types.NewDynamicList(types.DefaultTypeAdapter, resp)
+}
+
+func runDebug(path string, log *slog.Logger) int {
+	src, msg, err := readDebugArchive(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read archive: %v\n", err)
+		return invocationError
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var level slog.LevelVar
+	addSource := slogext.NewAtomicBool(false)
+	h := newDaemon("worklog-debug", log, &level, addSource, ctx, cancel)
+	prg, err := compile(src, h.ruleOpts(ctx))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to compile program: %v\n", err)
+		return internalError
+	}
+
+	var e struct {
+		Details debugDetails `json:"act"`
+	}
+	err = json.Unmarshal(msg, &e)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal data: %v\n", err)
+		return invocationError
+	}
+	d := e.Details
+	act := map[string]any{
+		"bucket":   d.Bucket,
+		"data_src": asMap(d.Source),
+		"period":   d.Period.Duration,
+		"curr":     d.Current.DetailMap(),
+		"last":     d.Last.DetailMap(),
+		"last_event": map[string]any{
+			"bucket":   d.LastEvent.Bucket,
+			"id":       d.LastEvent.ID,
+			"start":    d.LastEvent.Start,
+			"end":      d.LastEvent.End,
+			"data":     d.LastEvent.Data,
+			"continue": d.LastEvent.Continue,
+		},
+	}
+
+	note, err := eval[worklog.Event](prg, act)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+	err = json.NewEncoder(os.Stdout).Encode(note)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal result: %v\n", err)
+		return internalError
+	}
+	return success
+}
+
+func readDebugArchive(path string) (prg string, data []byte, err error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("read file: %w", err)
+	}
+	ar := txtar.Parse(raw)
+	for _, f := range ar.Files {
+		switch f.Name {
+		case "prg":
+			prg = string(f.Data)
+		case "data":
+			data = f.Data
+		default:
+			return "", nil, fmt.Errorf("unexpected file: %s", f.Name)
+		}
+	}
+	if prg == "" {
+		return "", nil, errors.New("archive missing prg file")
+	}
+	if len(data) == 0 {
+		return "", nil, errors.New("archive missing data file")
+	}
+	return prg, data, nil
+}
+
+type debugDetailsLayout[T any] struct {
+	Bucket    string         `json:"bucket"`
+	Source    rpc.UID        `json:"data_src"`
+	Current   T              `json:"curr"`
+	Last      T              `json:"last"`
+	LastEvent *worklog.Event `json:"last_event,omitempty"`
+	Period    rpc.Duration   `json:"period"`
+}
+
+type debugDetails debugDetailsLayout[worklog.DetailMapper]
+
+func (d *debugDetails) UnmarshalJSON(data []byte) error {
+	var raw debugDetailsLayout[json.RawMessage]
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
+		return err
+	}
+	*d = debugDetails{
+		Bucket:    raw.Bucket,
+		Source:    raw.Source,
+		LastEvent: raw.LastEvent,
+		Period:    raw.Period,
+	}
+	d.Current, err = worklog.UnmarshalDetailMapper(raw.Current, &debugWatcherDetails{}, &worklog.MapDetails{})
+	d.Last, err = worklog.UnmarshalDetailMapper(raw.Last, &debugWatcherDetails{}, &worklog.MapDetails{})
+	return err
+}
+
+type debugWatcherDetails struct {
+	Time time.Time `json:"time"`
+	worklog.WatcherDetails
+}
+
+func (d debugWatcherDetails) DetailMap() map[string]any {
+	m := d.WatcherDetails.DetailMap()
+	m["time"] = d.Time
+	return m
 }

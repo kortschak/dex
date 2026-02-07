@@ -98,3 +98,7 @@ On MacOS, details are obtained from the OS and no configuration is required.
 ## CEL optional types
 
 The CEL environment enables the CEL [optional types library](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypes), [version 1](https://pkg.go.dev/github.com/google/cel-go/cel#OptionalTypesVersion), and a function to obtain the current sleep state of a device and its last button event time, `sleep_state(<string>) -> <map<string,dyn>>` using the [`sleep` RPC method](https://pkg.go.dev/github.com/kortschak/dex/internal/device#SleepMessage).
+
+## CEL debugging
+
+The `watcher` module can be invoked with a `debug` option that is a path to a txtar file containing a prg file and a data file. The prg file is the CEL program to be run and the data file is the data that will be passed to the program. The structure of the data is JSON as emitted by `watcher` as a log message on CEL program evaluation failure. To manually construct data, the object passed to CEL is in the `tick`, `period`, `details` and `last` fields.
