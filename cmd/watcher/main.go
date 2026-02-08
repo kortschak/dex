@@ -225,8 +225,10 @@ type noDetails struct{}
 func (noDetails) strategy() string { return "none" }
 
 func (noDetails) details() (watcher.Details, error) {
-	return watcher.Details{}, errors.New("no details")
+	return watcher.Details{}, errNoDetails
 }
+
+var errNoDetails = warning{errors.New("no details")}
 
 func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
 	d.conn = conn
@@ -436,6 +438,9 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 							d.log.LogAttrs(ctx, slog.LevelWarn, "polling", slog.Any("error", warn.error))
 						} else {
 							d.log.LogAttrs(ctx, slog.LevelError, "polling", slog.Any("error", err))
+						}
+						if err == errNoDetails {
+							continue
 						}
 					}
 					details.LastInput = details.LastInput.In(loc)
