@@ -443,7 +443,19 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 							continue
 						}
 					}
-					details.LastInput = details.LastInput.In(loc)
+					if !details.LastInput.IsZero() {
+						// Do not set timezone if last input is the zero time;
+						// this is almost certainly going to set the timezone
+						// to LMT, which will then be serialised as a non-zero
+						// offset in the JSON. When this is seen by the CEL
+						// program, it will not be interpreted as a zero time.
+						//
+						// This is defensive; at the moment, this is only ever
+						// the case when the detailer is noDetails{} which is
+						// already guarded against by the check for errNoDetails
+						// above.
+						details.LastInput = details.LastInput.In(loc)
+					}
 					d.log.LogAttrs(ctx, slog.LevelDebug, "watcher details", slog.Any("details", details))
 					rules := d.rules.Load()
 					if rules == nil {
