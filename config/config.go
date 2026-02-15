@@ -260,6 +260,7 @@ const DeviceDependency = `
 	}
 
 	service: [_]: S={
+		serial?: or([for v in kernel.device{v.serial}]) | null
 		if S.listen != _|_ {
 			serial!: or([for v in kernel.device{v.serial}]) | _|_
 		}
