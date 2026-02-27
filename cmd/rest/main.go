@@ -721,7 +721,7 @@ func evalReq(prg cel.Program, ts time.Time, req *http.Request) (*rest.Notificati
 		return nil, fmt.Errorf("failed eval: %v", err)
 	}
 
-	v, err := out.ConvertToNative(reflect.TypeOf((*structpb.Value)(nil)))
+	v, err := out.ConvertToNative(reflect.TypeFor[*structpb.Value]())
 	if err != nil {
 		return nil, fmt.Errorf("failed proto conversion: %v", err)
 	}
@@ -853,7 +853,7 @@ func evalResp(prg cel.Program, ts time.Time, resp *rpc.Message[any]) ([]byte, er
 	case types.Double:
 		return strconv.AppendFloat(nil, float64(out), 'f', -1, 64), nil
 	default:
-		v, err := out.ConvertToNative(reflect.TypeOf((*structpb.Value)(nil)))
+		v, err := out.ConvertToNative(reflect.TypeFor[*structpb.Value]())
 		if err != nil {
 			return nil, fmt.Errorf("failed proto conversion: %v", err)
 		}
