@@ -82,10 +82,7 @@ func (p *brightness) Press(ctx context.Context, page string, r, c int, t time.Ti
 	if len(val) != 1 {
 		return fmt.Errorf("invalid brightness length: %d", len(val))
 	}
-	bright := int(val[0]) + p.add
-	if bright < 0 {
-		bright = 0
-	}
+	bright := max(int(val[0])+p.add, 0)
 	if bright > 100 {
 		bright = 100
 	}

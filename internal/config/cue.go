@@ -80,10 +80,7 @@ func unique(paths [][]string) [][]string {
 }
 
 func compare[T constraints.Ordered](a, b []T) int {
-	l := len(a)
-	if len(b) < l {
-		l = len(b)
-	}
+	l := min(len(b), len(a))
 	if l == 0 || &a[0] == &b[0] {
 		goto same
 	}

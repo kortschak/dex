@@ -67,10 +67,7 @@ func Draw(dst draw.Image, text string, col color.Color, fnt *basicfont.Face, dx,
 	} else {
 		t := []rune(text)
 		for len(t) != 0 {
-			n := cols
-			if n > len(t) {
-				n = len(t)
-			}
+			n := min(cols, len(t))
 			lines = append(lines, string(t[:n]))
 			t = t[n:]
 		}

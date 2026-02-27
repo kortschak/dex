@@ -765,8 +765,7 @@ func (db *DB) Select(ctx context.Context, query string) ([]map[string]any, error
 		for i, t := range types {
 			typ := t.ScanType()
 			if typ == nil {
-				var v any
-				typ = reflect.TypeOf(&v).Elem()
+				typ = reflect.TypeFor[any]()
 			}
 			cols[i] = reflect.New(reflect.PointerTo(typ)).Interface()
 		}

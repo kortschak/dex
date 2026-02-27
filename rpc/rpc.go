@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -229,9 +230,7 @@ func AddWireErrorDetail(err error, details map[string]any) error {
 		if json.Unmarshal(err.Data, &data) != nil {
 			return err
 		}
-		for k, v := range details {
-			data[k] = v
-		}
+		maps.Copy(data, details)
 		err.Data = wireErrorData(data)
 		return err
 	}
