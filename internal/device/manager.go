@@ -438,7 +438,6 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 					p.notify[svcConn{uid, conn}] = note
 				}
 				for _, a := range actions {
-					a := a // TODO: Remove this when loopvar behaviour is changed in go1.22.
 					if a.Change == nil {
 						// Draw image if it exists, or stop the button if not active.
 						if a.Image != "" {

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"reflect"
 	"time"
 
@@ -178,9 +179,7 @@ func withAll(dst, src ref.Val) ref.Val {
 	if err != nil {
 		return err
 	}
-	for k, v := range other {
-		new[k] = v
-	}
+	maps.Copy(new, other)
 	return types.NewRefValMap(types.DefaultTypeAdapter, new)
 }
 
@@ -212,7 +211,7 @@ func withReplace(dst, src ref.Val) ref.Val {
 	return types.NewRefValMap(types.DefaultTypeAdapter, new)
 }
 
-var refValMap = reflect.TypeOf(map[ref.Val]ref.Val(nil))
+var refValMap = reflect.TypeFor[map[ref.Val]ref.Val]()
 
 func with(dst, src ref.Val) (res, other map[ref.Val]ref.Val, maybe ref.Val) {
 	obj, ok := dst.(traits.Mapper)
@@ -229,9 +228,7 @@ func with(dst, src ref.Val) (res, other map[ref.Val]ref.Val, maybe ref.Val) {
 	if err != nil {
 		return nil, nil, types.NewErr("unable to convert dst to native: %w", err)
 	}
-	for k, v := range m.(map[ref.Val]ref.Val) {
-		new[k] = v
-	}
+	maps.Copy(new, m.(map[ref.Val]ref.Val))
 	m, err = val.ConvertToNative(refValMap)
 	if err != nil {
 		return nil, nil, types.NewErr("unable to convert src to native: %w", err)
@@ -247,7 +244,7 @@ func (l lib) logDebug(arg0, arg1 ref.Val) ref.Val {
 	if l.log == nil {
 		return arg1
 	}
-	val, err := arg1.ConvertToNative(reflect.TypeOf((*structpb.Value)(nil)))
+	val, err := arg1.ConvertToNative(reflect.TypeFor[*structpb.Value]())
 	if err != nil {
 		l.log.LogAttrs(context.Background(), slog.LevelError, "cel debug log error", slog.String("tag", string(tag)), slog.Any("error", err))
 	} else {

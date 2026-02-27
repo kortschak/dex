@@ -201,7 +201,7 @@ func eval(ctx context.Context, uid rpc.UID, conn *jsonrpc2.Connection, src, root
 		return "", fmt.Errorf("failed eval: %v", err)
 	}
 
-	v, err := out.ConvertToNative(reflect.TypeOf(&structpb.Value{}))
+	v, err := out.ConvertToNative(reflect.TypeFor[*structpb.Value]())
 	if err != nil {
 		return "", fmt.Errorf("failed proto conversion: %v", err)
 	}

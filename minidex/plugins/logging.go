@@ -87,10 +87,7 @@ func (p *logging) Press(ctx context.Context, page string, r, c int, t time.Time)
 	if len(val) != int(sizeUint64) {
 		return fmt.Errorf("invalid logging length: %d", len(val))
 	}
-	level := slog.Level(binary.LittleEndian.Uint64(val)) + p.add
-	if level < slog.LevelDebug {
-		level = slog.LevelDebug
-	}
+	level := max(slog.Level(binary.LittleEndian.Uint64(val))+p.add, slog.LevelDebug)
 	if level > slog.LevelError {
 		level = slog.LevelError
 	}
