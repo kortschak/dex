@@ -530,7 +530,7 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 	for conn, note := range p.notify {
 		note.Buttons = unique(note.Buttons)
 		p.log.LogAttrs(ctx, slog.LevelDebug, "notify service", slog.Any("notification", note))
-		err := conn.Notify(ctx, "state", rpc.NewMessage(kernelUID, note))
+		err := conn.Notify(ctx, rpc.Inform, rpc.NewMessage(kernelUID, note))
 		if err != nil {
 			p.log.LogAttrs(ctx, slog.LevelError, "failed to notify state", slog.Any("uid", conn.uid), slog.Any("error", err))
 		}

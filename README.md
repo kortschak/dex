@@ -71,6 +71,8 @@ Module executables are expected to implement the following methods:
 - `configure` — call `rpc.Message[any]` returns `rpc.Message[string]` with informational text.
 - `stop` — notify `any` signals the executable to terminate.
 
+Additionally, during service configuration the kernel will notify each service with `inform` [`rpc.Message[device.Notification]`](https://pkg.go.dev/github.com/kortschak/dex/internal/device#Notification). Services MAY ignore this notification, but MUST tolerate it.
+
 ## Provided modules
 
 ### `rest`

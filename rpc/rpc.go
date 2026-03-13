@@ -22,6 +22,7 @@ const (
 	Who       = "who"       // call Message[None] → Message[string] (version)
 	Configure = "configure" // call Message[any] → Message[string]
 	Stop      = "stop"      // notify any → nil
+	Inform    = "inform"    // notify Message[device.Notification] → nil (optional)
 )
 
 // Kernel methods. Call methods that are invoked with notify
