@@ -209,6 +209,8 @@ Modules have an additional setting, [`log_mode`](https://pkg.go.dev/github.com/k
 
 The `log_mode` option is static and set when the module is spawned.
 
+When the log level is set to DEBUG-1, the debugging behaviour of `dex` is extended; for example, execution flow assertions (`panic("unreachable")`) may be enabled, sensitive configuration values will be included in logging, and the system's environment variables will logged at start up. Environment variable logging is done before any configuration file has been read, so this is only affected by the `dex` `log` flag.
+
 ## Installation
 
 `dex` can be installed from source using the [Go tool chain](https://go.dev/doc/install) with

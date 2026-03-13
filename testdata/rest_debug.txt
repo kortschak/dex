@@ -1,0 +1,50 @@
+# The build of watcher takes a fair while due to the size of the dependency
+# tree, the size of some of the individual dependencies and the absence of
+# caching when building within a test script.
+[short] stop 'Skipping long test.'
+
+env HOME=${WORK}
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/watcher
+cd ${WORK}
+
+unquote debug_req_log.snarf debug_resp_log.snarf
+
+exec rest -log=DEBUG -debug_req debug_req_log.snarf
+cmp stdout want_req.text
+
+exec rest -log=DEBUG -debug_resp debug_resp_log.snarf
+cmp stdout want_resp.text
+
+-- want_req.text --
+{"uid":{"module":"runner","service":"write_file"},"method":"run","params":{"args":["-c","echo -n \"Test data.\n\" \u003e got.txt"],"path":"bash"},"header":{"other-header":["value"]}}
+-- debug_req_log.snarf --
+>-- prg --
+>{
+>	"method": "run",
+>	"uid": {
+>		"module": "runner",
+>		"service": "write_file",
+>	},
+>	"params": {
+>		"path": "bash",
+>		"args": ["-c", "echo -n "+debug("POST data", '"'+string(request.Body)+'"')+" > got.txt"],
+>	},
+>	"header": {
+>		"other-header": ["value"],
+>	},
+>}
+>-- data --
+>{"time":"2026-02-14T13:29:38.90684407+10:30","level":"ERROR","source":{"function":"main.(*daemon).serve.func1","file":".../rest/main.go","line":622},"msg":"eval error","component":"rest","name":"write_file","req":{"Body":"VGVzdCBkYXRhLgo=","Close":false,"ContentLength":-1,"Header":{"Accept-Encoding":["gzip"],"Content-Type":[""],"User-Agent":["Go-http-client/1.1"]},"Host":"localhost:7878","Method":"POST","Proto":"HTTP/1.1","ProtoMajor":1,"ProtoMinor":1,"RequestURI":"/","TransferEncoding":["chunked"],"URL":{"ForceQuery":false,"Fragment":"","Host":"","Opaque":"","Path":"/","RawFragment":"","RawPath":"","RawQuery":"","Scheme":""}}}
+>
+-- want_resp.text --
+{"result":"ok"}
+-- debug_resp_log.snarf --
+>-- prg --
+>{"result":"ok"}
+>-- data --
+>{"time":"2026-02-14T13:38:34.890200217+10:30","level":"ERROR","source":{"function":"main.(*daemon).serve.func1","file":".../rest/main.go","line":671},"msg":"eval error","component":"rest","name":"write_file","resp":{"time":"2026-02-14T13:38:34.889954015+10:30","uid":{"module":"kernel","service":"rpc"},"body":{"body":{},"time":"2026-02-14T13:38:34.889782525+10:30","uid":{"module":"rest"}}}}
+>

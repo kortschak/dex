@@ -128,20 +128,22 @@ func (r *Report) UnmarshalJSON(data []byte) error {
 		Time:   report.Time,
 		Period: report.Period,
 	}
+	r.Details, err = UnmarshalDetailMapper(report.Details, &WatcherDetails{}, &MapDetails{})
+	return err
+}
 
+// UnmarshalDetailMapper returns the first DetailMapper to allow the provided
+// data to deserialise into it, disallowing unknown fields.
+func UnmarshalDetailMapper(data []byte, mappers ...DetailMapper) (DetailMapper, error) {
 	var errs []error
-	for _, m := range []DetailMapper{
-		&WatcherDetails{},
-		&MapDetails{},
-	} {
-		err = jsonUnmarshalNoUnknown(report.Details, m)
+	for _, m := range mappers {
+		err := jsonUnmarshalNoUnknown(data, m)
 		if err == nil {
-			r.Details = m
-			return nil
+			return m, nil
 		}
 		errs = append(errs, err)
 	}
-	return errors.Join(errs...)
+	return nil, errors.Join(errs...)
 }
 
 // jsonUnmarshalNoUnknown is equivalent to json.Unmarshal except that it

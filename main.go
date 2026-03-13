@@ -69,6 +69,8 @@ func Main() int {
 		Level:     &level,
 		AddSource: addSource,
 	})})
+	log.LogAttrs(context.Background(), slog.LevelDebug-1, "env", slog.Any("vars", envMap{}))
+
 	// mlog is the logger for main.
 	mlog := log.With(slog.String("component", "dex.main"))
 
@@ -226,6 +228,20 @@ func Main() int {
 	}
 
 	return success
+}
+
+type envMap struct{}
+
+func (envMap) LogValue() slog.Value {
+	env := make(map[string]string)
+	for _, v := range os.Environ() {
+		key, val, ok := strings.Cut(v, "=")
+		if !ok {
+			continue
+		}
+		env[key] = val
+	}
+	return slog.AnyValue(env)
 }
 
 func xdgMkdir(parent func() (dir string, ok bool), path string, perm fs.FileMode) (dir string, err error) {

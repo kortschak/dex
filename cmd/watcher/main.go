@@ -26,6 +26,7 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/kortschak/jsonrpc2"
+	"golang.org/x/tools/txtar"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -55,8 +56,10 @@ func Main() int {
 	logging := flag.String("log", "info", "logging level (debug, info, warn or error)")
 	lines := flag.Bool("lines", false, "display source line details in logs")
 	logStdout := flag.Bool("log_stdout", false, "log to stdout instead of stderr")
+	debug := flag.String("debug", "", "path to txtar archive (prg, data) for CEL rule debug")
 	v := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
 	if *v {
 		err := version.Print()
 		if err != nil {
@@ -64,6 +67,26 @@ func Main() int {
 			os.Exit(internalError)
 		}
 		os.Exit(success)
+	}
+
+	var level slog.LevelVar
+	err := level.UnmarshalText([]byte(*logging))
+	if err != nil {
+		flag.Usage()
+		return invocationError
+	}
+	addSource := slogext.NewAtomicBool(*lines)
+	logDst := os.Stderr
+	if *logStdout {
+		logDst = os.Stdout
+	}
+
+	if *debug != "" {
+		log := slog.New(slogext.GoID{Handler: slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
+			Level:     &level,
+			AddSource: addSource,
+		})}).With(slog.String("component", "watcher-debug"))
+		return runDebug(*debug, log)
 	}
 
 	switch *network {
@@ -80,17 +103,6 @@ func Main() int {
 	default:
 	}
 
-	var level slog.LevelVar
-	err := level.UnmarshalText([]byte(*logging))
-	if err != nil {
-		flag.Usage()
-		return invocationError
-	}
-	addSource := slogext.NewAtomicBool(*lines)
-	logDst := os.Stderr
-	if *logStdout {
-		logDst = os.Stdout
-	}
 	log := slog.New(slogext.GoID{Handler: slogext.NewJSONHandler(logDst, &slogext.HandlerOptions{
 		Level:     &level,
 		AddSource: addSource,
@@ -464,7 +476,7 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 					for name, prg := range rules {
 						notes, err := eval(prg, t, details, last, p)
 						if err != nil {
-							d.log.LogAttrs(ctx, slog.LevelError, "polling evaluation", slog.Any("name", name), slog.Any("error", err))
+							d.log.LogAttrs(ctx, slog.LevelError, "polling evaluation", slog.Any("tick", t), slog.Any("name", name), slog.Any("details", details), slog.Any("last", last), slog.Duration("period", p), slog.Any("error", err))
 							continue
 						}
 						for i, note := range notes {
@@ -683,6 +695,12 @@ func (l devLib) CompileOptions() []cel.EnvOption {
 }
 
 func (l devLib) sleepState(arg ref.Val) ref.Val {
+	if l.conn == nil {
+		return types.NewDynamicMap(types.DefaultTypeAdapter, map[string]any{
+			"state": "",
+			"last":  time.Time{},
+		})
+	}
 	srv, ok := arg.(types.String)
 	if !ok {
 		return types.NewErr("invalid type for sleep_state: %T", arg)
@@ -712,4 +730,73 @@ func maybeTime(o *time.Time) time.Time {
 		t = *o
 	}
 	return t
+}
+
+func runDebug(path string, log *slog.Logger) int {
+	src, msg, err := readDebugArchive(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read archive: %v\n", err)
+		return invocationError
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var level slog.LevelVar
+	addSource := slogext.NewAtomicBool(false)
+	h := newDaemon(ctx, "", log, &level, addSource, cancel)
+	prg, err := h.compile(src)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to compile program: %v\n", err)
+		return internalError
+	}
+
+	var debug struct {
+		Time    time.Time       `json:"tick"`
+		Period  rpc.Duration    `json:"period"`
+		Details watcher.Details `json:"details"`
+		Last    watcher.Details `json:"last"`
+	}
+	err = json.Unmarshal(msg, &debug)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to unmarshal data: %v\n", err)
+		return invocationError
+	}
+
+	notes, err := eval(prg, debug.Time, debug.Details, debug.Last, debug.Period.Duration)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+	err = json.NewEncoder(os.Stdout).Encode(notes)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal result: %v\n", err)
+		return internalError
+	}
+
+	return success
+}
+
+func readDebugArchive(path string) (prg string, data []byte, err error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("read file: %w", err)
+	}
+	ar := txtar.Parse(raw)
+	for _, f := range ar.Files {
+		switch f.Name {
+		case "prg":
+			prg = string(f.Data)
+		case "data":
+			data = f.Data
+		default:
+			return "", nil, fmt.Errorf("unexpected file: %s", f.Name)
+		}
+	}
+	if prg == "" {
+		return "", nil, errors.New("archive missing prg file")
+	}
+	if len(data) == 0 {
+		return "", nil, errors.New("archive missing data file")
+	}
+	return prg, data, nil
 }
