@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	slices0 "slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -687,9 +688,7 @@ func unique(pages []string) []string {
 	if len(pages) < 2 {
 		return pages
 	}
-	sort.Slice(pages, func(i, j int) bool {
-		return pages[i] < pages[j]
-	})
+	slices0.Sort(pages)
 	curr := 0
 	for i, p := range pages {
 		if p == pages[curr] {
@@ -715,7 +714,7 @@ var (
 		},
 		cmp.Ignore(),
 	)
-	mapStringAny = reflect.TypeOf(map[string]any{})
+	mapStringAny = reflect.TypeFor[map[string]any]()
 )
 
 func (m *Manager[K, D, B]) sameModConfig(uid string, mod *config.Module) bool {

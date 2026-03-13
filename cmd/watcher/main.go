@@ -567,7 +567,7 @@ func eval(prg cel.Program, ts time.Time, curr, last watcher.Details, period time
 		return nil, fmt.Errorf("failed eval: %v", err)
 	}
 
-	v, err := out.ConvertToNative(reflect.TypeOf((*structpb.Value)(nil)))
+	v, err := out.ConvertToNative(reflect.TypeFor[*structpb.Value]())
 	if err != nil {
 		return nil, fmt.Errorf("failed proto conversion: %v", err)
 	}

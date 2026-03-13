@@ -6,7 +6,6 @@ package config
 
 import (
 	"bytes"
-	"context"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -427,8 +426,7 @@ func TestWatcher(t *testing.T) {
 
 	dir := t.TempDir()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	stream := make(chan Change)
 	for i, op := range operations {
 		err := op.fn(dir)

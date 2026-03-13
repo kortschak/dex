@@ -357,7 +357,7 @@ func TestDaemon(t *testing.T) {
 			t.Run("changes", func(t *testing.T) {
 				const changes = 5
 				changeWg.Add(changes)
-				for i := 0; i < changes; i++ {
+				for range changes {
 					resp, err := http.Get("http://localhost:7575/")
 					if err != nil {
 						t.Fatalf("unexpected error from GET http://localhost:7575/: %v", err)

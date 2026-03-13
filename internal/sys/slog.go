@@ -79,10 +79,7 @@ func (l *logWriter) Write(b []byte) (int, error) {
 	}
 	n := len(b)
 	for len(b) != 0 {
-		n := l.maxLine
-		if n > len(b) {
-			n = len(b)
-		}
+		n := min(l.maxLine, len(b))
 		l.log.LogAttrs(l.ctx, l.level, l.msg, slog.String(l.label, string(b[:n])))
 		b = b[n:]
 	}
