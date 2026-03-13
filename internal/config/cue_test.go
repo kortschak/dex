@@ -67,6 +67,31 @@ var vetTests = []struct {
 		wantErr:   errors.New("service.foo1.serial: 2 errors in empty disjunction: (and 3 more errors)"),
 	},
 	{
+		// Specify that no device is registered, but have a service that
+		// that requires one with a serial specified, but no listener.
+		// This should fail validation since serial must be in kernel
+		// device list.
+		name: "serial_without_listen_no_device",
+		config: &System{
+			Kernel: &Kernel{
+				Network: "unix",
+				Device:  []Device{}, // No device.
+			},
+			Modules: map[string]*Module{
+				"foo": {Path: "foo"},
+			},
+			Services: map[string]*Service{
+				"foo1": {
+					Serial: ptr(""), // Any serial.
+					Module: ptr("foo"),
+					Listen: nil, // No listener.
+				},
+			},
+		},
+		wantPaths: [][]string{{"service", "foo1", "serial"}},
+		wantErr:   errors.New("service.foo1.serial: 2 errors in empty disjunction: (and 3 more errors)"),
+	},
+	{
 		// Specify that no device is registered, and have a service that
 		// that does not requires one. This should succeed.
 		name: "not_listening",
