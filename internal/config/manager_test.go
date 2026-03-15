@@ -725,10 +725,7 @@ func TestManager(t *testing.T) {
 	m := NewManager(log)
 	for i, step := range changeStream {
 		log.LogAttrs(context.Background(), slog.LevelDebug, "step", slog.Int("number", i))
-		err := m.Apply(step.change)
-		if err != nil {
-			t.Fatalf("unexpected apply error at step: %d: %v", i, err)
-		}
+		m.Apply(step.change)
 
 		cfg, unified, _, _, err := m.Unify(config.Schema)
 		if err != nil {

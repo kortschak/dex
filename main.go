@@ -208,11 +208,7 @@ func Main() int {
 			continue
 		}
 		mlog.LogAttrs(ctx, slog.LevelDebug, "config stream element", slog.Any("config", slogext.PrivateRedact{Val: cfg.Config, Tag: "json"}), slog.Any("events", cfg.Event))
-		err = cfgman.Apply(cfg)
-		if err != nil {
-			mlog.LogAttrs(ctx, slog.LevelWarn, "config manager apply error", slog.Any("error", err))
-			continue
-		}
+		cfgman.Apply(cfg)
 		unified, cue, included, remain, err := cfgman.Unify(public.Schema)
 		if err != nil {
 			mlog.LogAttrs(ctx, slog.LevelWarn, "config manager unify error", slog.Any("error", err), slog.Any("cue", cue))
