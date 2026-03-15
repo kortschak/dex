@@ -69,15 +69,13 @@ func (w *Watcher) Watch(ctx context.Context) error {
 						Err:    err,
 					}
 
-				// Renames are seen as a rename/create pair. Create events
-				// independent of a write are not informative, so we handle
-				// those in the write case.
 				case ev.Has(fsnotify.Rename):
 					w.log.LogAttrs(ctx, slog.LevelDebug, "rename", slog.String("name", ev.Name))
 					sum := w.hashes[ev.Name]
 					w.log.LogAttrs(ctx, slog.LevelDebug, "set renames", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}), slog.Any("renames", renamesValue{renames}))
 					renames[sum] = ev
 					delete(w.hashes, ev.Name)
+
 				case ev.Has(fsnotify.Create):
 					w.log.LogAttrs(ctx, slog.LevelDebug, "create", slog.String("name", ev.Name))
 					b, err := os.ReadFile(ev.Name)
@@ -88,15 +86,38 @@ func (w *Watcher) Watch(ctx context.Context) error {
 					}
 					cfg, sum, err := unmarshalConfigs(w.hash, b)
 					prev, ok := renames[sum]
-					if !ok {
+					if ok {
+						// Paired with a preceding .toml rename
+						// (e.g. mv file.toml other.toml).
+						delete(renames, sum)
+						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.hashes[ev.Name] = sum
+						w.changes <- Change{
+							Event:  []fsnotify.Event{prev, ev},
+							Config: cfg,
+							Err:    err,
+						}
+						continue
+					}
+					// No matching rename. If the path is already
+					// tracked, this is an atomic save (write-temp
+					// then rename-over) where the temp did not have
+					// a .toml extension. For genuinely new files the
+					// subsequent Write event handles the content.
+					if _, tracked := w.hashes[ev.Name]; !tracked {
 						w.log.LogAttrs(ctx, slog.LevelDebug, "no renames", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("renames", renamesValue{renames}))
 						continue
 					}
-					delete(renames, sum)
-					w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
-					w.hashes[ev.Name] = sum
+					if w.hashes[ev.Name] == sum {
+						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						continue
+					}
+					if cfg != nil {
+						w.log.LogAttrs(ctx, slog.LevelDebug, "set hash", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
+						w.hashes[ev.Name] = sum
+					}
 					w.changes <- Change{
-						Event:  []fsnotify.Event{prev, ev},
+						Event:  []fsnotify.Event{ev},
 						Config: cfg,
 						Err:    err,
 					}
