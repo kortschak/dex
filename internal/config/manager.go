@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
-	"io/fs"
 	"log/slog"
 	"sort"
 
@@ -45,9 +44,8 @@ func NewManager(log *slog.Logger) *Manager {
 	}
 }
 
-// Apply applies the provided change to the current configuration state. Any
-// error returned will be fs.PathError.
-func (m *Manager) Apply(c Change) error {
+// Apply applies the provided change to the current configuration state.
+func (m *Manager) Apply(c Change) {
 	ctx := context.Background()
 	m.log.LogAttrs(ctx, slog.LevelDebug, "apply", slog.Any("op", slogext.Stringer{Stringer: c.Op()}))
 	for _, ev := range c.Event {
@@ -60,27 +58,17 @@ func (m *Manager) Apply(c Change) error {
 
 		case ev.Has(fsnotify.Rename):
 			m.log.LogAttrs(ctx, slog.LevelDebug, "apply rename", slog.Any("change", changeValue{c}))
-			if _, ok := m.fragments[ev.Name]; !ok {
-				return &fs.PathError{Op: "rename", Path: ev.Name, Err: fs.ErrNotExist}
-			}
 			delete(m.fragments, ev.Name)
 
 		case ev.Has(fsnotify.Create):
 			m.log.LogAttrs(ctx, slog.LevelDebug, "apply create", slog.Any("change", changeValue{c}))
-			if _, ok := m.fragments[ev.Name]; ok {
-				return &fs.PathError{Op: "create", Path: ev.Name, Err: fs.ErrExist}
-			}
 			m.fragments[ev.Name] = c.Config
 
 		case ev.Has(fsnotify.Remove):
 			m.log.LogAttrs(ctx, slog.LevelDebug, "apply remove", slog.Any("change", changeValue{c}))
-			if _, ok := m.fragments[ev.Name]; !ok {
-				return &fs.PathError{Op: "remove", Path: ev.Name, Err: fs.ErrNotExist}
-			}
 			delete(m.fragments, ev.Name)
 		}
 	}
-	return nil
 }
 
 // Unify returns a complete unified configuration validated against the provided
