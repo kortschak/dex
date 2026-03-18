@@ -246,7 +246,7 @@ func Test(t *testing.T) {
 		owner := rpc.UID{Module: "state", Service: "test"}
 		const n = 1000
 		var wg sync.WaitGroup
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if t.Failed() {
 				break
 			}

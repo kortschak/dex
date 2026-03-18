@@ -18,6 +18,10 @@ cd ${WORK}
 
 dex -log debug -lines &
 sleep 1s
+kill -INT
+wait
+stderr '"msg":"invalid config"'
+stderr '"service\.dummy\.serial: 2 errors in empty disjunction: \(and 3 more errors\)"'
 
 -- config.toml --
 [kernel]
@@ -32,8 +36,5 @@ log_add_source = true
 
 [service.dummy]
 module = "runner"
-# FIXME: This should be caught in config validation.
-# The serial here implies that a device is present,
-# but it is not and so when we come to send any details
-# for the device we panic. We shouldn't crash here.
+# Validation fails since serial is not in kernel.device (device = []).
 serial = ""

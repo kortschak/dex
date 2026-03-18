@@ -134,7 +134,7 @@ func getParams(par string) (map[string]string, error) {
 	}
 	param := make(map[string]string)
 	var err error
-	for _, kv := range strings.Split(par, ";") {
+	for kv := range strings.SplitSeq(par, ";") {
 		k, v, ok := strings.Cut(strings.TrimSpace(kv), "=")
 		if !ok {
 			return nil, fmt.Errorf("invalid params: %s", par)

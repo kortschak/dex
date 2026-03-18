@@ -229,7 +229,7 @@ func TestDaemon(t *testing.T) {
 				cmd.Process.Kill()
 			}
 			cold = false
-			for i := 0; i < changes; i++ {
+			for i := range changes {
 				if runtime.GOOS == "darwin" {
 					// On MacOS, the applescript used to get the PID returns
 					// the same PID for all the testers resulting in the

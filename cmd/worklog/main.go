@@ -806,7 +806,7 @@ func eval[T any](prg cel.Program, input any) (*T, error) {
 		return nil, fmt.Errorf("failed eval: %v", err)
 	}
 
-	v, err := out.ConvertToNative(reflect.TypeOf((*structpb.Value)(nil)))
+	v, err := out.ConvertToNative(reflect.TypeFor[*structpb.Value]())
 	if err != nil {
 		return nil, fmt.Errorf("failed proto conversion: %v", err)
 	}
@@ -1333,7 +1333,7 @@ func queryError(dec *json.Decoder, body []byte, err error) any {
 	}
 	off := offset
 	var line []byte
-	for _, l := range bytes.Split(body, []byte{'\n'}) {
+	for l := range bytes.SplitSeq(body, []byte{'\n'}) {
 		if off-(len(l)+1) <= 0 {
 			line = l
 			break
