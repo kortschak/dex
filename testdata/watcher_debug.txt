@@ -1,0 +1,77 @@
+# The build of watcher takes a fair while due to the size of the dependency
+# tree, the size of some of the individual dependencies and the absence of
+# caching when building within a test script.
+[short] stop 'Skipping long test.'
+
+env HOME=${WORK}
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/watcher
+cd ${WORK}
+
+unquote debug_activity_log.snarf debug_blanking_no_log.snarf debug_blanking_yes_log.snarf
+
+exec watcher -log=DEBUG -debug debug_activity_log.snarf
+cmp stdout want_activity_good.text
+
+exec watcher -log=DEBUG -debug debug_blanking_no_log.snarf
+cmp stdout want_blanking_no.text
+
+exec watcher -log=DEBUG -debug debug_blanking_yes_log.snarf
+cmp stdout want_blanking_yes.text
+
+-- want_activity_good.text --
+[{"uid":{"module":"worklog"},"method":"record","params":{"details":{"class":"Gnome-terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false,"name":"gnome-terminal-server","pid":4245,"wid":67109097,"window":"Terminal"},"period":"1s"}}]
+-- debug_activity_log.snarf --
+>-- prg --
+>{
+>	"uid":    {"module": "worklog"},
+>	"method": "record",
+>	"params": {
+>		"details": {
+>			"name":       locked ? "" : name,
+>			"class":      locked ? "" : class,
+>			"window":     locked ? "" : window,
+>			"last_input": last_input,
+>			"locked":     locked,
+>			"wid":        wid,
+>			"pid":        pid,
+>		},
+>		"period": period,
+>	},
+>}
+>-- data --
+>{"time":"2026-02-14T10:35:26.615526645+10:30","level":"ERROR","source":{"function":"main.(*daemon).poll.func1","file":".../watcher/main.go","line":472},"msg":"polling evaluation","component":"watcher","tick":"2026-02-14T10:35:26.612881714+10:30","name":"activity","details":{"wid":67109097,"pid":4245,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false},"last":{"wid":67109097,"pid":4245,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false},"period":1000000000,"error":null,"goid":7}
+>
+-- want_blanking_no.text --
+[{"uid":{},"method":""}]
+-- debug_blanking_no_log.snarf --
+>-- prg --
+>locked == last.locked ? {} : {
+>	"method": "sleep",
+>	"params": {
+>		"action":  "set",
+>		"state":   locked ? "blanked" : "awake",
+>		"service": {"service":"kernel_pager"}
+>	},
+>}
+>-- data --
+>{"time":"2026-02-14T10:35:28.618033931+10:30","level":"ERROR","source":{"function":"main.(*daemon).poll.func1","file":".../watcher/main.go","line":472},"msg":"polling evaluation","component":"watcher","tick":"2026-02-14T10:35:28.612882688+10:30","name":"blanking","details":{"wid":67109097,"pid":4245,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false},"last":{"wid":67109097,"pid":4245,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false},"period":1000000000,"error":null,"goid":7}
+>
+-- want_blanking_yes.text --
+[{"uid":{},"method":"sleep","params":{"action":"set","service":{"service":"kernel_pager"},"state":"blanked"}}]
+-- debug_blanking_yes_log.snarf --
+>-- prg --
+>locked == last.locked ? {} : {
+>	"method": "sleep",
+>	"params": {
+>		"action":  "set",
+>		"state":   locked ? "blanked" : "awake",
+>		"service": {"service":"kernel_pager"}
+>	},
+>}
+>-- data --
+>{"time":"2026-02-14T10:35:28.618033931+10:30","level":"ERROR","source":{"function":"main.(*daemon).poll.func1","file":".../watcher/main.go","line":472},"msg":"polling evaluation","component":"watcher","tick":"2026-02-14T10:35:28.612882688+10:30","name":"blanking","details":{"wid":67109097,"pid":4245,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":true},"last":{"wid":67109097,"pid":4245,"name":"gnome-terminal-server","class":"Gnome-terminal","window":"Terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false},"period":1000000000,"error":null,"goid":7}
+>
