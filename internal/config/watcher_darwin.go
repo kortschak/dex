@@ -25,11 +25,39 @@ func (w *Watcher) Watch(ctx context.Context) error {
 		close(w.changes)
 	}()
 
+	var (
+		pendingRemove *fsnotify.Event
+		removeDelay   <-chan time.Time
+	)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-removeDelay:
+			// No Create arrived within the debounce window,
+			// so treat this as a genuine deletion.
+			w.log.LogAttrs(ctx, slog.LevelDebug, "flush deferred remove", slog.String("name", pendingRemove.Name))
+			w.changes <- Change{Event: []fsnotify.Event{*pendingRemove}}
+			pendingRemove = nil
+			removeDelay = nil
 		case ev := <-w.watcher.Events:
+			// If a toml file Remove is pending, check whether
+			// this event is a Create for the same path. If so, the
+			// Remove was part of an atomic save (write-temp then
+			// rename-over) and should be suppressed; the Create
+			// will handle the content change. If not, flush it
+			// as a genuine deletion now.
+			if pendingRemove != nil {
+				if ev.Has(fsnotify.Create) && ev.Name == pendingRemove.Name {
+					w.log.LogAttrs(ctx, slog.LevelDebug, "suppress remove for atomic save", slog.String("name", pendingRemove.Name))
+				} else {
+					w.log.LogAttrs(ctx, slog.LevelDebug, "flush deferred remove", slog.String("name", pendingRemove.Name))
+					w.changes <- Change{Event: []fsnotify.Event{*pendingRemove}}
+				}
+				pendingRemove = nil
+				removeDelay = nil
+			}
+
 			if filepath.Ext(ev.Name) == ".toml" {
 				if ev.Has(fsnotify.Write | fsnotify.Create) {
 					fi, err := os.Stat(ev.Name)
@@ -81,8 +109,10 @@ func (w *Watcher) Watch(ctx context.Context) error {
 
 				case ev.Has(fsnotify.Remove):
 					w.log.LogAttrs(ctx, slog.LevelDebug, "remove", slog.String("name", ev.Name))
-					w.changes <- Change{Event: []fsnotify.Event{ev}}
 					delete(w.hashes, ev.Name)
+					ev := ev
+					pendingRemove = &ev
+					removeDelay = time.After(w.debounce)
 				}
 			} else if ev.Has(fsnotify.Remove) && ev.Name == w.dir {
 				w.log.LogAttrs(ctx, slog.LevelDebug, "remove config directory", slog.String("name", ev.Name))
