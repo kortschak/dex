@@ -399,13 +399,13 @@ network = "unix"
 		// Simulate an atomic save (write temp, rename over target)
 		// as performed by editors like helix. The temp file does not
 		// have a .toml extension, so the Rename event for it is
-		// ignored and the Create for the target is a standalone event.
-		// Skipped on non-Linux; the kqueue event sequence for a
-		// rename-over may differ and needs separate verification.
+		// ignored and the Create for the target is a standalone
+		// event. On Linux the Create is handled by the tracked-path
+		// fallthrough in the Create case. On macOS kqueue also sends
+		// a Remove for the replaced target; the darwin watcher
+		// defers the Remove and suppresses it when the Create
+		// follows.
 		name: "atomic_save", fn: func(dir string) error {
-			if runtime.GOOS != "linux" {
-				return nil
-			}
 			return atomicWrite(dir, "file1.toml", 0o644, `[kernel]
 device = [
 	{serial = "dev1"},
@@ -419,6 +419,33 @@ options.len = 1
 `)
 		},
 		want: map[string]Change{
+			"darwin": {
+				Event: []fsnotify.Event{
+					{
+						Name: "file1.toml",
+						Op:   fsnotify.Create,
+					},
+				},
+				Config: &System{
+					Kernel: &Kernel{
+						Device: []Device{
+							{PID: 0, Serial: ptr("dev1"), Default: nil},
+							{PID: 0, Serial: ptr("dev2"), Default: nil},
+						},
+						Network: "unix",
+						Sum:     mustSum("0384f61c9ded1788a24a7a2a5c5fa7dfe5838e7c"),
+					},
+					Modules: map[string]*Module{
+						"foo": {
+							Path: "/path/to/foo",
+							Options: map[string]any{
+								"len": int64(1),
+							},
+							Sum: mustSum("ca587faa828122bc4df3558fcec7a318bd26ce6a"),
+						},
+					},
+				},
+			},
 			"linux": {
 				Event: []fsnotify.Event{
 					{
