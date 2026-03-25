@@ -17,7 +17,6 @@ require (
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
-	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/image v0.34.0
 	golang.org/x/net v0.48.0
 	golang.org/x/sys v0.39.0
@@ -56,6 +55,7 @@ require (
 	github.com/tdewolff/parse/v2 v2.7.15 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/text v0.32.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260319201613-d00831a3d3e7 // indirect
