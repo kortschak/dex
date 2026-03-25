@@ -5,6 +5,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"sort"
 
@@ -12,7 +13,6 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	cerrors "cuelang.org/go/cue/errors"
 	"cuelang.org/go/encoding/gocode/gocodec"
-	"golang.org/x/exp/constraints"
 )
 
 // Validate performs a validation of the provided configuration value, returning
@@ -79,7 +79,7 @@ func unique(paths [][]string) [][]string {
 	return paths[s : curr+1]
 }
 
-func compare[T constraints.Ordered](a, b []T) int {
+func compare[T cmp.Ordered](a, b []T) int {
 	l := min(len(b), len(a))
 	if l == 0 || &a[0] == &b[0] {
 		goto same
