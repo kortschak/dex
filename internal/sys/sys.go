@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	slices0 "slices"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -26,7 +26,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/ardilla"
 	"github.com/kortschak/jsonrpc2"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 
 	"github.com/kortschak/dex/internal/config"
@@ -688,7 +687,7 @@ func unique(pages []string) []string {
 	if len(pages) < 2 {
 		return pages
 	}
-	slices0.Sort(pages)
+	slices.Sort(pages)
 	curr := 0
 	for i, p := range pages {
 		if p == pages[curr] {

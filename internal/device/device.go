@@ -13,6 +13,7 @@ import (
 	"image/color"
 	"io"
 	"log/slog"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -20,7 +21,6 @@ import (
 
 	"github.com/kortschak/ardilla"
 	"github.com/kortschak/jsonrpc2"
-	"golang.org/x/exp/slices"
 
 	"github.com/kortschak/dex/internal/animation"
 	"github.com/kortschak/dex/internal/slogext"

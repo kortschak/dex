@@ -17,13 +17,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/exp/slices"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 )

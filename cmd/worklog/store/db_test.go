@@ -13,11 +13,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/exp/slices"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 )
