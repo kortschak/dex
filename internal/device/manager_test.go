@@ -1092,6 +1092,345 @@ var pageTransactionTests = []struct {
 			},
 		},
 	},
+	{
+		name: "collision_then_resolve",
+		device: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+		manager: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 0, col: 0}: {
+						{Module: "runner", Service: "subl"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+						{Module: "runner", Service: "smerge"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,smerge"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"default": {
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,smerge"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+						},
+					},
+				},
+			},
+		},
+		reqs: []sendToRequest{
+			{
+				Service: rpc.UID{Module: "runner", Service: "subl"},
+				Actions: []config.Button{
+					{Row: 0, Col: 0, Image: "data:text/plain,subl"},
+					{Row: 0, Col: 0, Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+				},
+			},
+			{
+				Service: rpc.UID{Module: "runner", Service: "smerge"},
+				Actions: []config.Button{
+					{Row: 0, Col: 1, Image: "data:text/plain,smerge"},
+					{Row: 0, Col: 1, Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+				},
+			},
+		},
+		pages: setPages{deflt: nil, pages: []string{""}},
+		want: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 0, col: 0}: {
+						{Module: "runner", Service: "subl"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+					{row: 0, col: 1}: {
+						{Module: "runner", Service: "smerge"}: {
+							{Row: 0, Col: 1, Page: "default", Image: "data:text/plain,smerge"},
+							{Row: 0, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"default": {
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Actions: []config.Button{
+							{Row: 0, Col: 1, Page: "default", Image: "data:text/plain,smerge"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Actions: []config.Button{
+							{Row: 0, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+						},
+					},
+				},
+			},
+			notify: map[svcConn]Notification{
+				{uid: rpc.UID{Module: "runner", Service: "subl"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "subl"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+					},
+				},
+				{uid: rpc.UID{Module: "runner", Service: "smerge"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "smerge"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 1, Page: "default", Image: "data:text/plain,smerge"},
+						{Row: 0, Col: 1, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+					},
+				},
+			},
+		},
+		wantDevice: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+	},
+	{
+		name: "collision_add",
+		device: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+		manager: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 0, col: 0}: {
+						{Module: "runner", Service: "subl"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"default": {
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+				},
+			},
+		},
+		reqs: []sendToRequest{
+			{
+				Service: rpc.UID{Module: "runner", Service: "subl"},
+				Actions: []config.Button{
+					{Row: 0, Col: 0, Image: "data:text/plain,subl"},
+					{Row: 0, Col: 0, Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+				},
+			},
+			{
+				Service: rpc.UID{Module: "runner", Service: "smerge"},
+				Actions: []config.Button{
+					{Row: 0, Col: 0, Image: "data:text/plain,smerge"},
+					{Row: 0, Col: 0, Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+				},
+			},
+		},
+		pages: setPages{deflt: nil, pages: []string{""}},
+		want: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 0, col: 0}: {
+						{Module: "runner", Service: "subl"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+						{Module: "runner", Service: "smerge"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,smerge"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"default": {
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,smerge"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "smerge"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+						},
+					},
+				},
+			},
+			notify: map[svcConn]Notification{
+				{uid: rpc.UID{Module: "runner", Service: "subl"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "subl"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,subl"},
+						{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+					},
+				},
+				{uid: rpc.UID{Module: "runner", Service: "smerge"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "smerge"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,smerge"},
+						{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "smerge"}},
+					},
+				},
+			},
+		},
+		wantDevice: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+	},
+	{
+		name: "collision_within_service",
+		device: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+		manager: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{},
+			last:  map[string][]sendToRequest{},
+		},
+		reqs: []sendToRequest{
+			{
+				Service: rpc.UID{Module: "runner", Service: "subl"},
+				Actions: []config.Button{
+					{Row: 0, Col: 0, Image: "data:text/plain,first"},
+					{Row: 0, Col: 0, Image: "data:text/plain,second"},
+					{Row: 0, Col: 0, Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+				},
+			},
+		},
+		pages: setPages{deflt: nil, pages: []string{""}},
+		want: &pageManager{
+			state: map[string]map[pos]map[rpc.UID][]config.Button{
+				"default": {
+					{row: 0, col: 0}: {
+						{Module: "runner", Service: "subl"}: {
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,first"},
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,second"},
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+				},
+			},
+			last: map[string][]sendToRequest{
+				"default": {
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,first"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,second"},
+						},
+					},
+					{
+						Service: rpc.UID{Module: "runner", Service: "subl"},
+						Actions: []config.Button{
+							{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+						},
+					},
+				},
+			},
+			notify: map[svcConn]Notification{
+				{uid: rpc.UID{Module: "runner", Service: "subl"}, Connection: testConn("runner-conn")}: {
+					Service: rpc.UID{Module: "runner", Service: "subl"},
+					Buttons: []config.Button{
+						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,first"},
+						{Row: 0, Col: 0, Page: "default", Image: "data:text/plain,second"},
+						{Row: 0, Col: 0, Page: "default", Change: ptr("press"), Do: ptr("run"), Args: map[string]string{"path": "subl"}},
+					},
+				},
+			},
+		},
+		wantDevice: &testDevice{
+			rows: 3, cols: 5,
+			defaultPage: "default",
+			pages: map[string]bool{
+				"default": true,
+			},
+		},
+	},
 }
 
 type setPages struct {

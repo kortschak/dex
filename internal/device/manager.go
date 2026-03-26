@@ -5,6 +5,7 @@
 package device
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +14,9 @@ import (
 	"log/slog"
 	"maps"
 	"reflect"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -336,6 +339,22 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 	want := mkLayout(ctx, dev, p.reqs, pages, *deflt, p.log)
 	unchanged := intersectLayouts(p.state, want)
 
+	// When the set of services at a position changes partially,
+	// for example one service leaves but another stays, the
+	// position must be fully reprocessed. The stop phase blanks
+	// the physical button, so unchanged services need their
+	// images redrawn too.
+	for name, buttons := range unchanged {
+		for b := range buttons {
+			if len(p.state[name][b]) != len(buttons[b]) || len(want[name][b]) != len(buttons[b]) {
+				delete(buttons, b)
+			}
+		}
+		if len(buttons) == 0 {
+			delete(unchanged, name)
+		}
+	}
+
 	p.notify = make(map[svcConn]Notification) // Retain temporarily for testing.
 	// Stop pages that no longer exist in the target layout.
 	for name := range p.state {
@@ -421,6 +440,16 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 				stopped[pagePos{name, pos}] = true
 			}
 
+			conflict := imageConflict(module)
+			if conflict != nil {
+				p.log.LogAttrs(ctx, slog.LevelError, "button image conflict", slog.String("page", name), slog.Int("row", pos.row), slog.Int("col", pos.col), slog.Any("conflict", []rpc.UID(conflict)))
+				go p.drawImage(ctx, dev, rpc.NewMessage(kernelUID, DrawMessage{
+					Page: name, Row: pos.row, Col: pos.col,
+					Image:   fmt.Sprintf("data:text/plain,%s", conflict),
+					Service: &conflict[0],
+				}))
+			}
+
 			var press, release []func(ctx context.Context, page string, row, col int, t time.Time) error
 			for uid, actions := range module {
 				var (
@@ -439,8 +468,9 @@ func (p *pageManager) setPages(ctx context.Context, dev device, deflt *string, p
 				}
 				for _, a := range actions {
 					if a.Change == nil {
-						// Draw image if it exists, or stop the button if not active.
-						if a.Image != "" {
+						// Draw image if it exists and there is no conflict,
+						// or stop the button if not active.
+						if a.Image != "" && conflict == nil {
 							// We are running as a single locked thread here, so
 							// defer the drawing of the button image until after
 							// the page is made active.
@@ -718,6 +748,47 @@ func intersect[M ~map[K]V, K comparable, V any](a, b M) M {
 		}
 	}
 	return n
+}
+
+type conflict []rpc.UID
+
+func (c conflict) String() string {
+	if c == nil {
+		return "<nil>"
+	}
+	var sb strings.Builder
+	for i, uid := range c {
+		if i != 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(uid.String())
+	}
+	return "conflict: " + sb.String()
+}
+
+// imageConflict returns a non-empty conflict list when more than
+// one image-only action exists at the same position, whether from
+// different services or duplicate entries within the same service.
+func imageConflict(module map[rpc.UID][]config.Button) conflict {
+	var c conflict
+	for uid, actions := range module {
+		for _, a := range actions {
+			if a.Change == nil && a.Image != "" {
+				c = append(c, uid)
+			}
+		}
+	}
+	if len(c) < 2 {
+		return nil
+	}
+	slices.SortFunc(c, func(a, b rpc.UID) int {
+		if m := cmp.Compare(a.Module, b.Module); m != 0 {
+			return m
+		} else {
+			return cmp.Compare(a.Service, b.Service)
+		}
+	})
+	return c
 }
 
 func isActive(b config.Button) bool {
