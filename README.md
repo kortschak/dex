@@ -228,6 +228,7 @@ You can place the unit file below either in `~/.config/systemd/user` or in `/etc
 ```
 [Unit]
 Description=Dex Service
+After=graphical-session.target
 
 [Service]
 Type=simple
@@ -236,24 +237,17 @@ Restart=on-failure
 StandardError=journal
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
 ```
 This will log to the system journal, viewable with `journalctl --user -u dex`. It assumes that `dex` is located in your `~/bin`.
+
+The `WantedBy=graphical-session.target` line causes the service to start automatically when the graphical session begins; enable it with `systemctl --user enable dex.service`. The `After=graphical-session.target` ordering ensures the service starts after the desktop session has exported environment variables such as `XDG_SESSION_TYPE` and `DISPLAY` into the systemd user instance. Without this, the `watcher` module may fail to detect the session type.
 
 If debugging `dex` running as a service, it may be helpful instead to log to a file, in which case replace the `StandardError` setting with
 ```
 StandardError=file:%h/.local/state/dex/log/dex.log
 ```
 or another more convenient path.
-
-Since the service will most likely need access to your user environment (depending on the configuration), if you want the service to start on login, it is best to start the service with an autostart desktop file. For example
-```
-[Desktop Entry]
-Type=Application
-Name=dex
-Exec=systemctl --user start dex.service
-Comment=Start dex Stream Deck controller
-```
 
 The service can be stopped with `systemctl --user stop dex.service`.
 
