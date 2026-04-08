@@ -25,12 +25,13 @@ jobs:
 
     steps:
     - name: install Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
         go-version: ${{ matrix.go-version }}
+        check-latest: true
 
     - name: checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 1
 
@@ -52,7 +53,7 @@ jobs:
         sleep 1
 
     - name: unit tests
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 10
         max_attempts: 3
@@ -61,7 +62,7 @@ jobs:
           go test -run 'Test(Amendments|Continuation|DashboardData)$' ./cmd/worklog
 
     - name: integration tests
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 10
         max_attempts: 3
@@ -105,9 +106,10 @@ jobs:
 
     steps:
     - name: install Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: stable
+        check-latest: true
 
     - name: checkout code
       uses: actions/checkout@v4
@@ -137,7 +139,7 @@ jobs:
         go test ./cmd/worklog/pgstore
 
     - name: integration tests postgres
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 10
         max_attempts: 3
