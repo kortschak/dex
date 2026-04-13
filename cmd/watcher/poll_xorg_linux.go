@@ -309,7 +309,11 @@ func newXOrgDetailer() (detailer, error) {
 	if d.xss != nil {
 		d.last = time.Now()
 	}
-	return &d, nil
+	d.logind, err = newLogindSession()
+	if err != nil {
+		err = warning{err}
+	}
+	return &d, err
 }
 
 func openX11Lib() (*dl.Lib, *C.struct_X11Lib, error) {
@@ -460,6 +464,8 @@ type xOrgDetailer struct {
 
 	xss    *dl.Lib
 	xssLib *C.struct_XssLib
+
+	logind *logindSession
 }
 
 func (*xOrgDetailer) strategy() string { return "xorg" }
@@ -471,7 +477,12 @@ func (d *xOrgDetailer) Close() error {
 	d.x11Lib = nil
 	d.xResLib = nil
 	d.xssLib = nil
-	return errors.Join(d.x11.Close(), d.xRes.Close(), d.xss.Close())
+	var logindErr error
+	if d.logind != nil {
+		logindErr = d.logind.Close()
+		d.logind = nil
+	}
+	return errors.Join(d.x11.Close(), d.xRes.Close(), d.xss.Close(), logindErr)
 }
 
 func (d *xOrgDetailer) details() (watcher.Details, error) {
@@ -489,6 +500,7 @@ func (d *xOrgDetailer) details() (watcher.Details, error) {
 	if det.idle > 0 {
 		d.last = time.Now().Add(time.Duration(det.idle) * -time.Millisecond).Round(time.Second / 10)
 	}
+	locked, errLocked := sessionLocked(d.logind, det.saver_state == C.ScreenSaverOn)
 	active := watcher.Details{
 		WindowID:   int(det.wid),
 		ProcessID:  int(det.pid),
@@ -496,12 +508,15 @@ func (d *xOrgDetailer) details() (watcher.Details, error) {
 		Class:      C.GoString(det.class),
 		WindowName: C.GoString(det.window),
 		LastInput:  d.last,
-		Locked:     det.saver_state == C.ScreenSaverOn,
+		Locked:     locked,
 	}
 	C.freeDetails(d.x11Lib, &det)
 	const allWindowDetails = C.fdisplay | C.fclassname | C.fwindowname
 	if flags&C.fscreensaver == 0 || (!active.Locked && flags&allWindowDetails != allWindowDetails) {
-		return active, warning{fmt.Errorf("failed to obtain some details: missing %s", missing(flags))}
+		return active, warning{errors.Join(errLocked, fmt.Errorf("failed to obtain some details: missing %s", missing(flags)))}
+	}
+	if errLocked != nil {
+		return active, warning{errLocked}
 	}
 	return active, nil
 }

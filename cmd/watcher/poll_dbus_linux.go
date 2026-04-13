@@ -24,13 +24,18 @@ func newMutterDetailer() (detailer, error) {
 	if err != nil {
 		return noDetails{}, err
 	}
-	return &mutterDetailer{conn: conn, last: time.Now()}, nil
+	logind, err := newLogindSession()
+	if err != nil {
+		err = warning{err}
+	}
+	return &mutterDetailer{conn: conn, logind: logind, last: time.Now()}, err
 }
 
 type mutterDetailer struct {
-	mu   sync.Mutex
-	conn *dbus.Conn
-	last time.Time
+	mu     sync.Mutex
+	conn   *dbus.Conn
+	logind *logindSession
+	last   time.Time
 }
 
 func (*mutterDetailer) strategy() string { return "gnome/mutter" }
@@ -41,6 +46,10 @@ func (d *mutterDetailer) Close() error {
 	if d.conn != nil {
 		err = d.conn.Close()
 		d.conn = nil
+	}
+	if d.logind != nil {
+		err = errors.Join(err, d.logind.Close())
+		d.logind = nil
 	}
 	d.mu.Unlock()
 	return err
@@ -53,14 +62,21 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 		return watcher.Details{}, errClosedDetailer
 	}
 
-	locked, errLocked := dbusCall[bool](d.conn,
+	active, errActive := dbusCall[bool](d.conn,
 		"org.gnome.ScreenSaver",
 		"/org/gnome/ScreenSaver",
-		"org.gnome.ScreenSaver.GetActive",
+		"org.gnome.ScreenSaver.GetActive", 0,
 	)
 
-	if locked {
-		// Extensions are not available when locked, so
+	// Use logind LockedHint as the authoritative session lock
+	// state when available. The ScreenSaver active state does
+	// not distinguish between the password dialog being shown
+	// and the session being unlocked.
+	locked, errLocked := sessionLocked(d.logind, active)
+
+	if active || locked {
+		// Extensions are not available when the screen
+		// shield is active or the session is locked, so
 		// don't try; just get idle time from Mutter.
 		last, errTime := d.mutterIdleMonitor()
 		if !last.IsZero() {
@@ -68,14 +84,14 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 		}
 		return watcher.Details{
 			LastInput: d.last,
-			Locked:    true,
-		}, errors.Join(errLocked, errTime)
+			Locked:    locked,
+		}, errors.Join(errActive, errLocked, errTime)
 	}
 
 	detMsg, errWindow := dbusCall[string](d.conn,
 		"org.gnome.Shell",
 		"/org/gnome/Shell/Extensions/UserActivity",
-		"org.gnome.Shell.Extensions.UserActivity.Details",
+		"org.gnome.Shell.Extensions.UserActivity.Details", 0,
 	)
 	if errWindow != nil {
 		// If the user activity call failed, get last
@@ -92,7 +108,7 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 		return watcher.Details{
 			LastInput: d.last,
 			Locked:    true,
-		}, errors.Join(errLocked, errWindow, errTime)
+		}, errors.Join(errActive, errLocked, errWindow, errTime)
 	}
 	var det watcher.Details
 	errWindow = json.Unmarshal([]byte(detMsg), &det)
@@ -100,27 +116,17 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 		d.last = det.LastInput
 	}
 	det.Locked = false
-	return det, errors.Join(errLocked, errWindow)
+	return det, errors.Join(errActive, errLocked, errWindow)
 }
 
 func (d *mutterDetailer) mutterIdleMonitor() (time.Time, error) {
 	idle, err := dbusCall[int64](d.conn,
 		"org.gnome.Mutter.IdleMonitor",
 		"/org/gnome/Mutter/IdleMonitor/Core",
-		"org.gnome.Mutter.IdleMonitor.GetIdletime",
+		"org.gnome.Mutter.IdleMonitor.GetIdletime", 0,
 	)
 	if idle < 0 {
 		return time.Time{}, err
 	}
 	return time.Now().Add(time.Duration(idle) * -time.Millisecond).Round(time.Second / 10), err
-}
-
-func dbusCall[T any](conn *dbus.Conn, dest, path, method string) (T, error) {
-	var v T
-	c := conn.Object(dest, dbus.ObjectPath(path)).Call(method, 0)
-	err := c.Store(&v)
-	if err != nil {
-		return v, err
-	}
-	return v, nil
 }

@@ -379,8 +379,12 @@ func (d *daemon) replaceDetailer(ctx context.Context, strategy string) {
 	}
 	det, err := newDetailer(strategy)
 	if err != nil {
-		d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
-		return
+		var warn warning
+		if !errors.As(err, &warn) {
+			d.log.LogAttrs(ctx, slog.LevelError, "configure", slog.Any("error", err))
+			return
+		}
+		d.log.LogAttrs(ctx, slog.LevelWarn, "configure", slog.Any("error", warn.error))
 	}
 	err = closeCloser(d.detailer.Load())
 	if err != nil {
