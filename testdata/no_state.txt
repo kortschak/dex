@@ -9,6 +9,9 @@ env HOME=${WORK}
 dex -log debug -lines &dex&
 sleep 1s
 
+# If the perms on created directories are incorrect we get a warning.
+! stderr WARN
+
 [linux] exists ${HOME}/.config/dex
 [linux] exists ${HOME}/.local/state/dex/state.sqlite3
 

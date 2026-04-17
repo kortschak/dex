@@ -131,7 +131,7 @@ func Main() int {
 			fmt.Fprintln(os.Stderr, err)
 			return internalError
 		}
-		cfgdir, err = xdgMkdir(xdg.ConfigHome, "dex", 0o755)
+		cfgdir, err = xdgMkdir(xdg.ConfigHome, "dex", 0o700)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return internalError
@@ -139,6 +139,14 @@ func Main() int {
 		mlog.LogAttrs(ctx, slog.LevelInfo, "created config dir", slog.String("path", cfgdir))
 	}
 	mlog.LogAttrs(ctx, slog.LevelInfo, "config dir", slog.String("path", cfgdir))
+	fi, err := os.Stat(cfgdir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+	if perm := fi.Mode() & os.ModePerm; perm != 0o700 {
+		mlog.LogAttrs(ctx, slog.LevelWarn, "config dir permissions", slog.Any("perm", perm))
+	}
 
 	datadir, err := xdg.State("dex")
 	if err != nil {
@@ -146,7 +154,7 @@ func Main() int {
 			fmt.Fprintln(os.Stderr, err)
 			return internalError
 		}
-		datadir, err = xdgMkdir(xdg.StateHome, "dex", 0o755)
+		datadir, err = xdgMkdir(xdg.StateHome, "dex", 0o700)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return internalError
@@ -154,6 +162,14 @@ func Main() int {
 		mlog.LogAttrs(ctx, slog.LevelInfo, "created data dir", slog.String("path", datadir))
 	}
 	mlog.LogAttrs(ctx, slog.LevelInfo, "data dir", slog.String("path", datadir))
+	fi, err = os.Stat(cfgdir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return internalError
+	}
+	if perm := fi.Mode() & os.ModePerm; perm != 0o700 {
+		mlog.LogAttrs(ctx, slog.LevelWarn, "data dir permissions", slog.Any("perm", perm))
+	}
 
 	datapath := filepath.Join(datadir, "state.sqlite3")
 	store, err := state.Open(datapath, log)
