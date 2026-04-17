@@ -35,10 +35,6 @@ jobs:
       with:
         fetch-depth: 1
 
-    - name: govulncheck
-      run: |
-        go run golang.org/x/vuln/cmd/govulncheck@latest
-
     - name: non-Go linux dependencies
       if: matrix.platform == 'ubuntu-latest'
       run: |
@@ -51,6 +47,10 @@ jobs:
         # and a window manager to get focus for testers and wait again.
         i3 &
         sleep 1
+
+    - name: govulncheck
+      run: |
+        go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
     - name: unit tests
       uses: nick-fields/retry@v4
