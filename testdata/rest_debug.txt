@@ -1,4 +1,4 @@
-# The build of watcher takes a fair while due to the size of the dependency
+# The build of rest takes a fair while due to the size of the dependency
 # tree, the size of some of the individual dependencies and the absence of
 # caching when building within a test script.
 [short] stop 'Skipping long test.'
@@ -8,7 +8,7 @@ env HOME=${WORK}
 env GOBIN=${WORK}/bin
 env PATH=${GOBIN}:${PATH}
 cd ${PKG_ROOT}
-go install ./cmd/watcher
+go install ./cmd/rest
 cd ${WORK}
 
 unquote debug_req_log.snarf debug_resp_log.snarf
