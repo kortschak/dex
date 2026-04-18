@@ -58,6 +58,7 @@ jobs:
         timeout_minutes: 10
         max_attempts: 3
         command: |
+          set -xe
           go test ./rpc ./internal/... ./cmd/*/api ./cmd/worklog/store
           go test -run 'Test(Amendments|Continuation|DashboardData)$' ./cmd/worklog
 
@@ -67,6 +68,7 @@ jobs:
         timeout_minutes: 10
         max_attempts: 3
         command: |
+          set -xe
           go test .
           go test -p=1 -run TestDaemon ./cmd/* -verbose_log
           go test -run TestDaemon ./cmd/watcher -dynamic_timezone=false -verbose_log
@@ -144,4 +146,5 @@ jobs:
         timeout_minutes: 10
         max_attempts: 3
         command: |
+          set -xe
           go test -tags postgres -run TestScripts/worklog_load_postgres
