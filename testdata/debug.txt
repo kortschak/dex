@@ -35,13 +35,21 @@ cmp stdout want_pages.json
 
 -- kernel.toml --
 [kernel]
-device = []
+device = [{}]
 network = "tcp"
 -- want_system.json --
 {
 	"kernel": {
+		"device": [
+			{
+				"serial": ""
+			}
+		],
+		"missing": [
+			""
+		],
 		"network": "tcp",
-		"sum": "0594902707f6e8141ba872ac25ad05fac265885d"
+		"sum": "337bb06949e06b690f1fbada51ba6a98a700f019"
 	},
 	"module": {
 		"debug": {
