@@ -189,6 +189,12 @@ func (m *Manager) Clear() error {
 	return m.controller.Clear()
 }
 
+// Lock pauses the current page, blanks it and prevents button-press
+// wake. Only an explicit Wake call transitions out of the locked state.
+func (m *Manager) Lock() error {
+	return m.controller.Lock()
+}
+
 // SetBrightness sets the global screen brightness of the Stream Deck, across
 // all the device's buttons.
 func (m *Manager) SetBrightness(percent int) error {

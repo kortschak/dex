@@ -67,7 +67,7 @@ type BrightnessMessage struct {
 type SleepMessage struct {
 	// Valid actions are "get" and "set".
 	Action string `json:"action"`
-	// Valid states are "awake", "blanked" and "cleared"
+	// Valid states are "awake", "blanked", "cleared" and "locked".
 	State string `json:"state"`
 	// Last is the time of the last button event. Only
 	// valid for "get".
@@ -434,6 +434,8 @@ func GoFuncs[K sys.Kernel, D sys.Device[B], B sys.Button](ctx context.Context) f
 					err = dev.Blank()
 				case Cleared.String():
 					err = dev.Clear()
+				case Locked.String():
+					err = dev.Lock()
 				default:
 					return nil, rpc.NewError(rpc.ErrCodeInvalidData,
 						fmt.Sprintf("invalid state request: %q", m.Body.State),

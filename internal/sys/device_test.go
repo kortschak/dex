@@ -119,6 +119,11 @@ func (d *testDevice) Clear() error {
 	return nil
 }
 
+func (d *testDevice) Lock() error {
+	d.addAction("lock")
+	return nil
+}
+
 func (d *testDevice) Close() error {
 	return d.addAction("close")
 }

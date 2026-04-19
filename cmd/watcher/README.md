@@ -61,7 +61,7 @@ locked == last.locked ? {} : {
 	"method": "sleep",
 	"params": {
 		"action":  "set",
-		"state":   locked ? "blanked" : "awake",
+		"state":   locked ? "locked" : "awake",
 		"service": {"service":"kernel_default_service"}
 	},
 }

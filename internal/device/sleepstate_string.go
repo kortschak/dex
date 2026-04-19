@@ -11,11 +11,12 @@ func _() {
 	_ = x[Awake-0]
 	_ = x[Cleared-1]
 	_ = x[Blanked-2]
+	_ = x[Locked-3]
 }
 
-const _SleepState_name = "awakeclearedblanked"
+const _SleepState_name = "awakeclearedblankedlocked"
 
-var _SleepState_index = [...]uint8{0, 5, 12, 19}
+var _SleepState_index = [...]uint8{0, 5, 12, 19, 25}
 
 func (i SleepState) String() string {
 	if i < 0 || i >= SleepState(len(_SleepState_index)-1) {

@@ -175,6 +175,7 @@ type Device[B Button] interface {
 	Wake(ctx context.Context)
 	Blank() error
 	Clear() error
+	Lock() error
 
 	Close() error
 }

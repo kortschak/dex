@@ -67,6 +67,7 @@ const (
 	Awake SleepState = iota
 	Cleared
 	Blanked
+	Locked
 )
 
 // locked is a lock-protected [ardilla.Deck].
@@ -440,7 +441,7 @@ func (c *Controller) Blank() error {
 	c.pMu.Lock()
 	defer c.pMu.Unlock()
 	c.log.LogAttrs(context.Background(), slog.LevelDebug, "blank", slog.Bool("blanked", c.state == Blanked))
-	if c.state == Blanked {
+	if c.state == Blanked || c.state == Locked {
 		return nil
 	}
 	c.sleeping.Store(true)
@@ -478,13 +479,31 @@ func (c *Controller) Clear() error {
 	c.pMu.Lock()
 	defer c.pMu.Unlock()
 	c.log.LogAttrs(context.Background(), slog.LevelDebug, "clear", slog.Bool("cleared", c.state == Cleared))
-	if c.state == Cleared {
+	if c.state == Cleared || c.state == Locked {
 		return nil
 	}
 	c.sleeping.Store(true)
 	c.state = Cleared
 	c.displayed.Pause()
 	return c.Reset()
+}
+
+// Lock pauses the current page, blanks it and prevents button-press
+// wake. Only an explicit Wake call transitions out of the locked state.
+func (c *Controller) Lock() error {
+	c.pMu.Lock()
+	defer c.pMu.Unlock()
+	c.log.LogAttrs(context.Background(), slog.LevelDebug, "lock", slog.Bool("locked", c.state == Locked))
+	if c.state == Locked {
+		return nil
+	}
+	if c.cancelSleep != nil {
+		c.cancelSleep()
+	}
+	c.sleeping.Store(true)
+	c.state = Locked
+	c.displayed.Pause()
+	return c.displayed.blank()
 }
 
 // Close resets and closes the device.
@@ -539,7 +558,7 @@ func (c *Controller) watchButtons(ctx context.Context) {
 						c.displayed.Redraw(ctx)
 					case Cleared:
 						err = c.Reset()
-					case Blanked:
+					case Blanked, Locked:
 						err = c.displayed.blank()
 					}
 					if err != nil {
@@ -579,8 +598,12 @@ func (c *Controller) watchButtons(ctx context.Context) {
 		case states := <-s:
 
 			// Wake and discard events if we are sleeping. Also discard
-			// the release that follows a waking press.
+			// the release that follows a waking press. If the device
+			// is locked, discard all events without waking.
 			if c.sleeping.Load() || woke {
+				if c.SleepState() == Locked {
+					continue
+				}
 				if slices.Contains(states.buttons, true) {
 					if !woke {
 						c.log.LogAttrs(ctx, slog.LevelDebug, "wake", slog.String("reason", "button"))
