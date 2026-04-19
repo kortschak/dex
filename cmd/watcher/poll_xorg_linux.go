@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	watcher "github.com/kortschak/dex/cmd/watcher/api"
@@ -449,6 +450,8 @@ func openXResLib() (*dl.Lib, *C.struct_XResLib) {
 type xOrgDetailer struct {
 	last time.Time
 
+	mu sync.Mutex
+
 	x11    *dl.Lib
 	x11Lib *C.struct_X11Lib
 
@@ -462,6 +465,9 @@ type xOrgDetailer struct {
 func (*xOrgDetailer) strategy() string { return "xorg" }
 
 func (d *xOrgDetailer) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	d.x11Lib = nil
 	d.xResLib = nil
 	d.xssLib = nil
@@ -469,6 +475,12 @@ func (d *xOrgDetailer) Close() error {
 }
 
 func (d *xOrgDetailer) details() (watcher.Details, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.x11Lib == nil {
+		return watcher.Details{}, errClosedDetailer
+	}
+
 	var det C.struct_details
 	flags := C.activeWindow(&det, d.x11Lib, d.xResLib, d.xssLib)
 	if flags < 0 {

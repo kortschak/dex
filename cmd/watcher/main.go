@@ -240,7 +240,10 @@ func (noDetails) details() (watcher.Details, error) {
 	return watcher.Details{}, errNoDetails
 }
 
-var errNoDetails = warning{errors.New("no details")}
+var (
+	errNoDetails      = warning{errors.New("no details")}
+	errClosedDetailer = warning{errors.New("closed detailer")}
+)
 
 func (d *daemon) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
 	d.conn = conn
@@ -451,7 +454,8 @@ func (d *daemon) poll(ctx context.Context, p time.Duration) {
 						} else {
 							d.log.LogAttrs(ctx, slog.LevelError, "polling", slog.Any("error", err))
 						}
-						if err == errNoDetails {
+						switch err {
+						case errNoDetails, errClosedDetailer:
 							continue
 						}
 					}

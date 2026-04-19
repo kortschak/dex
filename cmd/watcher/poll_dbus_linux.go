@@ -50,7 +50,7 @@ func (d *mutterDetailer) details() (watcher.Details, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.conn == nil {
-		return watcher.Details{}, errors.New("closed")
+		return watcher.Details{}, errClosedDetailer
 	}
 
 	locked, errLocked := dbusCall[bool](d.conn,
