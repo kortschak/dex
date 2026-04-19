@@ -42,7 +42,7 @@ All RPC methods expect call and notify parameters to be a JSON object that can b
 
 Core methods provided by the kernel:
 
-- `call` — JSON-RPC2.0 **call** with a body corresponding to [`rcp.Message[rpc.Forward[any]]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Forward) forwarding the `rpc.Forward.Method` call to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
+- `call` — JSON-RPC2.0 **call** with a body corresponding to [`rcp.Message[rpc.Forward[any]]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Forward) forwarding the `rpc.Forward.Method` call to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`. Forwarding permissions are controlled by the `allow_forward` kernel configuration.
 - `notify` — JSON-RPC2.0 **notify** with a body corresponding to [`rcp.Message[rpc.Forward[any]]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Forward) forwarding the `rpc.Forward.Method` notification to the module/service identified by `rpc.Forward.UID` with the parameters in `rpc.Forward.Params`.
 - `unregister` — [`rpc.Message[rpc.None]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#None) to unregister the sending module and its services from the kernel's registry.
 - `heartbeat` — [`rpc.Message[rpc.Deadline]`](https://pkg.go.dev/github.com/kortschak/dex/rpc#Deadline) record a heartbeat from the sending module with a deadline for the next expected heartbeat.

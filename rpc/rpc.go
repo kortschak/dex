@@ -65,6 +65,8 @@ const (
 	ErrCodePath     = 44 // path error
 
 	ErrCodeNotFound = 5 // a state key was not present
+
+	ErrCodeForbidden = 6 // identity mismatch or forward not allowed
 )
 
 // Message is the message passing container.
@@ -140,10 +142,20 @@ type DaemonState struct {
 // Forward is a message body for call and notify methods that are to be
 // passed on to another daemon. UID is the destination daemon, Method is
 // the call or notify method and Params is the call or notify parameters.
+// Forwarded call or notify methods must be explicitly allowed using the
+// kernel allow_forward config option. This option is implemented using
+// [ForwardRules].
 type Forward[T any] struct {
 	UID    UID         `json:"uid,omitempty"`
 	Method string      `json:"method,omitempty"`
 	Params *Message[T] `json:"params,omitempty"`
+}
+
+// ForwardRules determines whether a sender-UID override is allowed.
+// Implementations are checked when a module sends a message with
+// a UID that does not match its bound connection identity.
+type ForwardRules interface {
+	Allowed(origin, identity, target UID, method string) bool
 }
 
 // Button indicates a button location.

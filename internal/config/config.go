@@ -38,9 +38,22 @@ const fragmentSchema = `
 _#kernel: {
 	device?:         [... _#device] // default applied at unification.
 	network?:        "tcp" | "unix"
+	allow_forward?:  "*" | [... _#forward_rule]
 	log_level?:      _#log_level
 	log_add_source?: bool
 	options?:        {[string]: _}
+}
+
+_#forward_rule: {
+	origin:   _#uid
+	identity: _#uid
+	target:   _#uid
+	method:   !=""
+}
+
+_#uid: {
+	module:   !=""
+	service?: string
 }
 
 _#device: {

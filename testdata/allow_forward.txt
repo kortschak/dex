@@ -1,0 +1,117 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/rest
+cd ${WORK}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+# Write a value to the state store as rest (no "from" override).
+GET http://localhost:7070/
+stdout '^ok$'
+
+# Read it back as rest (no "from" override).
+GET http://localhost:7071/
+cmp stdout want_read.txt
+
+# Read with "from" override to "allowed": permitted by allow_forward
+# rule. The get succeeds at the identity gate but returns not-found
+# because nothing was written under the "allowed" identity.
+GET http://localhost:7072/
+stdout '^null$'
+
+# Read with "from" override to "denied": no matching allow_forward
+# rule. The kernel rejects the call before it reaches the store.
+GET http://localhost:7073/
+stdout '^null$'
+
+kill -INT dex
+wait dex
+
+# The allowed forward should not trigger an identity mismatch.
+! stderr '"identity mismatch".*"allowed"'
+
+# The denied forward should trigger an identity mismatch.
+stderr '"identity mismatch".*"denied"'
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[[kernel.allow_forward]]
+origin = "rest"
+identity = "allowed"
+target = "kernel"
+method = "get"
+
+[module.rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.rest.options.server.writer]
+addr = "localhost:7070"
+request = """
+{
+	"method": "set",
+	"params": {"item": "test_key", "value": b"test_value"}
+}
+"""
+response = """
+"ok"
+"""
+
+[module.rest.options.server.reader]
+addr = "localhost:7071"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"}
+}
+"""
+response = """
+response.body
+"""
+
+[module.rest.options.server.allowed_reader]
+addr = "localhost:7072"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"},
+	"from": {"module": "allowed"}
+}
+"""
+response = """
+response.body
+"""
+
+[module.rest.options.server.denied_reader]
+addr = "localhost:7073"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"},
+	"from": {"module": "denied"}
+}
+"""
+response = """
+response.body
+"""
+
+-- want_read.txt --
+{"value":"dGVzdF92YWx1ZQ=="}

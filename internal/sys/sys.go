@@ -135,6 +135,7 @@ type NewKernel[K Kernel] func(ctx context.Context, network string, options jsonr
 type Kernel interface {
 	Builtin(ctx context.Context, uid string, dialer net.Dialer, binder jsonrpc2.Binder) error
 	Funcs(funcs rpc.Funcs)
+	AllowForward(rules rpc.ForwardRules)
 	jsonrpc2.Handler
 
 	Conn(ctx context.Context, uid string) (rpc.Connection, time.Time, bool)
@@ -244,6 +245,9 @@ func (m *Manager[K, D, B]) Configure(ctx context.Context, cfg *config.System) er
 	}
 
 	// Make any kernel configuration changes here.
+
+	// Set RPC call delegation rules.
+	m.kernel.AllowForward(cfg.Kernel.AllowForward)
 
 	// Update active devices.
 	m.log.LogAttrs(ctx, slog.LevelDebug, "set devices", slog.Any("devices", cfg.Kernel.Device))
@@ -361,6 +365,7 @@ func (m *Manager[K, D, B]) boot(ctx context.Context, cfg *config.System) error {
 		return err
 	}
 
+	m.kernel.AllowForward(cfg.Kernel.AllowForward)
 	m.configureModules(ctx, cfg.Kernel.Device, cfg.Modules, moduleInstances(cfg), make(map[string][]string))
 
 	m.current = cfg

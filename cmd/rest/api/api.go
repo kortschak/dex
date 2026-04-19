@@ -73,7 +73,9 @@ type Notification struct {
 	Params map[string]any `json:"params,omitempty"`
 	// From is the sender UID if not nil.
 	// Otherwise the sender is the service's
-	// UID.
+	// UID. Notifications forwarded using
+	// from must be allowed in the kernel
+	// using the allow_forward kernel option.
 	From *rpc.UID `json:"from,omitempty"`
 	// StatusCode is the HTTP status code to return
 	// to the client. If not set, [http.StatusOK] is

@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/ardilla"
@@ -37,15 +39,123 @@ type Kernel struct {
 	// not present.
 	Missing []string `json:"missing,omitempty"`
 	// Network is the network the kernel is communicating on.
-	Network   string      `json:"network,omitempty" toml:"network"`
-	LogLevel  *slog.Level `json:"log_level,omitempty" toml:"log_level"`
-	AddSource *bool       `json:"log_add_source,omitempty" toml:"log_add_source"`
+	Network string `json:"network,omitempty" toml:"network"`
+	// AllowForward controls which sender-UID overrides are
+	// permitted. If nil, no forwards are allowed.
+	AllowForward *AllowForward `json:"allow_forward,omitempty" toml:"allow_forward"`
+	LogLevel     *slog.Level   `json:"log_level,omitempty" toml:"log_level"`
+	AddSource    *bool         `json:"log_add_source,omitempty" toml:"log_add_source"`
 	// Options is a bag of arbitrary configuration values.
 	// See Schema for valid entries.
 	Options map[string]any `json:"options,omitempty" toml:"options"`
 
 	Sum *Sum  `json:"sum,omitempty"`
 	Err error `json:"err,omitempty"`
+}
+
+// AllowForward is a sender-UID forward rules for the kernel.
+// It is either a wildcard (All true) permitting all forwards,
+// or an explicit list of allowed forward rules.
+//
+// AllowForward satisfies [rpc.ForwardRules].
+type AllowForward struct {
+	All   bool
+	Rules []ForwardRule
+}
+
+// ForwardRule is an allowed sender-UID forward.
+type ForwardRule struct {
+	// Origin is the module that originates the message.
+	Origin rpc.UID `json:"origin" toml:"origin"`
+	// Identity is the claimed sender UID module.
+	Identity rpc.UID `json:"identity" toml:"identity"`
+	// Target is the destination module or "kernel" for
+	// direct kernel methods.
+	Target rpc.UID `json:"target" toml:"target"`
+	// Method is the RPC method name.
+	Method string `json:"method" toml:"method"`
+}
+
+// Allowed reports whether the forward from origin claiming
+// identity to target with method is permitted.
+func (a *AllowForward) Allowed(origin, identity, target rpc.UID, method string) bool {
+	if a == nil {
+		return false
+	}
+	return a.All || slices.ContainsFunc(a.Rules, func(r ForwardRule) bool {
+		return matchMethodRule(method, r.Method) &&
+			matchUIDRule(origin, r.Origin) &&
+			matchUIDRule(identity, r.Identity) &&
+			matchUIDRule(target, r.Target)
+	})
+}
+
+func matchUIDRule(uid, rule rpc.UID) bool {
+	return uid == rule || (rule.Service == "" && uid.Module == rule.Module)
+}
+
+func matchMethodRule(method, rule string) bool {
+	return rule == "*" || method == rule
+}
+
+func (a *AllowForward) MarshalJSON() ([]byte, error) {
+	if a.All {
+		return []byte(`"*"`), nil
+	}
+	return json.Marshal(a.Rules)
+}
+
+func (a *AllowForward) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		if s != "*" {
+			return fmt.Errorf("invalid allow_forward value: %q", s)
+		}
+		a.All = true
+		a.Rules = nil
+		return nil
+	}
+	a.All = false
+	return json.Unmarshal(data, &a.Rules)
+}
+
+func (a *AllowForward) UnmarshalTOML(data any) error {
+	// Promote short and dotted UIDs to objects.
+	if data, ok := data.([]map[string]any); ok {
+		for i, e := range data {
+			for k, v := range e {
+				switch k {
+				case "origin", "identity", "target":
+				default:
+					continue
+				}
+				if v, ok := v.(string); ok {
+					mod, srv, _ := strings.Cut(v, ".")
+					if strings.Contains(srv, ".") {
+						return fmt.Errorf("invalid %s uid: %s", k, v)
+					}
+					if srv == "*" {
+						srv = ""
+					}
+					data[i][k] = map[string]string{
+						"module":  mod,
+						"service": srv,
+					}
+				}
+			}
+		}
+	}
+
+	// Field mapping is delegated to UnmarshalJSON
+	// to keep the logic in one place.
+	b, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("allow_forward: %w", err)
+	}
+	return a.UnmarshalJSON(b)
 }
 
 type Device struct {
@@ -171,6 +281,7 @@ const Schema = `
 _#kernel: {
 	device:          *[{pid: 0, serial: ""}] | [... _#device]
 	network:         "tcp" | "unix"
+	allow_forward?:  "*" | [... _#forward_rule]
 	log_level?:      _#log_level
 	log_add_source?: bool
 	options?:        {
@@ -178,6 +289,18 @@ _#kernel: {
 		[string]: _
 	}
 	sum?:            _#sha1sum
+}
+
+_#forward_rule: {
+	origin:   _#uid
+	identity: _#uid
+	target:   _#uid
+	method:   !=""
+}
+
+_#uid: {
+	module:   !=""
+	service?: string
 }
 
 _#device: {

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -45,6 +46,9 @@ type Kernel struct {
 
 	fMu   sync.Mutex
 	funcs Funcs
+
+	afMu         sync.RWMutex
+	allowForward ForwardRules
 }
 
 type daemon struct {
@@ -154,17 +158,54 @@ func (k *Kernel) dial(ctx context.Context, dialer net.Dialer) (*jsonrpc2.Connect
 	return jsonrpc2.Dial(ctx, jsonrpc2.NetDialer(k.network, k.listener.Addr().String(), dialer), jsonrpc2.ConnectionOptions{})
 }
 
+// boundHandler is a per-connection handler that tracks the module UID
+// bound to the connection after the who handshake.
+type boundHandler struct {
+	kernel *Kernel
+	uid    atomic.Pointer[UID]
+}
+
+func (h *boundHandler) connUID() UID {
+	p := h.uid.Load()
+	if p == nil {
+		return UID{}
+	}
+	return *p
+}
+
+func (h *boundHandler) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error) {
+	return h.kernel.handle(ctx, req, h.connUID())
+}
+
+// AllowForward sets the forward rules for sender-UID overrides.
+// A nil rules denies all forwards.
+func (k *Kernel) AllowForward(rules ForwardRules) {
+	k.afMu.Lock()
+	defer k.afMu.Unlock()
+	k.allowForward = rules
+}
+
+func (k *Kernel) fromAllowed(origin, identity, target UID, method string) bool {
+	k.afMu.RLock()
+	defer k.afMu.RUnlock()
+	if k.allowForward == nil {
+		return false
+	}
+	return k.allowForward.Allowed(origin, identity, target, method)
+}
+
 // Bind binds the kernel's handler to a connection and the reverse connection
 // to a daemon's UID.
 func (k *Kernel) Bind(ctx context.Context, conn *jsonrpc2.Connection) jsonrpc2.ConnectionOptions {
 	k.log.LogAttrs(ctx, slog.LevelDebug, "binding")
-	go k.bind(ctx, conn)
+	h := &boundHandler{kernel: k}
+	go k.bind(ctx, conn, h)
 	return jsonrpc2.ConnectionOptions{
-		Handler: k,
+		Handler: h,
 	}
 }
 
-func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection) {
+func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection, h *boundHandler) {
 	var daemon Message[string]
 	err := conn.Call(ctx, Who, NewMessage(kernelUID, None{})).Await(ctx, &daemon)
 	k.log.LogAttrs(ctx, slog.LevelDebug, "binding response", slog.Any("message", daemon))
@@ -201,12 +242,58 @@ func (k *Kernel) bind(ctx context.Context, conn *jsonrpc2.Connection) {
 		}
 		return
 	}
+	uid := daemon.UID
+	h.uid.Store(&uid)
 	k.daemons[daemon.UID.Module].conn = conn
 	close(k.daemons[daemon.UID.Module].ready)
 }
 
-// Handle is the kernel's message handler.
+// Handle is the kernel's message handler for unbound connections.
 func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error) {
+	return k.handle(ctx, req, UID{})
+}
+
+// identityError is the wire error detail for a rejected identity check.
+type identityError struct {
+	Type   int64  `json:"type"`
+	Conn   UID    `json:"conn"`
+	Msg    UID    `json:"msg"`
+	Target UID    `json:"target"`
+	Method string `json:"method"`
+}
+
+// checkIdentity verifies that msgUID matches connUID, or that the
+// forward is allowed by the forward rules. It returns a non-nil
+// error if the identity mismatch is not permitted.
+func (k *Kernel) checkIdentity(connUID UID, msgUID, targetUID UID, method string) error {
+	if connUID.IsZero() || connUID.Module == msgUID.Module {
+		return nil
+	}
+	if targetUID.Module == "" {
+		targetUID.Module = "kernel"
+	}
+	if k.fromAllowed(connUID, msgUID, targetUID, method) {
+		return nil
+	}
+	k.log.LogAttrs(context.Background(), slog.LevelWarn, "identity mismatch",
+		slog.Any("conn", connUID),
+		slog.Any("msg", msgUID),
+		slog.Any("target", targetUID),
+		slog.String("method", method),
+	)
+	return NewError(ErrCodeForbidden,
+		fmt.Sprintf("identity mismatch: connection %s sent as %s calling %s", connUID, msgUID, method),
+		identityError{
+			Type:   ErrCodeForbidden,
+			Conn:   connUID,
+			Msg:    msgUID,
+			Target: targetUID,
+			Method: method,
+		},
+	)
+}
+
+func (k *Kernel) handle(ctx context.Context, req *jsonrpc2.Request, connUID UID) (any, error) {
 	k.log.LogAttrs(ctx, slog.LevelDebug, "handle", slog.Any("req", slogext.Request{Request: req}))
 
 	switch req.Method {
@@ -215,6 +302,9 @@ func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		err := UnmarshalMessage(req.Params, &m)
 		if err != nil {
 			k.log.LogAttrs(ctx, slog.LevelError, req.Method, slog.Any("error", err))
+			return nil, err
+		}
+		if err := k.checkIdentity(connUID, m.UID, m.Body.UID, m.Body.Method); err != nil {
 			return nil, err
 		}
 		m.Body.Params.Time = m.Time
@@ -227,6 +317,9 @@ func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			k.log.LogAttrs(ctx, slog.LevelError, req.Method, slog.Any("error", err))
 			return nil, err
 		}
+		if err := k.checkIdentity(connUID, m.UID, UID{}, req.Method); err != nil {
+			return nil, err
+		}
 		return k.unregister(ctx, req, m)
 
 	case Heartbeat:
@@ -234,6 +327,9 @@ func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		err := UnmarshalMessage(req.Params, &m)
 		if err != nil {
 			k.log.LogAttrs(ctx, slog.LevelError, req.Method, slog.Any("error", err))
+			return nil, err
+		}
+		if err := k.checkIdentity(connUID, m.UID, UID{}, req.Method); err != nil {
 			return nil, err
 		}
 		return k.heartbeat(ctx, req, m)
@@ -253,6 +349,11 @@ func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		k.fMu.Unlock()
 		if !ok {
 			return nil, jsonrpc2.ErrNotHandled
+		}
+
+		err := k.checkFuncIdentity(connUID, req.Method, req.Params)
+		if err != nil {
+			return nil, err
 		}
 
 		res, err := fn(ctx, req.ID, req.Params)
@@ -279,6 +380,32 @@ func (k *Kernel) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		return ret, err
 
 	}
+}
+
+// checkFuncIdentity extracts the UID from raw params and checks
+// it against connUID for methods that use UID as an actor identity.
+func (k *Kernel) checkFuncIdentity(connUID UID, method string, params json.RawMessage) error {
+	if connUID.IsZero() || !actorMethods[method] {
+		return nil
+	}
+	var env struct {
+		UID UID `json:"uid"`
+	}
+	if err := json.Unmarshal(params, &env); err != nil {
+		return nil
+	}
+	return k.checkIdentity(connUID, env.UID, UID{}, method)
+}
+
+// actorMethods is the set of func-dispatched methods where m.UID
+// is used as the actor identity rather than for routing.
+var actorMethods = map[string]bool{
+	"set":         true,
+	"get":         true,
+	"put":         true,
+	"delete":      true,
+	"drop":        true,
+	"drop_module": true,
 }
 
 func (k *Kernel) call(ctx context.Context, req *jsonrpc2.Request, m Message[Forward[any]]) (any, error) {

@@ -1,0 +1,124 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/rest
+cd ${WORK}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+# Write a value to the state store as rest (no "from" override).
+GET http://localhost:10070/
+stdout '^ok$'
+
+# Read by other_rest with no "from": no match due to item
+# addressing. The data was written under rest's UID, not other_rest's.
+GET http://localhost:10071/
+stdout '^null$'
+
+# Read by other_rest with "from" override to "rest": permitted by
+# allow_forward rule. The get succeeds because we are proxying to
+# rest.
+GET http://localhost:10072/
+cmp stdout want_read.txt
+
+# Read by denied_rest with "from" to rest: no matching allow_forward
+# rule. The kernel rejects the call before it reaches the store.
+GET http://localhost:10073/
+stdout '^null$'
+
+kill -INT dex
+wait dex
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+
+[[kernel.allow_forward]]
+origin = "other_rest"
+identity = "rest"
+target = "kernel"
+method = "get"
+
+[module.rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.rest.options.server.writer]
+addr = "localhost:10070"
+request = """
+{
+	"method": "set",
+	"params": {"item": "test_key", "value": b"test_value"}
+}
+"""
+response = """
+"ok"
+"""
+
+[module.other_rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.other_rest.options.server.reader]
+addr = "localhost:10071"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"}
+}
+"""
+response = """
+response.body
+"""
+
+[module.other_rest.options.server.allowed_reader]
+addr = "localhost:10072"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"},
+	"from": {"module": "rest"}
+}
+"""
+response = """
+response.body
+"""
+
+[module.denied_rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.denied_rest.options.server.reader]
+addr = "localhost:10073"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"},
+	"from": {"module": "rest"}
+}
+"""
+response = """
+response.body
+"""
+
+-- want_read.txt --
+{"value":"dGVzdF92YWx1ZQ=="}

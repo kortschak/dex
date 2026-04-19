@@ -1,0 +1,109 @@
+env HOME=${WORK}
+
+[linux] env XDG_CONFIG_HOME=${HOME}/.config
+[linux] env XDG_RUNTIME_DIR=${HOME}/runtime
+[linux] mkdir ${XDG_CONFIG_HOME}/dex
+[linux] mkdir ${XDG_RUNTIME_DIR}
+[linux] mv config.toml ${HOME}/.config/dex/config.toml
+
+[darwin] mkdir ${HOME}'/Library/Application Support/dex'
+[darwin] mv config.toml ${HOME}'/Library/Application Support/dex/config.toml'
+
+env GOBIN=${WORK}/bin
+env PATH=${GOBIN}:${PATH}
+cd ${PKG_ROOT}
+go install ./cmd/rest
+cd ${WORK}
+
+dex -log debug -lines &dex&
+sleep 1s
+
+# Write a value to the state store as rest (no "from" override).
+GET http://localhost:9070/
+stdout '^ok$'
+
+# Read it back as rest (no "from" override).
+GET http://localhost:9071/
+cmp stdout want_read.txt
+
+# Read with "from" override to "allowed": permitted by wildcard
+# allow_forward. Returns not-found (nothing written under
+# "allowed" identity).
+GET http://localhost:9072/
+stdout '^null$'
+
+# Read with "from" override to "denied": also permitted by
+# wildcard allow_forward. Returns not-found.
+GET http://localhost:9073/
+stdout '^null$'
+
+kill -INT dex
+wait dex
+
+# No identity mismatch should occur with wildcard allow_forward.
+! stderr '"identity mismatch"'
+
+-- config.toml --
+[kernel]
+device = []
+network = "tcp"
+allow_forward = "*"
+
+[module.rest]
+path = "rest"
+log_mode = "log"
+log_level = "debug"
+log_add_source = true
+
+[module.rest.options.server.writer]
+addr = "localhost:9070"
+request = """
+{
+	"method": "set",
+	"params": {"item": "test_key", "value": b"test_value"}
+}
+"""
+response = """
+"ok"
+"""
+
+[module.rest.options.server.reader]
+addr = "localhost:9071"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"}
+}
+"""
+response = """
+response.body
+"""
+
+[module.rest.options.server.allowed_reader]
+addr = "localhost:9072"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"},
+	"from": {"module": "allowed"}
+}
+"""
+response = """
+response.body
+"""
+
+[module.rest.options.server.denied_reader]
+addr = "localhost:9073"
+request = """
+{
+	"method": "get",
+	"params": {"item": "test_key"},
+	"from": {"module": "denied"}
+}
+"""
+response = """
+response.body
+"""
+
+-- want_read.txt --
+{"value":"dGVzdF92YWx1ZQ=="}

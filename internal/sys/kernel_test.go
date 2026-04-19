@@ -36,6 +36,8 @@ func (k *testKernel) Builtin(ctx context.Context, uid string, dialer net.Dialer,
 	return k.addAction("builtin", uid)
 }
 
+func (k *testKernel) AllowForward(rpc.ForwardRules) {}
+
 func (k *testKernel) Funcs(funcs rpc.Funcs) {
 	var names []any
 	if len(funcs) != 0 {
