@@ -17,10 +17,10 @@ require (
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
-	golang.org/x/image v0.38.0
-	golang.org/x/net v0.50.0
-	golang.org/x/sys v0.41.0
-	golang.org/x/tools v0.42.0
+	golang.org/x/image v0.39.0
+	golang.org/x/net v0.52.0
+	golang.org/x/sys v0.42.0
+	golang.org/x/tools v0.43.0
 	golang.org/x/tools/godoc v0.1.0-deprecated
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.33.1
@@ -54,9 +54,9 @@ require (
 	github.com/tdewolff/minify/v2 v2.20.5 // indirect
 	github.com/tdewolff/parse/v2 v2.7.15 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240826202546-f6391c0de4c7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
