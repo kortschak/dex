@@ -22,7 +22,7 @@ When a module is spawned it is given the read end of a pipe in stdin that may be
 
 The complete specification of the required by the system is defined in the [configuration schema](https://pkg.go.dev/github.com/kortschak/dex/config#pkg-constants) using the [CUE language](https://cuelang.org/) and in the [Go types](https://pkg.go.dev/github.com/kortschak/dex/config#System) used to hold the configuration values.
 
-Configurations are represented on disk as TOML files and may be split across multiple files.
+Configurations are represented on disk as TOML or JSON files and may be split across multiple files.
 
 Configuration files MUST be in `${XDG_CONFIG_HOME}/dex/` (`~/.config/dex/` on Linux and `~/Library/Application Support/dex/` on Mac) and this directory will be created at start up if it does not exist.
 

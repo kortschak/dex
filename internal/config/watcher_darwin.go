@@ -6,11 +6,13 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/kortschak/dex/internal/slogext"
@@ -58,7 +60,15 @@ func (w *Watcher) Watch(ctx context.Context) error {
 				removeDelay = nil
 			}
 
-			if filepath.Ext(ev.Name) == ".toml" {
+			if ext := filepath.Ext(ev.Name); ext == ".toml" || ext == ".json" {
+				var unmarshal func([]byte, any) error
+				switch ext {
+				case ".toml":
+					unmarshal = toml.Unmarshal
+				case ".json":
+					unmarshal = json.Unmarshal
+				}
+
 				if ev.Has(fsnotify.Write | fsnotify.Create) {
 					fi, err := os.Stat(ev.Name)
 					if err != nil {
@@ -81,7 +91,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 						w.changes <- Change{Err: err}
 						continue
 					}
-					cfg, sum, err := unmarshalConfigs(w.hash, b)
+					cfg, sum, err := unmarshalConfigs(w.hash, unmarshal, b)
 					if w.hashes[ev.Name] == sum {
 						w.log.LogAttrs(ctx, slog.LevelDebug, "no change", slog.Any("sum", slogext.Stringer{Stringer: &sum}), slog.Any("existing_hashes", hashesValue{w.hashes}))
 						continue

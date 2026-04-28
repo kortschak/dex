@@ -124,7 +124,13 @@ func (w *Watcher) init(ctx context.Context) (*Watcher, error) {
 		defer close(w.done)
 		for _, e := range de {
 			name := e.Name()
-			if filepath.Ext(name) != ".toml" {
+			var unmarshal func([]byte, any) error
+			switch filepath.Ext(name) {
+			case ".toml":
+				unmarshal = toml.Unmarshal
+			case ".json":
+				unmarshal = json.Unmarshal
+			default:
 				continue
 			}
 
@@ -143,7 +149,7 @@ func (w *Watcher) init(ctx context.Context) (*Watcher, error) {
 				w.changes <- Change{Err: err}
 				continue
 			}
-			cfg, sum, err := unmarshalConfigs(w.hash, b)
+			cfg, sum, err := unmarshalConfigs(w.hash, unmarshal, b)
 			if cfg != nil {
 				w.hashes[path] = sum
 			}
@@ -159,9 +165,9 @@ func (w *Watcher) init(ctx context.Context) (*Watcher, error) {
 
 // unmarshalConfigs returns a, potentially partial, configuration and its
 // semantic hash from the provided raw data.
-func unmarshalConfigs(h hash.Hash, b []byte) (cfg *System, sum Sum, _ error) {
+func unmarshalConfigs(h hash.Hash, unmarshal func([]byte, any) error, b []byte) (cfg *System, sum Sum, _ error) {
 	c := &System{}
-	err := toml.Unmarshal(b, c)
+	err := unmarshal(b, c)
 	if err != nil {
 		return nil, sum, err
 	}
