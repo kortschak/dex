@@ -393,7 +393,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		default:
 			d.log.LogAttrs(ctx, slog.LevelError, "configure database", slog.String("error", "unknown scheme"), slog.String("url", m.Body.Options.Database))
 			return nil, rpc.NewError(rpc.ErrCodeInvalidMessage,
-				err.Error(),
+				"unknown scheme",
 				map[string]any{
 					"type":     rpc.ErrCodeParameters,
 					"database": m.Body.Options.Database,
