@@ -287,6 +287,176 @@
 					min-height: 300px;
 				}
 			}
+
+			.tools-panel {
+				margin-top: var(--spacing);
+			}
+
+			.tools-panel > summary {
+				cursor: pointer;
+				font-size: 1.1rem;
+				font-weight: 600;
+				padding: 0.5rem 0;
+				user-select: none;
+				color: #333;
+			}
+
+			.tools-panel > summary:hover {
+				color: #000;
+			}
+
+			.tool-section {
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				margin-bottom: 0.75rem;
+				padding: 0;
+			}
+
+			.tool-section > summary {
+				cursor: pointer;
+				font-weight: 600;
+				padding: 0.5rem 0.75rem;
+				background: #f5f5f5;
+				border-radius: 4px;
+				user-select: none;
+				color: #444;
+			}
+
+			.tool-section[open] > summary {
+				border-bottom: 1px solid #ddd;
+				border-radius: 4px 4px 0 0;
+			}
+
+			.tool-section > summary:hover {
+				background: #eee;
+			}
+
+			.tool-body {
+				padding: 0.75rem;
+			}
+
+			.tool-form {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				align-items: flex-end;
+			}
+
+			.tool-field {
+				display: flex;
+				flex-direction: column;
+				gap: 0.2rem;
+			}
+
+			.tool-field label {
+				font-size: 0.8rem;
+				color: #555;
+			}
+
+			.tool-field input[type="text"],
+			.tool-field input[type="date"],
+			.tool-field input[type="datetime-local"],
+			.tool-field select {
+				padding: 0.3rem 0.5rem;
+				border: 1px solid #ccc;
+				border-radius: 3px;
+				font-size: 0.9rem;
+				font-family: inherit;
+			}
+
+			.tool-field-check {
+				flex-direction: row;
+				align-items: center;
+				gap: 0.3rem;
+				padding-bottom: 0.3rem;
+			}
+
+			.tool-field-wide {
+				flex-basis: 100%;
+			}
+
+			.tool-field textarea {
+				width: 100%;
+				min-height: 6rem;
+				padding: 0.4rem;
+				border: 1px solid #ccc;
+				border-radius: 3px;
+				font-family: monospace;
+				font-size: 0.85rem;
+				resize: vertical;
+				tab-size: 4;
+			}
+
+			.tool-btn {
+				padding: 0.35rem 1rem;
+				border: 1px solid #888;
+				border-radius: 3px;
+				background: #f8f8f8;
+				cursor: pointer;
+				font-size: 0.9rem;
+				font-family: inherit;
+			}
+
+			.tool-btn:hover {
+				background: #eee;
+				border-color: #666;
+			}
+
+			.tool-btn:active {
+				background: #ddd;
+			}
+
+			.tool-btn-warn {
+				border-color: #c44;
+				color: #c44;
+			}
+
+			.tool-btn-warn:hover {
+				background: #fee;
+				border-color: #a33;
+			}
+
+			.tool-status {
+				font-size: 0.85rem;
+				padding: 0.3rem 0;
+				min-height: 1.4em;
+			}
+
+			.tool-status-ok {
+				color: #282;
+			}
+
+			.tool-status-err {
+				color: #c44;
+			}
+
+			.result-area {
+				margin-top: 0.5rem;
+				max-height: 400px;
+				overflow: auto;
+				background: #fafafa;
+				border: 1px solid #ddd;
+				border-radius: 3px;
+				padding: 0.5rem;
+				font-family: monospace;
+				font-size: 0.8rem;
+				white-space: pre-wrap;
+				word-break: break-all;
+				display: none;
+			}
+
+			.result-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-top: 0.5rem;
+				display: none;
+			}
+
+			.result-header a {
+				font-size: 0.85rem;
+				color: #0066cc;
+			}
 		</style>
 		<script src="js/echarts-5.5.1.min.js"></script>
 		<script src="js/jquery-3.7.0.min.js"></script>
@@ -315,6 +485,123 @@
 				<div id="year" class="chart-container chart-container-year"></div>
 				<button id="yearNext" class="year-nav-button year-nav-button-right" aria-label="Next year">⏵</button>
 			</div>
+
+			<details class="tools-panel">
+				<summary>Tools</summary>
+
+				<details class="tool-section">
+					<summary>Summary</summary>
+					<div class="tool-body">
+						<div class="tool-form" id="summaryForm">
+							<div class="tool-field">
+								<label for="summaryStart">Start</label>
+								<input type="date" id="summaryStart" required>
+							</div>
+							<div class="tool-field">
+								<label for="summaryEnd">End</label>
+								<input type="date" id="summaryEnd">
+							</div>
+							<div class="tool-field">
+								<label for="summaryTz">Timezone</label>
+								<input type="text" id="summaryTz" placeholder="e.g. Australia/Adelaide">
+							</div>
+							<div class="tool-field">
+								<label for="summaryCooldown">Cooldown</label>
+								<input type="text" id="summaryCooldown" placeholder="e.g. 5m">
+							</div>
+							<div class="tool-field">
+								<label for="summaryOther">Other hosts</label>
+								<input type="text" id="summaryOther" placeholder="http://host:port, ...">
+							</div>
+							<div class="tool-field tool-field-check">
+								<input type="checkbox" id="summaryRaw">
+								<label for="summaryRaw">Raw</label>
+							</div>
+							<div class="tool-field tool-field-check">
+								<input type="checkbox" id="summaryStrict">
+								<label for="summaryStrict">Strict</label>
+							</div>
+							<button class="tool-btn" id="summaryRun">Fetch</button>
+						</div>
+						<div class="tool-status" id="summaryStatus"></div>
+						<div class="result-header" id="summaryResultHeader">
+							<span>Result</span>
+						</div>
+						<pre class="result-area" id="summaryResult"></pre>
+					</div>
+				</details>
+
+				<details class="tool-section">
+					<summary>Dump</summary>
+					<div class="tool-body">
+						<div class="tool-form" id="dumpForm">
+							<div class="tool-field">
+								<label for="dumpStart">Start</label>
+								<input type="datetime-local" id="dumpStart" step="0.001">
+							</div>
+							<div class="tool-field">
+								<label for="dumpEnd">End</label>
+								<input type="datetime-local" id="dumpEnd" step="0.001">
+							</div>
+							<button class="tool-btn" id="dumpRun">Fetch</button>
+							<button class="tool-btn" id="dumpDownload" style="display:none">Download</button>
+						</div>
+						<div class="tool-status" id="dumpStatus"></div>
+						<div class="result-header" id="dumpResultHeader">
+							<span>Result</span>
+						</div>
+						<pre class="result-area" id="dumpResult"></pre>
+					</div>
+				</details>
+
+				<details class="tool-section">
+					<summary>Load</summary>
+					<div class="tool-body">
+						<div class="tool-form">
+							<div class="tool-field">
+								<label for="loadFile">JSON file</label>
+								<input type="file" id="loadFile" accept=".json,application/json">
+							</div>
+							<div class="tool-field tool-field-check">
+								<input type="checkbox" id="loadReplace">
+								<label for="loadReplace">Replace</label>
+							</div>
+							<button class="tool-btn tool-btn-warn" id="loadRun">Load</button>
+						</div>
+						<div class="tool-field tool-field-wide" style="margin-top:0.5rem">
+							<label for="loadText">Or paste JSON</label>
+							<textarea id="loadText" placeholder='{"buckets": [...]}'></textarea>
+						</div>
+						<div class="tool-status" id="loadStatus"></div>
+					</div>
+				</details>
+
+				<details class="tool-section">
+					<summary>Query</summary>
+					<div class="tool-body">
+						<div class="tool-form">
+							<div class="tool-field">
+								<label for="queryMode">Mode</label>
+								<select id="queryMode">
+									<option value="sql">SQL</option>
+									<option value="cel">CEL</option>
+								</select>
+							</div>
+						<button class="tool-btn" id="queryRun">Run</button>
+							<button class="tool-btn" id="queryClear" style="display:none">Clear</button>
+					</div>
+						<div class="tool-field tool-field-wide" style="margin-top:0.5rem">
+							<label for="queryText">Query</label>
+							<textarea id="queryText" placeholder="SELECT * FROM events LIMIT 10"></textarea>
+						</div>
+						<div class="tool-status" id="queryStatus"></div>
+						<div class="result-header" id="queryResultHeader">
+							<span>Result</span>
+						</div>
+						<pre class="result-area" id="queryResult"></pre>
+					</div>
+				</details>
+			</details>
 		</div>
 		<script type="text/javascript">
 
@@ -1402,6 +1689,275 @@ function yearData(data) {
 		yearHours.push([key, value]);
 	}
 	return yearHours;
+}
+
+// Summary
+document.getElementById('summaryRun').addEventListener('click', function() {
+	var start = document.getElementById('summaryStart').value;
+	if (!start) {
+		setStatus('summaryStatus', 'Start date is required.', false);
+		return;
+	}
+	clearStatus('summaryStatus');
+	hideResult('summaryResult');
+
+	var params = new URLSearchParams();
+	params.set('start', start);
+	var end = document.getElementById('summaryEnd').value;
+	if (end) params.set('end', end);
+	var tz = document.getElementById('summaryTz').value.trim();
+	if (tz) params.set('tz', tz);
+	var cooldown = document.getElementById('summaryCooldown').value.trim();
+	if (cooldown) params.set('cooldown', cooldown);
+	var other = document.getElementById('summaryOther').value.trim();
+	if (other) {
+		other.split(',').forEach(function(u) {
+			u = u.trim();
+			if (u) params.append('other', u);
+		});
+	}
+	if (document.getElementById('summaryRaw').checked) params.set('raw', 'true');
+	if (document.getElementById('summaryStrict').checked) params.set('strict', 'true');
+
+	setStatus('summaryStatus', 'Fetching...', true);
+	$.ajax({
+		url: 'summary/?' + params.toString(),
+		method: 'GET',
+		dataType: 'json',
+		success: function(data) {
+			setStatus('summaryStatus', 'OK', true);
+			showResult('summaryResult', data);
+		},
+		error: function(xhr) {
+			setStatus('summaryStatus', 'Error: ' + xhr.status + ' ' + xhr.statusText, false);
+			if (xhr.responseText) {
+				try {
+					showResult('summaryResult', JSON.parse(xhr.responseText));
+				} catch(e) {
+					var el = document.getElementById('summaryResult');
+					el.textContent = xhr.responseText;
+					el.style.display = 'block';
+				}
+			}
+		}
+	});
+});
+
+// Dump
+var lastDumpText = '';
+
+document.getElementById('dumpRun').addEventListener('click', function() {
+	clearStatus('dumpStatus');
+	hideResult('dumpResult');
+	document.getElementById('dumpDownload').style.display = 'none';
+
+	var params = new URLSearchParams();
+	var start = document.getElementById('dumpStart').value;
+	if (start) params.set('start', localToRFC3339(start));
+	var end = document.getElementById('dumpEnd').value;
+	if (end) params.set('end', localToRFC3339(end));
+
+	var url = 'dump/';
+	if (params.toString()) url += '?' + params.toString();
+
+	setStatus('dumpStatus', 'Fetching...', true);
+	$.ajax({
+		url: url,
+		method: 'GET',
+		dataType: 'json',
+		success: function(data) {
+			setStatus('dumpStatus', 'OK', true);
+			lastDumpText = showResult('dumpResult', data);
+			document.getElementById('dumpDownload').style.display = '';
+		},
+		error: function(xhr) {
+			setStatus('dumpStatus', 'Error: ' + xhr.status + ' ' + xhr.statusText, false);
+			if (xhr.responseText) {
+				var el = document.getElementById('dumpResult');
+				el.textContent = xhr.responseText;
+				el.style.display = 'block';
+			}
+		}
+	});
+});
+
+function localToRFC3339(val) {
+	if (!val) return '';
+	var d = new Date(val);
+	return formatTime(d);
+}
+
+document.getElementById('dumpDownload').addEventListener('click', function() {
+	if (!lastDumpText) return;
+	var blob = new Blob([lastDumpText], {type: 'application/json'});
+	var url = URL.createObjectURL(blob);
+	var a = document.createElement('a');
+	a.href = url;
+	a.download = 'dump.json';
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	URL.revokeObjectURL(url);
+});
+
+// Load
+document.getElementById('loadRun').addEventListener('click', function() {
+	clearStatus('loadStatus');
+
+	var replace = document.getElementById('loadReplace').checked;
+	var fileInput = document.getElementById('loadFile');
+	var textInput = document.getElementById('loadText').value.trim();
+
+	function doLoad(body) {
+		try {
+			JSON.parse(body);
+		} catch(e) {
+			setStatus('loadStatus', 'Invalid JSON: ' + e.message, false);
+			return;
+		}
+		var url = 'load/';
+		if (replace) url += '?replace=true';
+		setStatus('loadStatus', 'Loading...', true);
+		$.ajax({
+			url: url,
+			method: 'POST',
+			contentType: 'application/json',
+			data: body,
+			success: function() {
+				setStatus('loadStatus', 'OK — data loaded.', true);
+			},
+			error: function(xhr) {
+				setStatus('loadStatus', 'Error: ' + xhr.status + ' ' + xhr.statusText, false);
+			}
+		});
+	}
+
+	if (fileInput.files.length > 0) {
+		var reader = new FileReader();
+		reader.onload = function(e) {
+			doLoad(e.target.result);
+		};
+		reader.readAsText(fileInput.files[0]);
+	} else if (textInput) {
+		doLoad(textInput);
+	} else {
+		setStatus('loadStatus', 'Provide a JSON file or paste JSON text.', false);
+	}
+});
+
+// Query
+document.getElementById('queryMode').addEventListener('change', function() {
+	var ta = document.getElementById('queryText');
+	if (this.value == 'sql') {
+		ta.placeholder = 'SELECT * FROM events LIMIT 10';
+	} else {
+		ta.placeholder = 'query("SELECT * FROM events LIMIT 10").size()';
+	}
+});
+
+document.getElementById('queryRun').addEventListener('click', function() {
+	var body = document.getElementById('queryText').value;
+	if (!body.trim()) {
+		setStatus('queryStatus', 'Enter a query.', false);
+		return;
+	}
+	clearStatus('queryStatus');
+	hideResult('queryResult');
+
+	var mode = document.getElementById('queryMode').value;
+	var ajaxOpts;
+
+	if (mode == 'sql') {
+		if (body.length < 2000) {
+			ajaxOpts = {
+				url: 'query/?sql=' + encodeURIComponent(body),
+				method: 'GET'
+			};
+		} else {
+			ajaxOpts = {
+				url: 'query/',
+				method: 'POST',
+				contentType: 'application/sql',
+				data: body
+			};
+		}
+	} else {
+		ajaxOpts = {
+			url: 'query/',
+			method: 'POST',
+			contentType: 'application/cel',
+			data: body
+		};
+	}
+
+	ajaxOpts.dataType = 'json';
+	setStatus('queryStatus', 'Running...', true);
+	ajaxOpts.success = function(data) {
+		setStatus('queryStatus', 'OK', true);
+		showResult('queryResult', data);
+		document.getElementById('queryClear').style.display = '';
+	};
+	ajaxOpts.error = function(xhr) {
+		setStatus('queryStatus', 'Error: ' + xhr.status + ' ' + xhr.statusText, false);
+		if (xhr.responseText) {
+			try {
+				showResult('queryResult', JSON.parse(xhr.responseText));
+			} catch(e) {
+				var el = document.getElementById('queryResult');
+				el.textContent = xhr.responseText;
+				el.style.display = 'block';
+			}
+			document.getElementById('queryClear').style.display = '';
+		}
+	};
+	$.ajax(ajaxOpts);
+});
+
+function setStatus(id, msg, ok) {
+	var el = document.getElementById(id);
+	el.textContent = msg;
+	el.className = 'tool-status ' + (ok ? 'tool-status-ok' : 'tool-status-err');
+}
+
+function showResult(id, json) {
+	var text = JSON.stringify(json, null, 2);
+	var el = document.getElementById(id);
+	el.textContent = text;
+	el.style.display = 'block';
+	var header = document.getElementById(id + 'Header');
+	if (header) {
+		header.style.display = 'flex';
+	}
+	return text;
+}
+
+document.getElementById('queryClear').addEventListener('click', function() {
+	hideResult('queryResult');
+	clearStatus('queryStatus');
+	this.style.display = 'none';
+});
+
+function hideResult(id) {
+	var el = document.getElementById(id);
+	el.textContent = '';
+	el.style.display = 'none';
+	var header = document.getElementById(id + 'Header');
+	if (header) {
+		header.style.display = 'none';
+	}
+}
+
+document.getElementById('queryText').addEventListener('keydown', function(e) {
+	if (e.key == 'Enter' && (e.ctrlKey || e.metaKey)) {
+		e.preventDefault();
+		document.getElementById('queryRun').click();
+	}
+});
+
+function clearStatus(id) {
+	var el = document.getElementById(id);
+	el.textContent = '';
+	el.className = 'tool-status';
 }
 
 		</script>
