@@ -1960,6 +1960,20 @@ function clearStatus(id) {
 	el.className = 'tool-status';
 }
 
+document.querySelectorAll('.result-area').forEach(function(el) {
+	el.setAttribute('tabindex', '0');
+	el.addEventListener('keydown', function(e) {
+		if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+			e.preventDefault();
+			var range = document.createRange();
+			range.selectNodeContents(el);
+			var sel = window.getSelection();
+			sel.removeAllRanges();
+			sel.addRange(range);
+		}
+	});
+});
+
 		</script>
 	</body>
 </html>
