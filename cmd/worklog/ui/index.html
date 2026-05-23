@@ -938,7 +938,19 @@ flow.setOption({
 			}
 		}
 	},
+	color: [
+		'#5470c6',
+		'#91cc75',
+		'#fac858',
+		'#ee6666',
+		'#73c0de',
+		'#3ba272',
+		'#fc8452',
+		'#9a60b4',
+		'#ea7ccc'
+	],
 	legend: {
+		top: 0,
 		data: null
 	},
 	singleAxis: {
@@ -982,7 +994,11 @@ flow.setOption({
 var transition = echarts.init(document.getElementById('transition'));
 transition.setOption({
 	tooltip: {},
-	legend: [],
+	legend: [
+		{
+			top: 0
+		}
+	],
 	series: [
 		{
 			type: 'graph',
@@ -1018,6 +1034,16 @@ transition.setOption({
 	]
 });
 
+const heatRange = {
+	color: [
+		'#ffffb2',
+		'#fecc5c',
+		'#fd8d3c',
+		'#f03b20',
+		'#bd0026',
+	]
+};
+
 var week = echarts.init(document.getElementById('week'));
 week.setOption({
 	title: {
@@ -1051,6 +1077,7 @@ week.setOption({
 		}
 	},
 	visualMap: {
+        inRange: heatRange,
 		min: 0,
 		max: 60,
 		calculable: true,
@@ -1090,6 +1117,7 @@ year.setOption({
 		}    
 	},
 	visualMap: {
+        inRange: heatRange,
 		min: 0,
 		max: 24,
 		splitNumber: 6,
@@ -1445,6 +1473,7 @@ function render(data) {
 		},
 		legend: [
 			{
+				top: 0,
 				data: categories.map(function (a) {
 					return a.name;
 				})
