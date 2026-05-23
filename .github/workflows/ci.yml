@@ -62,6 +62,22 @@ jobs:
           go test ./rpc ./internal/... ./cmd/*/api ./cmd/worklog/store
           go test -run 'Test(Amendments|Continuation|DashboardData)$' ./cmd/worklog
 
+    - name: Kill Setup Assistant
+      # Honestly, what an awful operating system.
+      # This is necessary because we can be in a
+      # state where we are running, but the set up
+      # assistant is still the front window. On the
+      # CI runner, "Setup Assistant" is pinned as
+      # the active/frontmost application at the OS
+      # level during provisioning. It may not exit‽
+      #
+      # This breaks the logic of the watcher tests.
+      # So kill it.
+      if: runner.os == 'macOS'
+      run: |
+        sudo pkill -x "Setup Assistant" || true
+        sleep 2
+
     - name: integration tests
       uses: nick-fields/retry@v4
       with:
