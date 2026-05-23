@@ -924,6 +924,18 @@ activity.setOption({
 	]
 });
 
+const appColors = [
+	'#5470c6',
+	'#91cc75',
+	'#fac858',
+	'#ee6666',
+	'#73c0de',
+	'#3ba272',
+	'#fc8452',
+	'#9a60b4',
+	'#ea7ccc'
+];
+
 var flow = echarts.init(document.getElementById('flow'));
 flow.setOption({
 	tooltip: {
@@ -938,17 +950,7 @@ flow.setOption({
 			}
 		}
 	},
-	color: [
-		'#5470c6',
-		'#91cc75',
-		'#fac858',
-		'#ee6666',
-		'#73c0de',
-		'#3ba272',
-		'#fc8452',
-		'#9a60b4',
-		'#ea7ccc'
-	],
+	color: appColors,
 	legend: {
 		top: 0,
 		data: null
@@ -1462,6 +1464,10 @@ function render(data) {
 
 	var transitions = transitionData(data);
 	var categories = transitions.categories;
+	var colorMap = {};
+	flowLegend(data).forEach(function(name, i) {
+		colorMap[name] = appColors[i % appColors.length];
+	});
 	transition.setOption({
 		tooltip: {
 			formatter: function(p) {
@@ -1474,16 +1480,34 @@ function render(data) {
 		legend: [
 			{
 				top: 0,
-				data: categories.map(function (a) {
-					return a.name;
+				data: categories.map(function(a) {
+					return {
+						name: a.name,
+						itemStyle: {
+							color: colorMap[a.name]
+						}
+					};
 				})
 			}
 		],
 		series: [
 			{
-				data: transitions.nodes,
+				data: transitions.nodes.map(function(n) {
+					var c = n.category !== undefined ? categories[n.category].name : n.name;
+					return Object.assign({}, n, {
+						itemStyle: {
+							color: colorMap[c]
+						}
+					});
+				}),
 				links: transitions.links,
-				categories: categories
+				categories: categories.map(function(a) {
+					return Object.assign({}, a, {
+						itemStyle: {
+							color: colorMap[a.name]
+						}
+					});
+				})
 			}
 		]
 	});
