@@ -1100,7 +1100,6 @@ func (g graph) MarshalJSON() ([]byte, error) {
 	type jsonCategory struct {
 		Name string `json:"name"`
 	}
-	categories := make([]jsonCategory, len(g.nodes))
 	for e := range g.times {
 		g.nodes[e.app].duration += e.end.Sub(e.start)
 	}
@@ -1115,15 +1114,24 @@ func (g graph) MarshalJSON() ([]byte, error) {
 			Value:    n.duration.Hours(),
 			Category: n.id,
 		})
-		categories[n.id] = jsonCategory{Name: name}
 	}
 	s := (g.size.max - g.size.min) / maxDuration.Hours()
 	for i, n := range nodes {
 		nodes[i].Size = n.Value*s + g.size.min
 	}
+	// Sort nodes by name so the category order matches the flow
+	// chart legend, which is alphabetical from JSON map key ordering.
 	sort.Slice(nodes, func(i, j int) bool {
-		return nodes[i].ID < nodes[j].ID
+		return nodes[i].Name < nodes[j].Name
 	})
+	idMap := make(map[int]int, len(nodes))
+	categories := make([]jsonCategory, len(nodes))
+	for i, n := range nodes {
+		idMap[n.ID] = i
+		nodes[i].ID = i
+		nodes[i].Category = i
+		categories[i] = jsonCategory{Name: n.Name}
+	}
 
 	type jsonEdge struct {
 		From      int     `json:"source"`
@@ -1140,8 +1148,8 @@ func (g graph) MarshalJSON() ([]byte, error) {
 			max = weight
 		}
 		edges = append(edges, jsonEdge{
-			From:  e.from,
-			To:    e.to,
+			From:  idMap[e.from],
+			To:    idMap[e.to],
 			Value: weight,
 		})
 	}
