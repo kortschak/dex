@@ -17,7 +17,7 @@ require (
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
-	golang.org/x/image v0.39.0
+	golang.org/x/image v0.41.0
 	golang.org/x/net v0.55.0
 	golang.org/x/sys v0.45.0
 	golang.org/x/tools v0.44.0
