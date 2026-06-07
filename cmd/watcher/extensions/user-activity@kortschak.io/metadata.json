@@ -3,7 +3,10 @@
   "description": "Provide active window details and activity state",
   "uuid": "user-activity@kortschak.io",
   "shell-version": [
-    "45"
+    "45",
+    "46",
+    "47",
+    "48"
   ],
   "version": 0.1,
   "url": "https://github.com/kortschak/dex"
