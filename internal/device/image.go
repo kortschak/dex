@@ -59,6 +59,9 @@ func DecodeImage(rect image.Rectangle, data, datadir string) (image.Image, error
 		default:
 			return errorImage(fmt.Errorf("unknown text mime type: %s", data), rect, pal, 1, 0)
 		case "text/plain":
+			if val == "" {
+				return errorImage(fmt.Errorf("no text: %q", data), rect, pal, 1, 0)
+			}
 			pal[1], pal[0], err = fgbg(pal[1], pal[0], param)
 			if err != nil {
 				return errorImage(err, rect, pal, 1, 0)

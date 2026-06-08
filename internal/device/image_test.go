@@ -255,6 +255,11 @@ var writeTests = []struct {
 		data: "data:video/mp4,message",
 		err:  errors.New("unknown mime type: data:video/mp4,message"),
 	},
+	{
+		name: "missing_message",
+		data: "data:text/plain,",
+		err:  errors.New(`no text: "data:text/plain,"`),
+	},
 }
 
 func TestWrite(t *testing.T) {
