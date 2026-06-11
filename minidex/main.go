@@ -12,11 +12,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-
-	"golang.org/x/sys/execabs"
 )
 
 func main() {
@@ -49,8 +48,8 @@ func goenv(ctx context.Context, name string) (string, error) {
 }
 
 // cmd is a go command runner helper.
-func cmd(ctx context.Context, stdout, stderr io.Writer, wd string, args ...string) *execabs.Cmd {
-	cmd := execabs.CommandContext(ctx, "go", args...)
+func cmd(ctx context.Context, stdout, stderr io.Writer, wd string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = wd
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr

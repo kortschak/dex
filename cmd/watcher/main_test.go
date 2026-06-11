@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/godbus/dbus/v5"
 	"github.com/kortschak/jsonrpc2"
-	"golang.org/x/sys/execabs"
 
 	watcher "github.com/kortschak/dex/cmd/watcher/api"
 	"github.com/kortschak/dex/internal/slogext"
@@ -70,7 +70,7 @@ func TestDaemon(t *testing.T) {
 
 	tmp := t.TempDir()
 	exePath := filepath.Join(tmp, "watcher")
-	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}
@@ -90,7 +90,7 @@ func TestDaemon(t *testing.T) {
 			switch useDBus {
 			case false:
 				testerPath = filepath.Join(tmp, "tester")
-				build := execabs.Command("go", "build", "-o", testerPath)
+				build := exec.Command("go", "build", "-o", testerPath)
 				build.Dir = "./tester"
 				out, err = build.CombinedOutput()
 				if err != nil {
@@ -260,7 +260,7 @@ func TestDaemon(t *testing.T) {
 						// MacOS, most (but not all) of the time fails to notice the first
 						// run of the tester. So run it once to get started.
 						if cold && runtime.GOOS == "darwin" {
-							cmd := execabs.Command(testerPath, "-title", "tester:cold")
+							cmd := exec.Command(testerPath, "-title", "tester:cold")
 							err := cmd.Start()
 							if err != nil {
 								t.Error("failed to start tester cold")
@@ -278,7 +278,7 @@ func TestDaemon(t *testing.T) {
 								// window to be observed. This is obviously horrible.
 								time.Sleep(time.Second)
 							}
-							cmd := execabs.Command(testerPath, "-title", fmt.Sprintf("tester:%d", i))
+							cmd := exec.Command(testerPath, "-title", fmt.Sprintf("tester:%d", i))
 							err := cmd.Start()
 							if err != nil {
 								t.Errorf("failed to start tester %d", i)
@@ -325,12 +325,12 @@ func effectiveStrategy(strategy string, dbus bool) string {
 func startFakeDBus(t *testing.T, responses []string) (addr string, resetDetails func()) {
 	t.Helper()
 
-	_, err := execabs.LookPath("dbus-daemon")
+	_, err := exec.LookPath("dbus-daemon")
 	if err != nil {
 		t.Skip("dbus-daemon not available")
 	}
 
-	cmd := execabs.Command("dbus-daemon", "--session", "--print-address", "--nofork")
+	cmd := exec.Command("dbus-daemon", "--session", "--print-address", "--nofork")
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("failed to get stdout pipe: %v", err)

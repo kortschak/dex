@@ -8,13 +8,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"time"
 	"unsafe"
 
 	// For get_active_app.applescript
 	_ "embed"
-
-	"golang.org/x/sys/execabs"
 
 	watcher "github.com/kortschak/dex/cmd/watcher/api"
 )
@@ -119,7 +118,7 @@ func (macosDetailer) details() (watcher.Details, error) {
 var getActiveApp string
 
 func activeWindowDetails() (pid int, name, window string, err error) {
-	cmd := execabs.Command("osascript", "-e", getActiveApp)
+	cmd := exec.Command("osascript", "-e", getActiveApp)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

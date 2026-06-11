@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -26,7 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
 	"github.com/rogpeppe/go-internal/testscript"
-	"golang.org/x/sys/execabs"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 	"github.com/kortschak/dex/cmd/worklog/store"
@@ -70,7 +70,7 @@ func (t *tern) IsBoolFlag() bool { return true }
 
 func TestDaemon(t *testing.T) {
 	exePath := filepath.Join(t.TempDir(), "worklog")
-	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}

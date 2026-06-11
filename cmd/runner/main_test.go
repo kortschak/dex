@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,7 +21,6 @@ import (
 	"time"
 
 	"github.com/kortschak/jsonrpc2"
-	"golang.org/x/sys/execabs"
 
 	runner "github.com/kortschak/dex/cmd/runner/api"
 	"github.com/kortschak/dex/internal/slogext"
@@ -34,7 +34,7 @@ var (
 
 func TestDaemon(t *testing.T) {
 	exePath := filepath.Join(t.TempDir(), "runner")
-	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}
@@ -150,7 +150,7 @@ func TestDaemon(t *testing.T) {
 				// Get the command output directly to avoid
 				// system differences causing problems.
 				var stdout strings.Builder
-				cmd := execabs.Command("ls", ".")
+				cmd := exec.Command("ls", ".")
 				cmd.Stdout = &stdout
 				err = cmd.Run()
 				if err != nil {
@@ -167,8 +167,8 @@ func TestDaemon(t *testing.T) {
 			})
 
 			t.Run("run_notify_state", func(t *testing.T) {
-				sleep, err := execabs.LookPath("sleep")
-				if err == execabs.ErrNotFound {
+				sleep, err := exec.LookPath("sleep")
+				if err == exec.ErrNotFound {
 					t.Skip("no sleep command")
 				}
 				if err != nil {

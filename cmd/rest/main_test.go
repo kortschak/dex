@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kortschak/jsonrpc2"
-	"golang.org/x/sys/execabs"
 	"golang.org/x/tools/godoc/vfs"
 	"golang.org/x/tools/godoc/vfs/mapfs"
 	"golang.org/x/tools/txtar"
@@ -63,7 +63,7 @@ func TestDaemon(t *testing.T) {
 	}
 
 	exePath := filepath.Join(t.TempDir(), "rest")
-	out, err := execabs.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", exePath, "-race").CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to build daemon: %v\n%s", err, out)
 	}
@@ -534,7 +534,7 @@ func (f fileShim) Stat() (fs.FileInfo, error) {
 }
 
 func getVersion(path string) (string, error) {
-	cmd := execabs.Command(path, "-version")
+	cmd := exec.Command(path, "-version")
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	err := cmd.Run()

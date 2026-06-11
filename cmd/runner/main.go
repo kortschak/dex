@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -23,7 +24,6 @@ import (
 	"unique"
 
 	"github.com/kortschak/jsonrpc2"
-	"golang.org/x/sys/execabs"
 
 	runner "github.com/kortschak/dex/cmd/runner/api"
 	"github.com/kortschak/dex/config"
@@ -126,7 +126,7 @@ func newDaemon(uid string, log *slog.Logger, level *slog.LevelVar, addSource *at
 		level:     level,
 		addSource: addSource,
 		cancel:    cancel,
-		waiting:   make(map[*execabs.Cmd]context.CancelFunc),
+		waiting:   make(map[*exec.Cmd]context.CancelFunc),
 		buttons:   make(buttons),
 	}
 }
@@ -158,7 +158,7 @@ type daemon struct {
 	cancel    context.CancelFunc
 
 	wMu     sync.Mutex
-	waiting map[*execabs.Cmd]context.CancelFunc
+	waiting map[*exec.Cmd]context.CancelFunc
 	buttons buttons
 
 	hMu       sync.Mutex
@@ -172,10 +172,10 @@ type buttons map[rpc.UID]map[buttonAction]map[int]running
 
 type running struct {
 	Start time.Time `json:"start"`
-	cmd   *execabs.Cmd
+	cmd   *exec.Cmd
 }
 
-func (b buttons) add(svc rpc.UID, action buttonAction, pid int, cmd *execabs.Cmd) {
+func (b buttons) add(svc rpc.UID, action buttonAction, pid int, cmd *exec.Cmd) {
 	r := running{Start: time.Now(), cmd: cmd}
 	if b[svc] == nil {
 		b[svc] = make(map[buttonAction]map[int]running)
@@ -287,7 +287,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 			cctx, cancel = context.WithCancel(cctx)
 		}
 
-		cmd := execabs.CommandContext(cctx, p.Path, p.Args...)
+		cmd := exec.CommandContext(cctx, p.Path, p.Args...)
 		cmd.Env = p.Env
 		cmd.Dir = p.Dir
 		cmd.WaitDelay = p.WaitDelay
@@ -335,7 +335,7 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		err = cmd.Run()
-		var exitErr *execabs.ExitError
+		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			d.log.LogAttrs(ctx, slog.LevelError, err.Error(), slog.Any("cmd", p))
 			return nil, rpc.NewError(rpc.ErrCodeInternal,

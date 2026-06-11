@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -26,7 +27,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sys/execabs"
 
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 )
@@ -340,7 +340,7 @@ func (db *DB) Backup(ctx context.Context, dir string) (string, error) {
 	dbname := path.Base(u.Path)
 
 	dst := filepath.Join(dir, dbname+"_"+time.Now().In(time.UTC).Format("20060102150405")+".gz")
-	cmd := execabs.Command("pg_dump", "-h", host, "-p", port, dbname)
+	cmd := exec.Command("pg_dump", "-h", host, "-p", port, dbname)
 	f, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return "", err

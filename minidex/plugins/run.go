@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"log/slog"
 	"os"
+	"os/exec"
 	"time"
 
 	// For errorGIF.
@@ -23,7 +24,6 @@ import (
 
 	"golang.org/x/image/draw"
 	"golang.org/x/image/font/basicfont"
-	"golang.org/x/sys/execabs"
 
 	"github.com/kortschak/dex/internal/animation"
 	"github.com/kortschak/dex/internal/text"
@@ -106,7 +106,7 @@ text:
 
 func (p *command) Press(ctx context.Context, page string, r, c int, t time.Time) error {
 	go func() {
-		err := execabs.CommandContext(ctx, p.cmd, p.args...).Run()
+		err := exec.CommandContext(ctx, p.cmd, p.args...).Run()
 		if err == nil {
 			return
 		}
