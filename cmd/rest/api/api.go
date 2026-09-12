@@ -30,7 +30,7 @@ type Service struct {
 	Serial  *string `json:"serial,omitempty"`
 	Options struct {
 		// Service-level server definition.
-		Server Server `json:"server,omitempty"`
+		Server Server `json:"server,omitzero"`
 	} `json:"options,omitempty"`
 }
 
@@ -80,7 +80,7 @@ type Notification struct {
 	// StatusCode is the HTTP status code to return
 	// to the client. If not set, [http.StatusOK] is
 	// returned unless internal errors prevent it.
-	StatusCode int `json:"status,omitempty"`
+	StatusCode int `json:"status,omitzero"`
 	// Header is the set of headers to include in
 	// the HTTP response. Setting a header will
 	// replace any existing headers in the response.

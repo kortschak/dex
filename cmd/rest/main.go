@@ -11,7 +11,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -775,10 +776,10 @@ func errorContext(err error, window int, data []byte) []byte {
 	switch err := err.(type) {
 	default:
 		return data
-	case *json.SyntaxError:
-		pos = int(err.Offset)
-	case *json.UnmarshalTypeError:
-		pos = int(err.Offset)
+	case *jsontext.SyntacticError:
+		pos = int(err.ByteOffset)
+	case *json.SemanticError:
+		pos = int(err.ByteOffset)
 	}
 	const dots = "…"
 	left := max(0, pos-window)
@@ -996,8 +997,8 @@ func runDebugReq(path string, log *slog.Logger) int {
 	}
 
 	var debug struct {
-		Time    time.Time       `json:"time"`
-		Request json.RawMessage `json:"req"`
+		Time    time.Time      `json:"time"`
+		Request jsontext.Value `json:"req"`
 	}
 	err = json.Unmarshal(msg, &debug)
 	if err != nil {
@@ -1025,7 +1026,7 @@ func runDebugReq(path string, log *slog.Logger) int {
 		fmt.Fprintln(os.Stderr, err)
 		return internalError
 	}
-	err = json.NewEncoder(os.Stdout).Encode(note)
+	err = json.MarshalWrite(os.Stdout, note)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to marshal result: %v\n", err)
 		return internalError

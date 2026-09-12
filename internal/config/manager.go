@@ -7,7 +7,8 @@ package config
 import (
 	"context"
 	"crypto/sha1"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"hash"
 	"log/slog"
@@ -155,9 +156,9 @@ func desum(c *System) *System {
 }
 
 func resum(h hash.Hash, c *System) (sum Sum, err error) {
-	enc := json.NewEncoder(h)
+	enc := jsontext.NewEncoder(h, json.Deterministic(true))
 	if c.Kernel != nil {
-		err = enc.Encode(c.Kernel)
+		err = json.MarshalEncode(enc, c.Kernel)
 		if err != nil {
 			return sum, err
 		}
@@ -165,7 +166,7 @@ func resum(h hash.Hash, c *System) (sum Sum, err error) {
 		h.Reset()
 	}
 	for name, config := range c.Modules {
-		err = enc.Encode(config)
+		err = json.MarshalEncode(enc, config)
 		if err != nil {
 			return sum, err
 		}
@@ -174,7 +175,7 @@ func resum(h hash.Hash, c *System) (sum Sum, err error) {
 		c.Modules[name] = config
 	}
 	for name, config := range c.Services {
-		err = enc.Encode(config)
+		err = json.MarshalEncode(enc, config)
 		if err != nil {
 			return sum, err
 		}
@@ -183,7 +184,7 @@ func resum(h hash.Hash, c *System) (sum Sum, err error) {
 		c.Services[name] = config
 	}
 
-	err = enc.Encode(c)
+	err = json.MarshalEncode(enc, c)
 	if err != nil {
 		return sum, err
 	}

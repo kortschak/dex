@@ -6,7 +6,7 @@ package state
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"log/slog"
 
 	"github.com/kortschak/jsonrpc2"
@@ -66,7 +66,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 	storeUID := rpc.UID{Module: "kernel", Service: "store"}
 	return rpc.Funcs{
 		// Set(owner rpc.UID, item string, val []byte) error
-		"set": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"set": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[SetMessage]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {
@@ -89,7 +89,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 		},
 
 		// Get(owner rpc.UID, item string) (val []byte, err error)
-		"get": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"get": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[GetMessage]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {
@@ -117,7 +117,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 		},
 
 		// Put(owner rpc.UID, item string, new []byte) (old []byte, written bool, err error)
-		"put": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"put": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[PutMessage]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {
@@ -140,7 +140,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 		},
 
 		// Delete(owner rpc.UID, item string) error
-		"delete": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"delete": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[DeleteMessage]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {
@@ -163,7 +163,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 		},
 
 		// Drop(owner rpc.UID) error
-		"drop": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"drop": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[rpc.None]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {
@@ -185,7 +185,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 		},
 
 		// DropModule(module string) error
-		"drop_module": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"drop_module": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[rpc.None]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {

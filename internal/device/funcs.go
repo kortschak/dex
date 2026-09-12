@@ -6,7 +6,7 @@ package device
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -90,7 +90,7 @@ type SleepMessage struct {
 func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 	store := manager.Store()
 	return rpc.Funcs{
-		"page": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+		"page": func(ctx context.Context, id jsonrpc2.ID, msg jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[PageMessage]
 			err := rpc.UnmarshalMessage(msg, &m)
 			if err != nil {
@@ -126,7 +126,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			return resp, err
 		},
 
-		"page_names": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+		"page_names": func(ctx context.Context, id jsonrpc2.ID, msg jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[PageStateMessage]
 			err := rpc.UnmarshalMessage(msg, &m)
 			if err != nil {
@@ -151,7 +151,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			return nil, nil
 		},
 
-		"page_details": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+		"page_details": func(ctx context.Context, id jsonrpc2.ID, msg jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[PageStateMessage]
 			err := rpc.UnmarshalMessage(msg, &m)
 			if err != nil {
@@ -176,7 +176,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 			return nil, nil
 		},
 
-		"brightness": func(ctx context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+		"brightness": func(ctx context.Context, id jsonrpc2.ID, msg jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[BrightnessMessage]
 			err := rpc.UnmarshalMessage(msg, &m)
 			if err != nil {
@@ -309,7 +309,7 @@ func Funcs[K sys.Kernel, D sys.Device[B], B sys.Button](manager *sys.Manager[K, 
 func GoFuncs[K sys.Kernel, D sys.Device[B], B sys.Button](ctx context.Context) func(*sys.Manager[K, D, B], *slog.Logger) rpc.Funcs {
 	return func(manager *sys.Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 		return rpc.Funcs{
-			"draw": func(_ context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+			"draw": func(_ context.Context, id jsonrpc2.ID, msg jsontext.Value) (*rpc.Message[any], error) {
 				var m rpc.Message[DrawMessage]
 				err := rpc.UnmarshalMessage(msg, &m)
 				if err != nil {
@@ -392,7 +392,7 @@ func GoFuncs[K sys.Kernel, D sys.Device[B], B sys.Button](ctx context.Context) f
 				return resp, nil
 			},
 
-			"sleep": func(_ context.Context, id jsonrpc2.ID, msg json.RawMessage) (*rpc.Message[any], error) {
+			"sleep": func(_ context.Context, id jsonrpc2.ID, msg jsontext.Value) (*rpc.Message[any], error) {
 				var m rpc.Message[SleepMessage]
 				err := rpc.UnmarshalMessage(msg, &m)
 				if err != nil {

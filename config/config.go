@@ -8,7 +8,7 @@ package config
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -42,15 +42,15 @@ type Kernel struct {
 	Network string `json:"network,omitempty" toml:"network"`
 	// AllowForward controls which sender-UID overrides are
 	// permitted. If nil, no forwards are allowed.
-	AllowForward *AllowForward `json:"allow_forward,omitempty" toml:"allow_forward"`
-	LogLevel     *slog.Level   `json:"log_level,omitempty" toml:"log_level"`
-	AddSource    *bool         `json:"log_add_source,omitempty" toml:"log_add_source"`
+	AllowForward *AllowForward `json:"allow_forward,omitzero" toml:"allow_forward"`
+	LogLevel     *slog.Level   `json:"log_level,omitzero" toml:"log_level"`
+	AddSource    *bool         `json:"log_add_source,omitzero" toml:"log_add_source"`
 	// Options is a bag of arbitrary configuration values.
 	// See Schema for valid entries.
 	Options map[string]any `json:"options,omitempty" toml:"options"`
 
-	Sum *Sum  `json:"sum,omitempty"`
-	Err error `json:"err,omitempty"`
+	Sum *Sum  `json:"sum,omitzero"`
+	Err error `json:"err,omitzero"`
 }
 
 // AllowForward is a sender-UID forward rules for the kernel.
@@ -160,15 +160,15 @@ func (a *AllowForward) UnmarshalTOML(data any) error {
 
 type Device struct {
 	// PID is the product ID of the device.
-	PID ardilla.PID `json:"pid,omitempty" toml:"pid"`
+	PID ardilla.PID `json:"pid,omitempty,omitzero" toml:"pid"` // omitempty for CUE
 	// Serial is the device serial numbers.
-	Serial *string `json:"serial,omitempty" toml:"serial"`
+	Serial *string `json:"serial,omitzero" toml:"serial"`
 	// Default is the default page name for the device.
 	// If Default is nil, the device default name is used.
-	Default *string `json:"default,omitempty" toml:"default"`
+	Default *string `json:"default,omitzero" toml:"default"`
 	// Required indicates the configuration may not
 	// continue if the device is not available.
-	Required bool `json:"required,omitempty" toml:"required"`
+	Required bool `json:"required,omitempty,omitzero" toml:"required"` // omitempty for CUE
 }
 
 // Module is a module configuration.
@@ -178,8 +178,8 @@ type Module struct {
 	// Args is any additional arguments pass to the module's
 	// executable at start up.
 	Args      []string    `json:"args,omitempty" toml:"args"`
-	LogLevel  *slog.Level `json:"log_level,omitempty" toml:"log_level"`
-	AddSource *bool       `json:"log_add_source,omitempty" toml:"log_add_source"`
+	LogLevel  *slog.Level `json:"log_level,omitzero" toml:"log_level"`
+	AddSource *bool       `json:"log_add_source,omitzero" toml:"log_add_source"`
 	// LogMode specifies how module logging is handled
 	// by the system; options are "log", "passthrough"
 	// and "none". The default behaviour is "passthrough".
@@ -204,8 +204,8 @@ type Module struct {
 	// If Schema is empty, DeviceDependency is used.
 	Schema string `json:"schema,omitempty"`
 
-	Sum *Sum  `json:"sum,omitempty"`
-	Err error `json:"err,omitempty"`
+	Sum *Sum  `json:"sum,omitzero"`
+	Err error `json:"err,omitzero"`
 }
 
 // Service is a module service configuration.
@@ -216,13 +216,13 @@ type Service struct {
 	// Active indicates the state of the service.
 	// If a configure call with Active false is made
 	// the service is deconfigured.
-	Active *bool `json:"active,omitempty"`
+	Active *bool `json:"active,omitzero"`
 
 	// Module is the module the service depends on.
-	Module *string `json:"module,omitempty" toml:"module"`
+	Module *string `json:"module,omitzero" toml:"module"`
 	// Serial is the device's serial number the service is using.
 	// This must correspond to a serial number held by the kernel.
-	Serial *string `json:"serial,omitempty" toml:"serial"`
+	Serial *string `json:"serial,omitzero" toml:"serial"`
 	// Listen is the set of buttons the service expects to be
 	// notified of changes in.
 	Listen []Button `json:"listen,omitempty" toml:"listen"`
@@ -230,8 +230,8 @@ type Service struct {
 	// Valid values are service-specific.
 	Options map[string]any `json:"options,omitempty" toml:"options"`
 
-	Sum *Sum  `json:"sum,omitempty"`
-	Err error `json:"err,omitempty"`
+	Sum *Sum  `json:"sum,omitzero"`
+	Err error `json:"err,omitzero"`
 }
 
 // IsService returns whether the request is a service configuration.
@@ -264,8 +264,8 @@ type Button struct {
 	Row    int     `json:"row" toml:"row"`
 	Col    int     `json:"col" toml:"col"`
 	Page   string  `json:"page,omitempty" toml:"page"`
-	Change *string `json:"change,omitempty" toml:"change"`
-	Do     *string `json:"do,omitempty" toml:"do"`
+	Change *string `json:"change,omitzero" toml:"change"`
+	Do     *string `json:"do,omitzero" toml:"do"`
 	Args   any     `json:"args,omitempty" toml:"args"`
 	Image  string  `json:"image,omitempty" toml:"image"`
 }

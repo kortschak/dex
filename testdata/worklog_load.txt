@@ -26,7 +26,7 @@ sleep 1s
 POST dump.json http://localhost:7979/load/?replace=true
 
 GET -json http://localhost:7979/dump/
-cmp stdout want.json
+cmpjson stdout want.json
 
 GET http://localhost:7979/query?sql=select+count(*)+as+event_count+from+events
 cmp stdout want_event_count.json

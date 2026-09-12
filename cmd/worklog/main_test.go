@@ -7,7 +7,9 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -283,10 +285,10 @@ func mergeAfk() int {
 	defer db.Close(ctx)
 	d.configureDB(ctx, db)
 
-	dec := json.NewDecoder(bytes.NewReader(data))
+	dec := jsontext.NewDecoder(bytes.NewReader(data))
 	var last, curr worklog.Report
 	for {
-		err = dec.Decode(&curr)
+		err = json.UnmarshalDecode(dec, &curr)
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -303,10 +305,10 @@ func mergeAfk() int {
 		fmt.Fprintf(os.Stderr, "failed to dump db: %v\n", err)
 		return 1
 	}
-	enc := json.NewEncoder(os.Stdout)
+	enc := jsontext.NewEncoder(os.Stdout, json.Deterministic(true))
 	for _, b := range dump {
 		for _, e := range b.Events {
-			err := enc.Encode(e)
+			err := json.MarshalEncode(enc, e)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to encode event: %v\n", err)
 				return 1
@@ -398,9 +400,8 @@ func dashboardData() int {
 		return 1
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "\t")
-	err = enc.Encode(events)
+	enc := jsontext.NewEncoder(os.Stdout, jsontext.WithIndent("\t"), json.Deterministic(true))
+	err = json.MarshalEncode(enc, events)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to encode events: %v\n", err)
 		return 1
@@ -468,9 +469,8 @@ func summaryData() int {
 		return 1
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "\t")
-	err = enc.Encode(events)
+	enc := jsontext.NewEncoder(os.Stdout, jsontext.WithIndent("\t"), json.Deterministic(true))
+	err = json.MarshalEncode(enc, events)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to encode events: %v\n", err)
 		return 1
@@ -511,9 +511,8 @@ func mergeSummaryData() int {
 		return 1
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "\t")
-	err = enc.Encode(events)
+	enc := jsontext.NewEncoder(os.Stdout, jsontext.WithIndent("\t"), json.Deterministic(true))
+	err = json.MarshalEncode(enc, events)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to encode events: %v\n", err)
 		return 1
@@ -608,7 +607,7 @@ func generateData(ts *testscript.TestScript, neg bool, args []string) {
 		Offsets []time.Duration                   `json:"offsets"`
 		Pattern []map[string]any                  `json:"pattern"`
 	}
-	ts.Check(json.Unmarshal(data, &template))
+	ts.Check(json.Unmarshal(data, &template, jsonv1.FormatDurationAsNano(true)))
 	names := make([]string, 0, len(template.Buckets))
 	for n, b := range template.Buckets {
 		names = append(names, n)
@@ -660,9 +659,8 @@ func generateData(ts *testscript.TestScript, neg bool, args []string) {
 	}
 
 	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "\t")
-	err = enc.Encode(buckets)
+	enc := jsontext.NewEncoder(&buf, jsontext.WithIndent("\t"), json.Deterministic(true))
+	err = json.MarshalEncode(enc, buckets)
 	ts.Check(err)
 	ts.Check(os.WriteFile(ts.MkAbs(path), buf.Bytes(), 0o640))
 }

@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"flag"
 	"fmt"
 	"io"
@@ -51,6 +51,7 @@ func TestScripts(t *testing.T) {
 		TestWork:      *keep,
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
 			"sleep":          sleep,
+			"cmpjson":        cmpJSON,
 			"grep_from_file": grep,
 			"expand":         expand,
 			"createdb":       createDB,
@@ -98,6 +99,31 @@ func sleep(ts *testscript.TestScript, neg bool, args []string) {
 	d, err := time.ParseDuration(args[0])
 	ts.Check(err)
 	time.Sleep(d)
+}
+
+func cmpJSON(ts *testscript.TestScript, neg bool, args []string) {
+	if len(args) != 2 {
+		ts.Fatalf("usage: cmpjson file1 file2")
+	}
+	data1 := jsontext.Value(ts.ReadFile(args[0]))
+	if err := data1.Canonicalize(); err != nil {
+		ts.Fatalf("failed to canonicalize %s: %v", args[0], err)
+	}
+	data2 := jsontext.Value(ts.ReadFile(args[1]))
+	if err := data2.Canonicalize(); err != nil {
+		ts.Fatalf("failed to canonicalize %s: %v", args[1], err)
+	}
+
+	eq := bytes.Equal(data1, data2)
+	if neg {
+		if eq {
+			ts.Fatalf("%s and %s are equal", args[0], args[1])
+		}
+		return
+	}
+	if !eq {
+		ts.Fatalf("diff %s %s\n--- %s\n%s\n+++ %s\n%s", args[0], args[1], args[0], data1, args[1], data2)
+	}
 }
 
 func grep(ts *testscript.TestScript, neg bool, args []string) {
@@ -266,12 +292,14 @@ func get() int {
 		}
 	}
 	if *jsonData {
-		var dst bytes.Buffer
-		err = json.Indent(&dst, buf.Bytes(), "", "\t")
+		v := jsontext.Value(buf.Bytes())
+		err = v.Indent(jsontext.WithIndent("\t"))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed format JSON data: %v\n", err)
 			return 1
 		}
+		var dst bytes.Buffer
+		dst.Write(v)
 		buf = dst
 	}
 	os.Stdout.Write(buf.Bytes())
@@ -329,12 +357,14 @@ func post() int {
 		}
 	}
 	if *jsonData {
-		var dst bytes.Buffer
-		err = json.Indent(&dst, buf.Bytes(), "", "\t")
+		v := jsontext.Value(buf.Bytes())
+		err = v.Indent(jsontext.WithIndent("\t"))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed format response JSON data: %v\n", err)
+			fmt.Fprintf(os.Stderr, "failed format JSON data: %v\n", err)
 			return 1
 		}
+		var dst bytes.Buffer
+		dst.Write(v)
 		buf = dst
 	}
 	os.Stdout.Write(buf.Bytes())

@@ -19,7 +19,7 @@ dex -log debug -lines &dex&
 sleep 1s
 
 POST -json -header header.txt body.txt http://localhost:7878/
-cmp stdout want_response.json
+cmpjson stdout want_response.json
 cmp got.txt body.txt
 cmp header.txt want_header.txt
 

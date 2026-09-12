@@ -17,7 +17,7 @@ unquote debug_log.snarf
 env ZEROTIME=0001-01-01T00:00:00Z
 expand debug_log.snarf debug_log_good.snarf
 exec worklog -log=DEBUG -debug debug_log_good.snarf
-cmp stdout want_good.text
+cmpjson stdout want_good.text
 
 # UTC-marked zero time: invalid Go JSON via RFC3339.
 env ZEROTIME=0001-01-01T00:00:00+UTC

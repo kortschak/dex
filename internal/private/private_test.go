@@ -6,7 +6,8 @@ package private
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"reflect"
 	"testing"
 
@@ -52,13 +53,13 @@ var redactTests = []redactTest{
 	},
 	{
 		name: "json_raw_message_string",
-		in:   json.RawMessage(`{"private":"secret","secret":"1","not_secret":"2"}`),
-		want: json.RawMessage(`{"not_secret":"2","private":"secret"}`), // json.Marshal canonicalised field order.
+		in:   jsontext.Value(`{"private":"secret","secret":"1","not_secret":"2"}`),
+		want: jsontext.Value(`{"not_secret":"2","private":"secret"}`), // json.Marshal canonicalised field order.
 	},
 	{
 		name: "json_raw_message_string_inner",
-		in:   json.RawMessage(`{"inner":{"private":"secret","secret":"1","not_secret":"2"}}`),
-		want: json.RawMessage(`{"inner":{"not_secret":"2","private":"secret"}}`), // json.Marshal canonicalised field order.
+		in:   jsontext.Value(`{"inner":{"private":"secret","secret":"1","not_secret":"2"}}`),
+		want: jsontext.Value(`{"inner":{"not_secret":"2","private":"secret"}}`), // json.Marshal canonicalised field order.
 	},
 	{
 		name: "map_slice",
@@ -277,7 +278,7 @@ func TestRedact(t *testing.T) {
 			_, isCycle := test.wantErr.(cycle)
 			if !isCycle {
 				var err error
-				before, err = json.Marshal(test.in)
+				before, err = json.Marshal(test.in, json.Deterministic(true))
 				if err != nil {
 					t.Fatalf("failed to get before state: %v", err)
 				}
@@ -286,8 +287,15 @@ func TestRedact(t *testing.T) {
 			if err != test.wantErr {
 				t.Fatalf("unexpected error from Redact: %v", err)
 			}
+			if v, ok := got.(jsontext.Value); ok {
+				err := v.Canonicalize(jsontext.CanonicalizeRawInts(false))
+				if err != nil {
+					t.Fatalf("unexpected error canonicalising value: %v", err)
+				}
+				got = v
+			}
 			if !isCycle {
-				after, err := json.Marshal(test.in)
+				after, err := json.Marshal(test.in, json.Deterministic(true))
 				if err != nil {
 					t.Fatalf("failed to get after state: %v", err)
 				}

@@ -6,7 +6,8 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -133,7 +134,7 @@ func (k *Kernel) Addr() net.Addr {
 // If the ID is valid, the function must return either a non-nil, JSON-marshalable
 // result, or a non-nil error. If it is not valid, the functions must return a nil
 // result.
-type Funcs map[string]func(context.Context, jsonrpc2.ID, json.RawMessage) (*Message[any], error)
+type Funcs map[string]func(context.Context, jsonrpc2.ID, jsontext.Value) (*Message[any], error)
 
 // Funcs inserts the provided functions into the kernel's handler. If funcs is nil
 // the entire kernel mapping table is reset.
@@ -384,7 +385,7 @@ func (k *Kernel) handle(ctx context.Context, req *jsonrpc2.Request, connUID UID)
 
 // checkFuncIdentity extracts the UID from raw params and checks
 // it against connUID for methods that use UID as an actor identity.
-func (k *Kernel) checkFuncIdentity(connUID UID, method string, params json.RawMessage) error {
+func (k *Kernel) checkFuncIdentity(connUID UID, method string, params jsontext.Value) error {
 	if connUID.IsZero() || !actorMethods[method] {
 		return nil
 	}

@@ -7,12 +7,13 @@ package rpc
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kortschak/jsonrpc2"
@@ -167,9 +168,8 @@ type Button struct {
 
 // UnmarshalMessage is a strict equivalent of [json.Unmarshal].
 func UnmarshalMessage[T any](data []byte, v *Message[T]) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	err := dec.Decode(v)
+	dec := jsontext.NewDecoder(bytes.NewReader(data))
+	err := json.UnmarshalDecode(dec, v, json.RejectUnknownMembers(true))
 	if err != nil {
 		return &jsonrpc2.WireError{
 			Code:    ErrCodeInvalidMessage,
@@ -177,22 +177,22 @@ func UnmarshalMessage[T any](data []byte, v *Message[T]) error {
 			Data:    encodeErrData(err, data),
 		}
 	}
-	if dec.More() {
+	if len(dec.UnreadBuffer()) != 0 {
 		off := dec.InputOffset()
 		return &jsonrpc2.WireError{
 			Code:    ErrCodeInvalidMessage,
 			Message: fmt.Sprintf("invalid character "+quoteChar(data[off])+" after top-level value at offset %d", off),
-			Data:    encodeErrData(&json.SyntaxError{Offset: off}, data),
+			Data:    encodeErrData(&jsontext.SyntacticError{ByteOffset: off}, data),
 		}
 	}
 	return nil
 }
 
 // encodeErrData return the JSON encoding for an error's extra data.
-func encodeErrData(err error, data []byte) json.RawMessage {
+func encodeErrData(err error, data []byte) jsontext.Value {
 	type extra struct {
-		Type    int    `json:"type,omitempty"`
-		Offset  int64  `json:"offset,omitempty"`
+		Type    int    `json:"type,omitzero"`
+		Offset  int64  `json:"offset"`
 		Message []byte `json:"msg"`
 	}
 	e := extra{
@@ -201,25 +201,28 @@ func encodeErrData(err error, data []byte) json.RawMessage {
 	switch err := err.(type) {
 	case nil:
 		return nil
-	case *json.SyntaxError:
-		e.Type = ErrCodeMessageSyntax
-		e.Offset = err.Offset
-	case *json.UnmarshalTypeError:
-		e.Type = ErrCodeMessageType
-		e.Offset = err.Offset
-	default:
-		switch {
-		case err == io.EOF, err == io.ErrUnexpectedEOF:
+	case *jsontext.SyntacticError:
+		e.Offset = err.ByteOffset
+		if errors.Is(err, io.ErrUnexpectedEOF) {
 			e.Type = ErrCodeShortMessage
-		case strings.HasPrefix(err.Error(), "json: unknown field"):
+		} else {
+			e.Type = ErrCodeMessageSyntax
+		}
+	case *json.SemanticError:
+		e.Type = ErrCodeMessageType
+		if errors.Is(err, json.ErrUnknownName) {
 			e.Type = ErrCodeMessageUnknownField
+		} else {
+			e.Type = ErrCodeMessageType
+		}
+		e.Offset = err.ByteOffset
+	default:
+		if err == io.EOF {
+			e.Type = ErrCodeShortMessage
 		}
 	}
-	var buf bytes.Buffer
-	dec := json.NewEncoder(&buf)
-	dec.SetEscapeHTML(false)
-	dec.Encode(e)
-	return bytes.TrimSpace(buf.Bytes())
+	b, _ := json.Marshal(e)
+	return b
 }
 
 // NewError returns an error that will be encoded correctly in the RPC protocol.
@@ -249,19 +252,15 @@ func AddWireErrorDetail(err error, details map[string]any) error {
 	return err
 }
 
-func wireErrorData(data any) json.RawMessage {
+func wireErrorData(data any) jsontext.Value {
 	if data == nil {
 		return nil
 	}
-	var buf bytes.Buffer
-	dec := json.NewEncoder(&buf)
-	dec.SetEscapeHTML(false)
-	err := dec.Encode(data)
+	b, err := json.Marshal(data)
 	if err != nil {
-		b, _ := json.Marshal("!" + err.Error())
-		return b
+		b, _ = json.Marshal("!" + err.Error())
 	}
-	return bytes.TrimSpace(buf.Bytes())
+	return b
 }
 
 // quoteChar formats c as a quoted character literal.

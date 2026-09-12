@@ -8,7 +8,8 @@ package slogext
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"log/slog"
@@ -70,24 +71,24 @@ func (v RequestRedactPrivate) LogValue() slog.Value {
 	var p any
 	err := json.Unmarshal(v.Params, &p)
 	if err != nil {
-		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: jsontext.Value(`"INVALID"`), Err: err.Error()})
 	}
 	p, err = private.Redact(p, "")
 	if err != nil {
-		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: jsontext.Value(`"INVALID"`), Err: err.Error()})
 	}
 	b, err := json.Marshal(p)
 	if err != nil {
-		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: json.RawMessage(`"INVALID"`), Err: err.Error()})
+		return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: jsontext.Value(`"INVALID"`), Err: err.Error()})
 	}
 	return slog.AnyValue(request{ID: v.ID.Raw(), Method: v.Method, Params: b})
 }
 
 type request struct {
-	ID     any             `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params"`
-	Err    string          `json:"error,omitempty"`
+	ID     any            `json:"id"`
+	Method string         `json:"method"`
+	Params jsontext.Value `json:"params"`
+	Err    string         `json:"error,omitempty"`
 }
 
 type PrivateRedact struct {

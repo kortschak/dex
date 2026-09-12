@@ -6,7 +6,7 @@ package sys
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"log/slog"
 	"sort"
 
@@ -29,7 +29,7 @@ import (
 func Funcs[K Kernel, D Device[B], B Button](redact bool) func(manager *Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 	return func(manager *Manager[K, D, B], log *slog.Logger) rpc.Funcs {
 		return rpc.Funcs{
-			"system": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+			"system": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 				var m rpc.Message[rpc.None]
 				err := rpc.UnmarshalMessage(params, &m)
 				if err != nil {

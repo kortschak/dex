@@ -5,7 +5,7 @@
 package rpc
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"io"
 	"log/slog"
@@ -189,7 +189,7 @@ func TestCheckFuncIdentity(t *testing.T) {
 	for _, test := range checkFuncIdentityTests {
 		t.Run(test.name, func(t *testing.T) {
 			k := testKernelWith(test.rules)
-			err := k.checkFuncIdentity(test.connUID, test.method, json.RawMessage(test.params))
+			err := k.checkFuncIdentity(test.connUID, test.method, jsontext.Value(test.params))
 			if !sameError(err, test.wantErr) {
 				t.Errorf("checkFuncIdentity() error = %v, wantErr %v", err, test.wantErr)
 			}

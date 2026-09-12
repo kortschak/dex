@@ -37,7 +37,7 @@ sleep 1s
 POST dump.json http://localhost:9797/load/?replace=true
 # and confirm.
 GET -json http://localhost:9797/dump/
-cmp stdout want.json
+cmpjson stdout want.json
 
 # Show that the non-granted user cannot read.
 GET http://localhost:9797/query?sql=select+count(*)+as+event_count+from+events

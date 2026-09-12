@@ -10,7 +10,8 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -1303,7 +1304,7 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			resp, err := db.Select(ctx, body.String())
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(map[string]any{"err": err.Error()})
+				json.MarshalWrite(w, map[string]any{"err": err.Error()})
 				return
 			}
 			for _, row := range resp {
@@ -1319,7 +1320,7 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 					row["datastr"] = d
 				}
 			}
-			json.NewEncoder(w).Encode(resp)
+			json.MarshalWrite(w, resp, json.Deterministic(true))
 		case "application/cel":
 			prg, err := compile(body.String(), []cel.EnvOption{
 				cel.OptionalTypes(cel.OptionalTypesVersion(1)),
@@ -1328,28 +1329,28 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 			})
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]any{"err": err.Error()})
+				json.MarshalWrite(w, map[string]any{"err": err.Error()})
 				return
 			}
 			resp, err := eval[any](prg, nil)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]any{"err": err.Error()})
+				json.MarshalWrite(w, map[string]any{"err": err.Error()})
 				return
 			}
-			json.NewEncoder(w).Encode(resp)
+			json.MarshalWrite(w, resp, json.Deterministic(true))
 		default:
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	}
 }
 
-func queryError(dec *json.Decoder, body []byte, err error) any {
+func queryError(dec *jsontext.Decoder, body []byte, err error) any {
 	offset := int(dec.InputOffset())
-	var syntax *json.SyntaxError
+	var syntax *jsontext.SyntacticError
 	switch {
 	case errors.As(err, &syntax):
-		offset = int(syntax.Offset)
+		offset = int(syntax.ByteOffset)
 	case errors.Is(err, io.ErrUnexpectedEOF):
 		offset = len(body)
 	}
@@ -1466,7 +1467,7 @@ func runDebug(path string, log *slog.Logger) int {
 		fmt.Fprintln(os.Stderr, err)
 		return internalError
 	}
-	err = json.NewEncoder(os.Stdout).Encode(note)
+	err = json.MarshalWrite(os.Stdout, note, json.Deterministic(true))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to marshal result: %v\n", err)
 		return internalError
@@ -1511,7 +1512,7 @@ type debugDetailsLayout[T any] struct {
 type debugDetails debugDetailsLayout[worklog.DetailMapper]
 
 func (d *debugDetails) UnmarshalJSON(data []byte) error {
-	var raw debugDetailsLayout[json.RawMessage]
+	var raw debugDetailsLayout[jsontext.Value]
 	err := json.Unmarshal(data, &raw)
 	if err != nil {
 		return err

@@ -7,7 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -394,7 +394,7 @@ type summary struct {
 	Period struct {
 		AtKeyboard []worklog.Event    `json:"at_keyboard,omitempty"`
 		Hours      map[string]float64 `json:"hours,omitempty"`
-		TotalHours float64            `json:"total_hours,omitempty"`
+		TotalHours float64            `json:"total_hours,omitzero"`
 	} `json:"period"`
 	Cooldown string   `json:"cooldown,omitempty"`
 	Warnings []string `json:"warn,omitempty"`

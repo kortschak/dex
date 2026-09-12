@@ -14,13 +14,13 @@ cd ${WORK}
 unquote debug_activity_log.snarf debug_blanking_no_log.snarf debug_blanking_yes_log.snarf
 
 exec watcher -log=DEBUG -debug debug_activity_log.snarf
-cmp stdout want_activity_good.text
+cmpjson stdout want_activity_good.text
 
 exec watcher -log=DEBUG -debug debug_blanking_no_log.snarf
-cmp stdout want_blanking_no.text
+cmpjson stdout want_blanking_no.text
 
 exec watcher -log=DEBUG -debug debug_blanking_yes_log.snarf
-cmp stdout want_blanking_yes.text
+cmpjson stdout want_blanking_yes.text
 
 -- want_activity_good.text --
 [{"uid":{"module":"worklog"},"method":"record","params":{"details":{"class":"Gnome-terminal","last_input":"2026-02-14T10:35:21.6+10:30","locked":false,"name":"gnome-terminal-server","pid":4245,"wid":67109097,"window":"Terminal"},"period":"1s"}}]

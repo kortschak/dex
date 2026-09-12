@@ -8,7 +8,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -775,7 +775,7 @@ func runDebug(path string, log *slog.Logger) int {
 		fmt.Fprintln(os.Stderr, err)
 		return internalError
 	}
-	err = json.NewEncoder(os.Stdout).Encode(notes)
+	err = json.MarshalWrite(os.Stdout, notes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to marshal result: %v\n", err)
 		return internalError
