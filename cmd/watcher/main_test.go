@@ -8,7 +8,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"flag"
 	"fmt"
@@ -189,7 +190,7 @@ func TestDaemon(t *testing.T) {
 						doneChanges = make(chan struct{})
 					)
 					kernel.Funcs(rpc.Funcs{
-						"change": func(ctx context.Context, id jsonrpc2.ID, m json.RawMessage) (*rpc.Message[any], error) {
+						"change": func(ctx context.Context, id jsonrpc2.ID, m jsontext.Value) (*rpc.Message[any], error) {
 							var v rpc.Message[map[string]any]
 							err := rpc.UnmarshalMessage(m, &v)
 							if err != nil {
@@ -204,7 +205,7 @@ func TestDaemon(t *testing.T) {
 						},
 						// store is a simulation. In practice this would use an [rpc.Forward]
 						// call to an activity store.
-						"store": func(ctx context.Context, id jsonrpc2.ID, m json.RawMessage) (*rpc.Message[any], error) {
+						"store": func(ctx context.Context, id jsonrpc2.ID, m jsontext.Value) (*rpc.Message[any], error) {
 							var v rpc.Message[map[string]any]
 							err := rpc.UnmarshalMessage(m, &v)
 							if err != nil {

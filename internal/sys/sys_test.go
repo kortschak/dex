@@ -6,7 +6,7 @@ package sys
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -1838,7 +1838,7 @@ var managerTests = []struct {
 	},
 }
 
-func noneFunc(_ context.Context, _ jsonrpc2.ID, _ json.RawMessage) (*rpc.Message[any], error) {
+func noneFunc(_ context.Context, _ jsonrpc2.ID, _ jsontext.Value) (*rpc.Message[any], error) {
 	return rpc.NewMessage[any](rpc.UID{Module: "testing"}, "none"), nil
 }
 

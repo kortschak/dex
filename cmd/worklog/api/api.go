@@ -7,7 +7,8 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -79,7 +80,7 @@ type BucketMetadata struct {
 
 type Event struct {
 	Bucket   string         `json:"bucket,omitempty"`
-	ID       int64          `json:"id,omitempty"`
+	ID       int64          `json:"id,omitzero"`
 	Start    time.Time      `json:"start"`
 	End      time.Time      `json:"end"`
 	Data     map[string]any `json:"data,omitempty"`
@@ -116,9 +117,9 @@ type Report struct {
 // into a MapDetailer.
 func (r *Report) UnmarshalJSON(data []byte) error {
 	var report struct {
-		Time    time.Time       `json:"time"`
-		Period  rpc.Duration    `json:"period"`
-		Details json.RawMessage `json:"details"`
+		Time    time.Time      `json:"time"`
+		Period  rpc.Duration   `json:"period"`
+		Details jsontext.Value `json:"details"`
 	}
 	err := jsonUnmarshalNoUnknown(data, &report)
 	if err != nil {
@@ -149,13 +150,12 @@ func UnmarshalDetailMapper(data []byte, mappers ...DetailMapper) (DetailMapper, 
 // jsonUnmarshalNoUnknown is equivalent to json.Unmarshal except that it
 // rejects data mapping that contains fields not present in the target.
 func jsonUnmarshalNoUnknown(data []byte, v any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	err := dec.Decode(v)
+	dec := jsontext.NewDecoder(bytes.NewReader(data))
+	err := json.UnmarshalDecode(dec, v, json.RejectUnknownMembers(true))
 	if err != nil {
 		return err
 	}
-	if dec.More() {
+	if len(dec.UnreadBuffer()) != 0 {
 		off := dec.InputOffset()
 		return fmt.Errorf("invalid character "+quoteChar(data[off])+" after top-level value at offset %d", off)
 	}

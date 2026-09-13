@@ -6,7 +6,7 @@ package state
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"flag"
 	"fmt"
@@ -181,15 +181,20 @@ func Test(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to marshal dump: %v", err)
 		}
-		var buf bytes.Buffer
-		json.Indent(&buf, gotJSON, "", "\t")
+		v := jsontext.Value(gotJSON)
+		err = v.Canonicalize(jsontext.CanonicalizeRawInts(true))
 		if err != nil {
-			t.Errorf("failed to indent dump: %v", err)
+			t.Errorf("failed to make canonicalise dump: %v", err)
 		}
+		err = v.Indent(jsontext.WithIndent("\t"))
+		if err != nil {
+			t.Errorf("failed to make indent dump: %v", err)
+		}
+		gotJSON = v
 
-		if !cmp.Equal(buf.Bytes(), wantJSON) {
+		if !cmp.Equal(gotJSON, wantJSON) {
 			t.Errorf("unexpected json result:\n--- want:\n+++ got:\n%s",
-				cmp.Diff(wantJSON, buf.Bytes()))
+				cmp.Diff(wantJSON, gotJSON))
 		}
 
 		err = db.Close()

@@ -6,7 +6,7 @@ package config
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -66,7 +66,9 @@ func (w *Watcher) Watch(ctx context.Context) error {
 				case ".toml":
 					unmarshal = toml.Unmarshal
 				case ".json":
-					unmarshal = json.Unmarshal
+					unmarshal = func(msg []byte, val any) error {
+						return json.Unmarshal(msg, val)
+					}
 				}
 
 				if ev.Has(fsnotify.Write | fsnotify.Create) {

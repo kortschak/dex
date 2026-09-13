@@ -22,7 +22,7 @@ POST dump1.json http://localhost:7171/load/?replace=true
 POST dump2.json http://localhost:7272/load/?replace=true
 
 GET -json http://localhost:7171/summary/?start=2024-01-01&end=2024-01-02&tz=%2b10:30&strict=true&other=http://localhost:7272/
-cmp stdout want.json
+cmpjson stdout want.json
 
 GET -json http://localhost:7171/summary/?start=2024-01-01&end=2024-01-02&cooldown=15m&tz=%2b10:30&strict=true&other=http://localhost:7272/
 cmp stdout want_15m_cooldown.json

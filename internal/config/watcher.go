@@ -7,7 +7,8 @@ package config
 import (
 	"context"
 	"crypto/sha1"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"hash"
 	"io/fs"
@@ -129,7 +130,9 @@ func (w *Watcher) init(ctx context.Context) (*Watcher, error) {
 			case ".toml":
 				unmarshal = toml.Unmarshal
 			case ".json":
-				unmarshal = json.Unmarshal
+				unmarshal = func(msg []byte, val any) error {
+					return json.Unmarshal(msg, val)
+				}
 			default:
 				continue
 			}
@@ -180,9 +183,9 @@ func unmarshalConfigs(h hash.Hash, unmarshal func([]byte, any) error, b []byte) 
 		}
 	}
 
-	enc := json.NewEncoder(h)
+	enc := jsontext.NewEncoder(h, json.Deterministic(true))
 	if c.Kernel != nil {
-		err = enc.Encode(c.Kernel)
+		err = json.MarshalEncode(enc, c.Kernel)
 		if err != nil {
 			return nil, sum, err
 		}
@@ -190,7 +193,7 @@ func unmarshalConfigs(h hash.Hash, unmarshal func([]byte, any) error, b []byte) 
 		h.Reset()
 	}
 	for name, config := range c.Modules {
-		err = enc.Encode(config)
+		err = json.MarshalEncode(enc, config)
 		if err != nil {
 			return nil, sum, err
 		}
@@ -199,7 +202,7 @@ func unmarshalConfigs(h hash.Hash, unmarshal func([]byte, any) error, b []byte) 
 		c.Modules[name] = config
 	}
 	for name, config := range c.Services {
-		err = enc.Encode(config)
+		err = json.MarshalEncode(enc, config)
 		if err != nil {
 			return nil, sum, err
 		}
@@ -208,7 +211,7 @@ func unmarshalConfigs(h hash.Hash, unmarshal func([]byte, any) error, b []byte) 
 		c.Services[name] = config
 	}
 
-	err = enc.Encode(c)
+	err = json.MarshalEncode(enc, c)
 	if err != nil {
 		return nil, sum, err
 	}

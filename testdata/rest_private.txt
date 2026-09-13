@@ -19,7 +19,7 @@ dex -log debug -lines &dex&
 sleep 1s
 
 GET -json https://localhost:7575
-cmp stdout want_system.json
+cmpjson stdout want_system.json
 
 -- config.toml --
 [kernel]

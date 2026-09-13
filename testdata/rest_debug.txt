@@ -14,13 +14,13 @@ cd ${WORK}
 unquote debug_req_log.snarf debug_resp_log.snarf
 
 exec rest -log=DEBUG -debug_req debug_req_log.snarf
-cmp stdout want_req.text
+cmpjson stdout want_req.text
 
 exec rest -log=DEBUG -debug_resp debug_resp_log.snarf
 cmp stdout want_resp.text
 
 -- want_req.text --
-{"uid":{"module":"runner","service":"write_file"},"method":"run","params":{"args":["-c","echo -n \"Test data.\n\" \u003e got.txt"],"path":"bash"},"header":{"other-header":["value"]}}
+{"uid":{"module":"runner","service":"write_file"},"method":"run","params":{"args":["-c","echo -n \"Test data.\n\" > got.txt"],"path":"bash"},"header":{"other-header":["value"]}}
 -- debug_req_log.snarf --
 >-- prg --
 >{

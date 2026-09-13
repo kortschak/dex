@@ -6,7 +6,8 @@ package celext
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -145,7 +146,7 @@ func celMain() (status int) {
 
 	storeUID := rpc.UID{Module: "test", Service: "store"}
 	kernel.Funcs(rpc.Funcs{
-		"get": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+		"get": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 			var m rpc.Message[state.GetMessage]
 			err := rpc.UnmarshalMessage(params, &m)
 			if err != nil {
@@ -215,9 +216,7 @@ func eval(ctx context.Context, uid rpc.UID, conn *jsonrpc2.Connection, src, root
 		return "", fmt.Errorf("failed json conversion: %v", err)
 	}
 	var buf strings.Builder
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "\t")
-	err = enc.Encode(res)
+	enc := jsontext.NewEncoder(&buf, jsontext.WithIndent("\t"), json.Deterministic(true))
+	err = json.MarshalEncode(enc, res)
 	return strings.TrimRight(buf.String(), "\n"), err
 }

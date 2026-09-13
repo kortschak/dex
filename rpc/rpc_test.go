@@ -6,11 +6,13 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"flag"
 	"log/slog"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -196,7 +198,7 @@ var unmarshalMessageTests = []struct {
 		wantErr: &jsonrpc2.WireError{
 			Code:    1,
 			Message: "EOF",
-			Data:    json.RawMessage(`{"type":13,"msg":""}`),
+			Data:    jsontext.Value(`{"type":13,"offset":0,"msg":""}`),
 		},
 	},
 	{
@@ -204,8 +206,8 @@ var unmarshalMessageTests = []struct {
 		data: `{"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{}`,
 		wantErr: &jsonrpc2.WireError{
 			Code:    1,
-			Message: "unexpected EOF",
-			Data:    json.RawMessage(`{"type":13,"msg":"eyJ0aW1lIjoiMjAwNi0wMS0wMlQxNTowNDowNVoiLCJ1aWQiOnsibW9kdWxlIjoibSIsInNlcnZpY2UiOiJzIn0sImJvZHkiOnt9"}`),
+			Message: "jsontext: unexpected EOF after offset 75",
+			Data:    jsontext.Value(`{"type":13,"offset":75,"msg":"eyJ0aW1lIjoiMjAwNi0wMS0wMlQxNTowNDowNVoiLCJ1aWQiOnsibW9kdWxlIjoibSIsInNlcnZpY2UiOiJzIn0sImJvZHkiOnt9"}`),
 		},
 	},
 	{
@@ -213,8 +215,8 @@ var unmarshalMessageTests = []struct {
 		data: `{"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{"book":9}}`,
 		wantErr: &jsonrpc2.WireError{
 			Code:    1,
-			Message: `json: unknown field "book"`,
-			Data:    json.RawMessage(`{"type":12,"msg":"eyJ0aW1lIjoiMjAwNi0wMS0wMlQxNTowNDowNVoiLCJ1aWQiOnsibW9kdWxlIjoibSIsInNlcnZpY2UiOiJzIn0sImJvZHkiOnsiYm9vayI6OX19"}`),
+			Message: semanticPrefix() + `unmarshal JSON string into Go rpc.Button: unknown object member name "book" within "/body"`,
+			Data:    jsontext.Value(`{"type":12,"offset":74,"msg":"eyJ0aW1lIjoiMjAwNi0wMS0wMlQxNTowNDowNVoiLCJ1aWQiOnsibW9kdWxlIjoibSIsInNlcnZpY2UiOiJzIn0sImJvZHkiOnsiYm9vayI6OX19"}`),
 		},
 	},
 	{
@@ -222,8 +224,8 @@ var unmarshalMessageTests = []struct {
 		data: `"time":"2006-01-02T15:04:05Z","uid":{"module":"m","service":"s"},"body":{"book":9}}`,
 		wantErr: &jsonrpc2.WireError{
 			Code:    1,
-			Message: "json: cannot unmarshal string into Go value of type rpc.Message[github.com/kortschak/dex/rpc.Button]",
-			Data:    json.RawMessage(`{"type":14,"offset":6,"msg":"InRpbWUiOiIyMDA2LTAxLTAyVDE1OjA0OjA1WiIsInVpZCI6eyJtb2R1bGUiOiJtIiwic2VydmljZSI6InMifSwiYm9keSI6eyJib29rIjo5fX0="}`),
+			Message: semanticPrefix() + "unmarshal JSON string into Go rpc.Message[github.com/kortschak/dex/rpc.Button]",
+			Data:    jsontext.Value(`{"type":14,"offset":0,"msg":"InRpbWUiOiIyMDA2LTAxLTAyVDE1OjA0OjA1WiIsInVpZCI6eyJtb2R1bGUiOiJtIiwic2VydmljZSI6InMifSwiYm9keSI6eyJib29rIjo5fX0="}`),
 		},
 	},
 	{
@@ -231,8 +233,8 @@ var unmarshalMessageTests = []struct {
 		data: "not json",
 		wantErr: &jsonrpc2.WireError{
 			Code:    1,
-			Message: "invalid character 'o' in literal null (expecting 'u')",
-			Data:    json.RawMessage(`{"type":11,"offset":2,"msg":"bm90IGpzb24="}`),
+			Message: "jsontext: invalid character 'o' in literal null (expecting 'u') after offset 1",
+			Data:    jsontext.Value(`{"type":11,"offset":1,"msg":"bm90IGpzb24="}`),
 		},
 	},
 	{
@@ -246,11 +248,18 @@ var unmarshalMessageTests = []struct {
 	},
 }
 
+// semanticPrefix is a Hyrum adapter.
+func semanticPrefix() string {
+	var err json.SemanticError
+	return strings.TrimSuffix(err.Error(), "handle")
+}
+
 func TestUnmarshalMessage(t *testing.T) {
+
 	for _, test := range unmarshalMessageTests {
 		t.Run(test.name, func(t *testing.T) {
 			var got Message[Button]
-			err := UnmarshalMessage[Button]([]byte(test.data), &got)
+			err := UnmarshalMessage([]byte(test.data), &got)
 			if !cmp.Equal(test.wantErr, err) {
 				t.Errorf("unexpected error:\n--- want:\n+++ got:\n%s",
 					cmp.Diff(test.wantErr, err))

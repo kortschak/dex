@@ -5,9 +5,8 @@
 package plugins
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"image"
@@ -56,9 +55,9 @@ func (p *dump) Press(ctx context.Context, page string, r, c int, t time.Time) er
 		err = errors.Join(err)
 		return err
 	}
-	var buf bytes.Buffer
-	json.Indent(&buf, msg, "", "\t")
-	fmt.Println(&buf)
+	v := jsontext.Value(msg)
+	v.Indent(jsontext.WithIndent("\t"))
+	fmt.Println(v)
 	return nil
 }
 

@@ -12,7 +12,8 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"encoding/pem"
 	"errors"
 	"flag"
@@ -180,7 +181,7 @@ func TestDaemon(t *testing.T) {
 				changeWg   sync.WaitGroup
 			)
 			kernel.Funcs(rpc.Funcs{
-				"change": func(ctx context.Context, id jsonrpc2.ID, m json.RawMessage) (*rpc.Message[any], error) {
+				"change": func(ctx context.Context, id jsonrpc2.ID, m jsontext.Value) (*rpc.Message[any], error) {
 					var v rpc.Message[map[string]any]
 					err := rpc.UnmarshalMessage(m, &v)
 					if err != nil {
@@ -192,7 +193,7 @@ func TestDaemon(t *testing.T) {
 				},
 
 				// State store methods from internal/state/funcs.go.
-				"set": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+				"set": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 					var m rpc.Message[state.SetMessage]
 					err := rpc.UnmarshalMessage(params, &m)
 					if err != nil {
@@ -202,7 +203,7 @@ func TestDaemon(t *testing.T) {
 					err = store.Set(m.UID, m.Body.Item, m.Body.Value)
 					return nil, err
 				},
-				"get": func(ctx context.Context, id jsonrpc2.ID, params json.RawMessage) (*rpc.Message[any], error) {
+				"get": func(ctx context.Context, id jsonrpc2.ID, params jsontext.Value) (*rpc.Message[any], error) {
 					var m rpc.Message[state.GetMessage]
 					err := rpc.UnmarshalMessage(params, &m)
 					if err != nil {
@@ -266,7 +267,7 @@ func TestDaemon(t *testing.T) {
 				}
 
 				type serviceOptions struct {
-					Server rest.Server `json:"server,omitempty"`
+					Server rest.Server `json:"server,omitzero"`
 				}
 				err = conn.Call(ctx, "configure", rpc.NewMessage(uid, rest.Service{
 					Name:   "store",
