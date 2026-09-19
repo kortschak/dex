@@ -3,7 +3,7 @@ module github.com/kortschak/dex
 go 1.27.1
 
 require (
-	cuelang.org/go v0.15.1
+	cuelang.org/go v0.17.1
 	github.com/BurntSushi/toml v1.5.0
 	github.com/bbrks/wrap/v2 v2.7.0
 	github.com/fsnotify/fsnotify v1.7.0
@@ -15,7 +15,7 @@ require (
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
 	github.com/kortschak/goroutine v1.1.3
 	github.com/kortschak/jsonrpc2 v0.0.0-20240214190357-0539ebd6a045
-	github.com/rogpeppe/go-internal v1.14.1
+	github.com/rogpeppe/go-internal v1.15.0
 	github.com/tdewolff/canvas v0.0.0-20241004114307-d601972c0f7c
 	golang.org/x/image v0.45.0
 	golang.org/x/net v0.57.0
@@ -33,9 +33,9 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/benoitkugler/textlayout v0.3.0 // indirect
 	github.com/benoitkugler/textprocessing v0.0.3 // indirect
-	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
+	github.com/cockroachdb/apd/v3 v3.2.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/emicklei/proto v1.14.2 // indirect
+	github.com/emicklei/proto v1.14.3 // indirect
 	github.com/go-fonts/latin-modern v0.3.1 // indirect
 	github.com/go-text/typesetting v0.0.0-20231013144250-6cc35dbfae7d // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
@@ -46,8 +46,8 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
-	github.com/protocolbuffers/txtpbfmt v0.0.0-20251016062345-16587c79cd91 // indirect
+	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
+	github.com/protocolbuffers/txtpbfmt v0.0.0-20260420112717-c39628bde8b5 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sstallion/go-hid v0.15.0 // indirect
 	github.com/tdewolff/font v0.0.0-20240728193914-9dc6e3441d03 // indirect
