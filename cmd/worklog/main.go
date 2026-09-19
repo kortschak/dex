@@ -1523,9 +1523,16 @@ func (d *debugDetails) UnmarshalJSON(data []byte) error {
 		LastEvent: raw.LastEvent,
 		Period:    raw.Period,
 	}
-	d.Current, err = worklog.UnmarshalDetailMapper(raw.Current, &debugWatcherDetails{}, &worklog.MapDetails{})
-	d.Last, err = worklog.UnmarshalDetailMapper(raw.Last, &debugWatcherDetails{}, &worklog.MapDetails{})
-	return err
+	var cerr, lerr error
+	d.Current, cerr = worklog.UnmarshalDetailMapper(raw.Current, &debugWatcherDetails{}, &worklog.MapDetails{})
+	if cerr != nil {
+		cerr = fmt.Errorf("unmarshaling current: %w", cerr)
+	}
+	d.Last, lerr = worklog.UnmarshalDetailMapper(raw.Last, &debugWatcherDetails{}, &worklog.MapDetails{})
+	if lerr != nil {
+		lerr = fmt.Errorf("unmarshaling last: %w", lerr)
+	}
+	return errors.Join(cerr, lerr)
 }
 
 type debugWatcherDetails struct {
