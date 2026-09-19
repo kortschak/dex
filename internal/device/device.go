@@ -182,14 +182,6 @@ func (c *Controller) handle(ctx context.Context, req *jsonrpc2.Request) (any, er
 	return c.kernel.Handle(ctx, req)
 }
 
-// id is the global internal RPC ID source.
-var id atomic.Int64
-
-// nextKernelID returns the next internal kernel RPC ID.
-func nextKernelID() jsonrpc2.ID {
-	return jsonrpc2.StringID(fmt.Sprintf("kernel-%d", id.Add(1)))
-}
-
 // NewPage inserts a new page into the controller. NewPage returns an error
 // if the name already exists.
 func (c *Controller) NewPage(name string) error {
