@@ -322,8 +322,3 @@ type dbKey struct {
 	Owner rpc.UID `json:"owner"`
 	Item  string  `json:"item"`
 }
-
-func (k dbKey) marshal() (string, error) {
-	b, err := json.Marshal(k)
-	return string(b), err
-}
