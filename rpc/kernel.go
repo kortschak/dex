@@ -155,6 +155,8 @@ func (k *Kernel) Funcs(funcs Funcs) {
 }
 
 // dial returns a new direct unmanaged connection to the kernel server.
+//
+//lint:ignore U1000 debugging helper
 func (k *Kernel) dial(ctx context.Context, dialer net.Dialer) (*jsonrpc2.Connection, error) {
 	return jsonrpc2.Dial(ctx, jsonrpc2.NetDialer(k.network, k.listener.Addr().String(), dialer), jsonrpc2.ConnectionOptions{})
 }
