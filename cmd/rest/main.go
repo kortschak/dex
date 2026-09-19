@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/kortschak/jsonrpc2"
@@ -372,9 +372,9 @@ func (d *daemon) Handle(ctx context.Context, req *jsonrpc2.Request) (any, error)
 // currently running.
 func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, curr serverDetail) serverDetail {
 	if cfg.Request != curr.server.Request {
-		decls := cel.Declarations(
-			decls.NewVar("time", decls.Timestamp),
-			decls.NewVar("request", decls.NewMapType(decls.String, decls.Dyn)),
+		decls := cel.VariableDecls(
+			decls.NewVariable("time", types.TimestampType),
+			decls.NewVariable("request", types.NewMapType(types.StringType, types.DynType)),
 		)
 		reqPrg, err := d.compile(curr.euid, cfg.Request, decls, d.log)
 		if err != nil {
@@ -389,9 +389,9 @@ func (d *daemon) mkServer(ctx context.Context, cfg rest.Server, iuid rpc.UID, cu
 			curr.server.Response = ""
 			curr.respPrg = nil
 		} else {
-			decls := cel.Declarations(
-				decls.NewVar("time", decls.Timestamp),
-				decls.NewVar("response", decls.NewMapType(decls.String, decls.Dyn)),
+			decls := cel.VariableDecls(
+				decls.NewVariable("time", types.TimestampType),
+				decls.NewVariable("response", types.NewMapType(types.StringType, types.DynType)),
 			)
 			respPrg, err := d.compile(curr.euid, cfg.Response, decls, d.log)
 			if err != nil {
@@ -1071,9 +1071,9 @@ func runDebug(ctx context.Context, cancel context.CancelFunc, path, typ string, 
 	var level slog.LevelVar
 	addSource := slogext.NewAtomicBool(false)
 	h := newDaemon("rest-debug", log, &level, addSource, ctx, cancel)
-	decls := cel.Declarations(
-		decls.NewVar("time", decls.Timestamp),
-		decls.NewVar(typ, decls.NewMapType(decls.String, decls.Dyn)),
+	decls := cel.VariableDecls(
+		decls.NewVariable("time", types.TimestampType),
+		decls.NewVariable(typ, types.NewMapType(types.StringType, types.DynType)),
 	)
 	prg, err := h.compile(rpc.UID{}, src, decls, log)
 	if err != nil {

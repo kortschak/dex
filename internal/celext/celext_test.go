@@ -19,7 +19,8 @@ import (
 	"testing"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/decls"
+	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/interpreter"
 	"github.com/kortschak/jsonrpc2"
 	"github.com/rogpeppe/go-internal/testscript"
@@ -175,7 +176,7 @@ func celMain() (status int) {
 
 func eval(ctx context.Context, uid rpc.UID, conn *jsonrpc2.Connection, src, root string, input any, log *slog.Logger) (string, error) {
 	env, err := cel.NewEnv(
-		cel.Declarations(decls.NewVar(root, decls.Dyn)),
+		cel.VariableDecls(decls.NewVariable(root, types.DynType)),
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		Lib(log),
 		StateLib(ctx, uid, conn, log),

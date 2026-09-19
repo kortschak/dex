@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/kortschak/jsonrpc2"
@@ -532,17 +532,17 @@ func (d *daemon) compile(src string) (cel.Program, error) {
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(d.log),
 		cel.Lib(devLib{ctx: d.ctx, uid: d.uid, conn: d.conn, log: d.log}),
-		cel.Declarations(
-			decls.NewVar("time", decls.Timestamp),
-			decls.NewVar("period", decls.Duration),
-			decls.NewVar("wid", decls.Int),
-			decls.NewVar("pid", decls.Int),
-			decls.NewVar("name", decls.String),
-			decls.NewVar("class", decls.String),
-			decls.NewVar("window", decls.String),
-			decls.NewVar("last_input", decls.Timestamp),
-			decls.NewVar("locked", decls.Bool),
-			decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
+		cel.VariableDecls(
+			decls.NewVariable("time", types.TimestampType),
+			decls.NewVariable("period", types.DurationType),
+			decls.NewVariable("wid", types.IntType),
+			decls.NewVariable("pid", types.IntType),
+			decls.NewVariable("name", types.StringType),
+			decls.NewVariable("class", types.StringType),
+			decls.NewVariable("window", types.StringType),
+			decls.NewVariable("last_input", types.TimestampType),
+			decls.NewVariable("locked", types.BoolType),
+			decls.NewVariable("last", types.NewMapType(types.StringType, types.DynType)),
 		),
 	)
 	if err != nil {

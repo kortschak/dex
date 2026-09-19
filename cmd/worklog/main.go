@@ -33,7 +33,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/interpreter"
@@ -584,9 +584,9 @@ func (d *daemon) configureWebRule(ctx context.Context, rules map[string]map[stri
 	opts := []cel.EnvOption{
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(d.log),
-		cel.Declarations(
-			decls.NewVar("bucket", decls.String),
-			decls.NewVar("data", decls.NewMapType(decls.String, decls.Dyn)),
+		cel.VariableDecls(
+			decls.NewVariable("bucket", types.StringType),
+			decls.NewVariable("data", types.NewMapType(types.StringType, types.DynType)),
 		),
 	}
 	ruleDetails := make(map[string]map[string]ruleDetail)
@@ -629,13 +629,13 @@ func (d *daemon) ruleOpts(ctx context.Context) []cel.EnvOption {
 		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
 		celext.Lib(d.log),
 		stateLibOpt,
-		cel.Declarations(
-			decls.NewVar("bucket", decls.String),
-			decls.NewVar("data_src", decls.NewMapType(decls.String, decls.String)),
-			decls.NewVar("period", decls.Duration),
-			decls.NewVar("curr", decls.NewMapType(decls.String, decls.Dyn)),
-			decls.NewVar("last", decls.NewMapType(decls.String, decls.Dyn)),
-			decls.NewVar("last_event", decls.NewMapType(decls.String, decls.Dyn)),
+		cel.VariableDecls(
+			decls.NewVariable("bucket", types.StringType),
+			decls.NewVariable("data_src", types.NewMapType(types.StringType, types.StringType)),
+			decls.NewVariable("period", types.DurationType),
+			decls.NewVariable("curr", types.NewMapType(types.StringType, types.DynType)),
+			decls.NewVariable("last", types.NewMapType(types.StringType, types.DynType)),
+			decls.NewVariable("last_event", types.NewMapType(types.StringType, types.DynType)),
 		),
 	}
 }
