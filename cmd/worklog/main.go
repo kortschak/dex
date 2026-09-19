@@ -1345,35 +1345,6 @@ func (d *daemon) query(ctx context.Context) http.HandlerFunc {
 	}
 }
 
-func queryError(dec *jsontext.Decoder, body []byte, err error) any {
-	offset := int(dec.InputOffset())
-	var syntax *jsontext.SyntacticError
-	switch {
-	case errors.As(err, &syntax):
-		offset = int(syntax.ByteOffset)
-	case errors.Is(err, io.ErrUnexpectedEOF):
-		offset = len(body)
-	}
-	off := offset
-	var line []byte
-	for l := range bytes.SplitSeq(body, []byte{'\n'}) {
-		if off-(len(l)+1) <= 0 {
-			line = l
-			break
-		}
-		off -= len(l) + 1
-	}
-	return map[string]any{
-		"err":    err.Error(),
-		"query":  string(body),
-		"offset": offset,
-		"detail": map[string]string{
-			"line": string(line),
-			"mark": strings.Repeat(" ", off) + "^",
-		},
-	}
-}
-
 type dbLib struct {
 	ctx context.Context
 	db  storage
