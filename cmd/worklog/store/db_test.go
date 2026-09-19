@@ -22,11 +22,7 @@ import (
 	worklog "github.com/kortschak/dex/cmd/worklog/api"
 )
 
-var (
-	verbose = flag.Bool("verbose_log", false, "print full logging")
-	lines   = flag.Bool("show_lines", false, "log source code position")
-	keep    = flag.Bool("keep", false, "keep workdir after tests")
-)
+var keep = flag.Bool("keep", false, "keep workdir after tests")
 
 const testDir = "testdata"
 
@@ -601,8 +597,6 @@ func TestDB(t *testing.T) {
 		})
 	}
 }
-
-func ptr[T any](v T) *T { return &v }
 
 func findOverlap(n worklog.Replacement, h []worklog.Replacement) (worklog.Replacement, bool) {
 	for _, c := range h {
