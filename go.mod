@@ -3,13 +3,13 @@ module github.com/kortschak/dex
 go 1.27.1
 
 require (
+	cel.dev/cel-go v0.32.0
 	cuelang.org/go v0.17.1
 	github.com/BurntSushi/toml v1.5.0
 	github.com/bbrks/wrap/v2 v2.7.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/gofrs/flock v0.12.1
-	github.com/google/cel-go v0.27.0
 	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/kortschak/ardilla v0.0.0-20240121074954-8297d203ffa4
