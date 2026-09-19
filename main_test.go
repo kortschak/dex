@@ -35,11 +35,11 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"dex":  Main,
-		"GET":  get,
-		"POST": post,
-	}))
+	testscript.Main(m, map[string]func(){
+		"dex":  func() { os.Exit(Main()) },
+		"GET":  func() { os.Exit(get()) },
+		"POST": func() { os.Exit(post()) },
+	})
 }
 
 func TestScripts(t *testing.T) {

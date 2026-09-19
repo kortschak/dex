@@ -202,12 +202,12 @@ func TestDaemon(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	os.Exit(testscript.RunMain(m, map[string]func() int{
-		"merge_afk":          mergeAfk,
-		"dashboard_data":     dashboardData,
-		"summary_data":       summaryData,
-		"merge_summary_data": mergeSummaryData,
-	}))
+	testscript.Main(m, map[string]func(){
+		"merge_afk":          func() { os.Exit(mergeAfk()) },
+		"dashboard_data":     func() { os.Exit(dashboardData()) },
+		"summary_data":       func() { os.Exit(summaryData()) },
+		"merge_summary_data": func() { os.Exit(mergeSummaryData()) },
+	})
 }
 
 func TestContinuation(t *testing.T) {
