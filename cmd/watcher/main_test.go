@@ -81,6 +81,9 @@ func TestDaemon(t *testing.T) {
 		if useDBus && runtime.GOOS == "darwin" {
 			continue
 		}
+		if !useDBus && os.Getenv("XDG_SESSION_TYPE") == "wayland" {
+			continue
+		}
 
 		t.Run(fmt.Sprintf("dbus=%t", useDBus), func(t *testing.T) {
 
