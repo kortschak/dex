@@ -60,7 +60,7 @@ func (d *daemon) dashboardData(ctx context.Context) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		b, err := json.Marshal(events)
+		b, err := json.Marshal(events, json.Deterministic(true))
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -325,7 +325,7 @@ func (d *daemon) summaryData(ctx context.Context) http.HandlerFunc {
 				return
 			}
 		}
-		b, err := json.Marshal(events)
+		b, err := json.Marshal(events, json.Deterministic(true))
 		if err != nil {
 			d.log.LogAttrs(ctx, slog.LevelWarn, "web server", slog.Any("error", err), slog.String("url", req.RequestURI))
 			w.WriteHeader(http.StatusInternalServerError)
@@ -786,7 +786,7 @@ func (d *daemon) getAmendments(ctx context.Context, e worklog.Event) []worklog.A
 	if !ok {
 		return nil
 	}
-	b, err := json.Marshal(a)
+	b, err := json.Marshal(a, json.Deterministic(true))
 	if err != nil {
 		d.log.LogAttrs(ctx, slog.LevelWarn, "get amendments", slog.Any("error", err))
 		return nil
