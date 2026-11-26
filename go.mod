@@ -29,7 +29,7 @@ require (
 require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/ByteArena/poly2tri-go v0.0.0-20170716161910-d102ad91854f // indirect
-	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/andybalholm/brotli v1.3.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/benoitkugler/textlayout v0.3.0 // indirect
 	github.com/benoitkugler/textprocessing v0.0.3 // indirect
