@@ -219,11 +219,12 @@ func (db *DB) Delete(owner rpc.UID, item string) error {
 	db.log.LogAttrs(ctx, slog.LevelDebug, "delete", slog.Any("key", key))
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	_, err := db.store.Query(delet, owner.Module, owner.Service, item)
+	rows, err := db.store.Query(delet, owner.Module, owner.Service, item)
 	if err != nil {
 		db.log.LogAttrs(ctx, slog.LevelError, "delete", slog.Any("key", key), slog.Any("error", err))
+		return err
 	}
-	return err
+	return rows.Close()
 }
 
 // Drop deletes all entries owned by the owner.
@@ -232,11 +233,12 @@ func (db *DB) Drop(owner rpc.UID) error {
 	db.log.LogAttrs(ctx, slog.LevelDebug, "drop", slog.Any("key", owner))
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	_, err := db.store.Query(drop, owner.Module, owner.Service)
+	rows, err := db.store.Query(drop, owner.Module, owner.Service)
 	if err != nil {
 		db.log.LogAttrs(ctx, slog.LevelError, "delete", slog.Any("key", owner), slog.Any("error", err))
+		return err
 	}
-	return err
+	return rows.Close()
 }
 
 // DropModule deletes all entries owned by the module.
@@ -245,11 +247,12 @@ func (db *DB) DropModule(module string) error {
 	db.log.LogAttrs(ctx, slog.LevelDebug, "drop module", slog.String("key", module))
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	_, err := db.store.Query(dropModule, module)
+	rows, err := db.store.Query(dropModule, module)
 	if err != nil {
 		db.log.LogAttrs(ctx, slog.LevelError, "delete", slog.Any("key", module), slog.Any("error", err))
+		return err
 	}
-	return err
+	return rows.Close()
 }
 
 // DumpModule returns a Go map with all the module's items.
